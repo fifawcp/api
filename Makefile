@@ -42,6 +42,24 @@ migrate-test-down:
 	@migrate -path $(MIGRATIONS_PATH) -database $(DB_TEST_ADDRESS) down
 	@echo "Migrations rolled back successfully"
 
+# ==================== Database ====================
+
+.PHONY: db-seed
+db-seed:
+	@go run ./cmd/db/seed
+
+.PHONY: db-flush
+db-flush:
+	@go run ./cmd/db/seed -flush
+ 
+# ==================== Cache ====================
+
+.PHONY: cache-flush
+cache-flush:
+	@echo "Flushing Redis cache..."
+	@docker exec -e REDISCLI_AUTH=$(REDIS_PASSWORD) redis redis-cli FLUSHDB
+	@echo "Redis cache flushed successfully"
+
 # ==================== Docker & Project Setup ====================
 
 .PHONY: docker-up
@@ -76,6 +94,38 @@ swagger:
 		-o ./docs/swagger \
 		&& swag fmt
 	@echo "Swagger documentation generated successfully"
+
+# ==================== Help ====================
+
+.PHONY: help
+help:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  Social API - Makefile Commands"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo ""
+	@echo "💻 Development:"
+	@echo "  make dev               - Run API with hot reload"
+	@echo ""
+	@echo "🐳 Docker:"
+	@echo "  make docker-up         - Start all services (DB, Redis)"
+	@echo "  make docker-down       - Stop all services"
+	@echo "  make docker-restart    - Restart all services"
+	@echo ""
+	@echo "💾 Database:"
+	@echo "  make db-seed           - Seed database with test data"
+	@echo "  make db-flush          - Remove all data from database"
+	@echo ""
+	@echo "🔄 Migrations:"
+	@echo "  make migration         - Create new migration file"
+	@echo "  make migrate-up        - Apply all pending migrations"
+	@echo "  make migrate-down      - Rollback last migration"
+	@echo "  make migrate-test-up   - Apply all pending migrations in test db"
+	@echo "  make migrate-test-down - Rollback last migration in test db"
+	@echo ""
+	@echo "📚 Documentation:"
+	@echo "  make swagger           - Generate Swagger docs"
+	@echo ""
+	@echo "═══════════════════════════════════════════════════════════════"
 
 # Catch-all target to prevent make from treating migration names as targets
 %:
