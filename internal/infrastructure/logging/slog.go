@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/config"
+	"github.com/ncondes/fifawcp/internal/infrastructure/config"
 )
 
 type SlogLogger struct {

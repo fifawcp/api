@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/domain"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/dtos"
+	"github.com/ncondes/fifawcp/internal/domain"
+	"github.com/ncondes/fifawcp/internal/dtos"
 )
 
 type Validator struct {

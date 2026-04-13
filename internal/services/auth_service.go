@@ -10,51 +10,55 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ncondes/fifa-world-cup-pickems/internal/domain"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/dtos"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/auth"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/config"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/logging"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/middlewares"
+	"github.com/ncondes/fifawcp/internal/domain"
+	"github.com/ncondes/fifawcp/internal/dtos"
+	"github.com/ncondes/fifawcp/internal/infrastructure/auth"
+	"github.com/ncondes/fifawcp/internal/infrastructure/config"
+	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
+	"github.com/ncondes/fifawcp/internal/infrastructure/mailer"
+	"github.com/ncondes/fifawcp/internal/packages/totp"
 )
 
 type AuthServiceInterface interface {
 	RequestOtp(ctx context.Context, payload *dtos.RequestOtpDto) error
-	Authenticate(ctx context.Context, payload *dtos.AuthenticationInputDto, requestInfo *middlewares.RequestInfo) (*dtos.AuthenticationDto, error)
-	RefreshToken(ctx context.Context, payload *dtos.RefreshTokenDto) (*dtos.AuthData, error)
+	Authenticate(ctx context.Context, payload *dtos.AuthenticationInputDto, requestInfo dtos.RequestInfo) (*dtos.AuthenticationDto, error)
+	RefreshToken(ctx context.Context, refreshToken string) (*dtos.AuthData, error)
 	Logout(ctx context.Context, refreshToken string) error
 	LogoutAll(ctx context.Context, refreshToken string) error
 	GetSessions(ctx context.Context, refreshToken string) ([]domain.Session, error)
-	DeleteSession(ctx context.Context, sessionID string) error
+	DeleteSession(ctx context.Context, sessionID string, userID string) error
 }
 
 type AuthService struct {
-	userRepository         domain.UserRepositoryInterface
-	sessionRepository      domain.SessionRepositoryInterface
-	refreshTokenRepository domain.RefreshTokenRepositoryInterface
-	otpRepository          domain.OTPRepositoryInterface
+	userRepository         domain.UserRepository
+	sessionRepository      domain.SessionRepository
+	refreshTokenRepository domain.RefreshTokenRepository
+	otpStorage             domain.OTPStorage
 	cfg                    *config.Config
 	logger                 logging.Logger
 	authenticator          auth.Authenticator
+	mailer                 mailer.Mailer
 }
 
 func NewAuthService(
-	userRepository domain.UserRepositoryInterface,
-	sessionRepository domain.SessionRepositoryInterface,
-	refreshTokenRepository domain.RefreshTokenRepositoryInterface,
-	otpRepository domain.OTPRepositoryInterface,
+	userRepository domain.UserRepository,
+	sessionRepository domain.SessionRepository,
+	refreshTokenRepository domain.RefreshTokenRepository,
+	otpStorage domain.OTPStorage,
 	logger logging.Logger,
 	cfg *config.Config,
 	authenticator auth.Authenticator,
+	mailer mailer.Mailer,
 ) *AuthService {
 	return &AuthService{
 		userRepository:         userRepository,
 		sessionRepository:      sessionRepository,
 		refreshTokenRepository: refreshTokenRepository,
-		otpRepository:          otpRepository,
+		otpStorage:             otpStorage,
 		cfg:                    cfg,
 		logger:                 logger,
 		authenticator:          authenticator,
+		mailer:                 mailer,
 	}
 }
 
@@ -63,7 +67,7 @@ func (s *AuthService) RequestOtp(
 	payload *dtos.RequestOtpDto,
 ) error {
 	// Check cooldown before proceeding
-	otp, err := s.otpRepository.GetOTP(ctx, payload.Identifier, *payload.Purpose)
+	otp, err := s.otpStorage.GetOTP(ctx, payload.Identifier, *payload.Purpose)
 	if err == nil {
 		if time.Since(otp.CreatedAt) < s.cfg.Auth.OTPCooldown {
 			return domain.ErrOtpCooldown(s.cfg.Auth.OTPCooldown)
@@ -76,12 +80,19 @@ func (s *AuthService) RequestOtp(
 	}
 
 	// Generate and store OTP
-	_, err = s.generateAndStoreOTP(ctx, payload.Identifier, *payload.Purpose)
+	plainOtp, err := s.generateAndStoreOTP(ctx, payload.Identifier, *payload.Purpose)
 	if err != nil {
 		return err
 	}
 
-	// TODO: Send OTP via email/SMS
+	if err := s.mailer.SendOTPEmail(
+		ctx,
+		payload.Identifier,
+		plainOtp,
+		*payload.Purpose,
+	); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -89,7 +100,7 @@ func (s *AuthService) RequestOtp(
 func (s *AuthService) Authenticate(
 	ctx context.Context,
 	payload *dtos.AuthenticationInputDto,
-	requestInfo *middlewares.RequestInfo,
+	requestInfo dtos.RequestInfo,
 ) (*dtos.AuthenticationDto, error) {
 	// Verify OTP
 	if err := s.verifyOTP(
@@ -118,6 +129,15 @@ func (s *AuthService) Authenticate(
 
 		if err := s.userRepository.CreateUser(ctx, user); err != nil {
 			return nil, err
+		}
+
+		// Send welcome email (non-blocking failure — don't fail registration if email fails)
+		if err := s.mailer.SendWelcomeEmail(ctx, user.Email, user.FirstName); err != nil {
+			s.logger.Error(
+				"failed to send welcome email",
+				"error", err,
+				"email", user.Email,
+			)
 		}
 	}
 
@@ -165,7 +185,7 @@ func (s *AuthService) Authenticate(
 
 	// Delete OTP from Redis
 	// In case of error we can ignore it as it will expire anyway
-	s.otpRepository.DeleteOTP(ctx, payload.Identifier, payload.Purpose)
+	s.otpStorage.DeleteOTP(ctx, payload.Identifier, payload.Purpose)
 
 	authData := dtos.AuthData{
 		AccessToken:  accessTokenResult.Token,
@@ -183,10 +203,10 @@ func (s *AuthService) Authenticate(
 
 func (s *AuthService) RefreshToken(
 	ctx context.Context,
-	payload *dtos.RefreshTokenDto,
+	refreshTokenString string,
 ) (*dtos.AuthData, error) {
 	// Validate refresh token
-	refreshToken, err := s.refreshTokenRepository.GetRefreshTokenByTokenHash(ctx, s.hashToken(payload.RefreshToken))
+	refreshToken, err := s.refreshTokenRepository.GetRefreshTokenByTokenHash(ctx, s.hashToken(refreshTokenString))
 	if err != nil {
 		if errors.Is(err, domain.ErrRefreshTokenNotFound) {
 			return nil, domain.ErrRefreshTokenInvalidOrExpired
@@ -241,10 +261,8 @@ func (s *AuthService) GetSessions(ctx context.Context, refreshToken string) ([]d
 	return s.sessionRepository.GetSessions(ctx, s.hashToken(refreshToken))
 }
 
-func (s *AuthService) DeleteSession(ctx context.Context, sessionID string) error {
-	// TODO: check session belongs to the authenticated user
-	// - Maybe through context middleware
-	return s.sessionRepository.DeleteSessionById(ctx, sessionID)
+func (s *AuthService) DeleteSession(ctx context.Context, sessionID string, userID string) error {
+	return s.sessionRepository.DeleteSessionById(ctx, sessionID, userID)
 }
 
 func (s *AuthService) validateUserForPurpose(
@@ -288,7 +306,7 @@ func (s *AuthService) generateAndStoreOTP(
 		CreatedAt:  time.Now(),
 	}
 
-	if err := s.otpRepository.SetOTP(ctx, otp, s.cfg.Auth.OTPTTL); err != nil {
+	if err := s.otpStorage.SetOTP(ctx, otp, s.cfg.Auth.OTPTTL); err != nil {
 		return "", err
 	}
 
@@ -333,21 +351,26 @@ func (s *AuthService) verifyOTP(
 	purpose domain.OTPPurpose,
 	plainOtp string,
 ) error {
+	// ! Non-prod env bypass
+	if !s.cfg.IsProd() && plainOtp == totp.Generate(identifier, s.cfg.JWT.Secret) {
+		return nil
+	}
+
 	// Get OTP from Redis
-	otp, err := s.otpRepository.GetOTP(ctx, identifier, purpose)
+	otp, err := s.otpStorage.GetOTP(ctx, identifier, purpose)
 	if err != nil {
 		return err
 	}
 
 	// Check attempts
 	if otp.Attempts >= s.cfg.Auth.MaxOTPAttempts-1 {
-		s.otpRepository.DeleteOTP(ctx, identifier, purpose)
+		s.otpStorage.DeleteOTP(ctx, identifier, purpose)
 		return domain.ErrOTPTooManyAttempts
 	}
 
 	// Verify OTP
 	if otp.OTPHash != s.hashToken(plainOtp) {
-		s.otpRepository.IncrementAttempts(ctx, identifier, purpose)
+		s.otpStorage.IncrementAttempts(ctx, identifier, purpose)
 		return domain.ErrOTPInvalidOrExpired
 	}
 

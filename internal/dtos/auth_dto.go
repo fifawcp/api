@@ -5,12 +5,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ncondes/fifa-world-cup-pickems/internal/domain"
+	"github.com/ncondes/fifawcp/internal/domain"
 )
 
 type RequestOtpDto struct {
-	Identifier string             `json:"identifier" validate:"required,max=255" example:"user@example.com"`
-	Purpose    *domain.OTPPurpose `json:"purpose" validate:"required,oneof=registration login" example:"registration"`
+	Identifier string             `json:"identifier" validate:"required,max=255" example:"john.doe@example.com"`
+	Purpose    *domain.OTPPurpose `json:"purpose" validate:"required,oneof=registration login" example:"registration" swaggertype:"string" enums:"registration,login"`
 }
 
 func (dto *RequestOtpDto) Normalize() {
@@ -22,8 +22,8 @@ func (dto *RequestOtpDto) Normalize() {
 }
 
 type AuthenticationInputDto struct {
-	Identifier string            `json:"identifier" validate:"required,max=255" example:"user@example.com"`
-	Purpose    domain.OTPPurpose `json:"purpose" validate:"required,oneof=registration login" example:"registration"`
+	Identifier string            `json:"identifier" validate:"required,max=255" example:"john.doe@example.com"`
+	Purpose    domain.OTPPurpose `json:"purpose" validate:"required,oneof=registration login" example:"registration" swaggertype:"string" enums:"registration,login"`
 	OTP        string            `json:"otp" validate:"required,min=6,max=6" example:"123456"`
 	User       *CreateUserDto    `json:"user"`
 }
@@ -42,13 +42,23 @@ type AuthenticationDto struct {
 }
 
 type AuthData struct {
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token"`
-	ExpiresAt    time.Time `json:"expires_at"`
+	AccessToken  string    `json:"access_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzZjAxZmFmNiJ9.signature"`
+	RefreshToken string    `json:"-"` // Set in cookie, not returned in API response
+	ExpiresAt    time.Time `json:"expires_at" example:"2026-04-20T02:18:46Z"`
 }
 
-type RefreshTokenDto struct {
-	RefreshToken string `json:"refresh_token" validate:"required"`
+type RequestInfo struct {
+	IPAddress  string
+	UserAgent  string
+	DeviceInfo DeviceInfo
+}
+
+type DeviceInfo struct {
+	Browser     string `json:"browser"`
+	Platform    string `json:"platform"`
+	DeviceModel string `json:"device_model,omitempty"`
+	DisplayName string `json:"display_name"`
+	OS          string `json:"os"`
 }
 
 func isEmail(s string) bool {

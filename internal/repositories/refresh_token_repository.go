@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/ncondes/fifa-world-cup-pickems/internal/domain"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/config"
+	"github.com/ncondes/fifawcp/internal/domain"
+	"github.com/ncondes/fifawcp/internal/infrastructure/config"
 )
 
 type RefreshTokenRepository struct {

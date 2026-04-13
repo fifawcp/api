@@ -14,7 +14,7 @@ type RefreshToken struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-type RefreshTokenRepositoryInterface interface {
+type RefreshTokenRepository interface {
 	CreateRefreshToken(ctx context.Context, refreshToken *RefreshToken) error
 	GetRefreshTokenByTokenHash(ctx context.Context, tokenHash string) (*RefreshToken, error)
 	RotateRefreshToken(ctx context.Context, oldTokenHash string, newToken *RefreshToken) error

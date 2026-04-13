@@ -7,22 +7,8 @@ import (
 	"strings"
 
 	"github.com/mssola/useragent"
+	"github.com/ncondes/fifawcp/internal/dtos"
 )
-
-// TODO: think in a better naming
-type RequestInfo struct {
-	IPAddress  string
-	UserAgent  string
-	DeviceInfo DeviceInfo
-}
-
-type DeviceInfo struct {
-	Browser     string `json:"browser"`
-	Platform    string `json:"platform"`
-	DeviceModel string `json:"device_model,omitempty"`
-	DisplayName string `json:"display_name"`
-	OS          string `json:"os"`
-}
 
 func RequestInfoMiddleware() func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -33,13 +19,13 @@ func RequestInfoMiddleware() func(next http.Handler) http.Handler {
 			userAgentStr := r.UserAgent()
 			deviceInfo := parseUserAgent(userAgentStr)
 
-			requestInfo := RequestInfo{
+			requestInfo := dtos.RequestInfo{
 				IPAddress:  ipAddress,
 				UserAgent:  userAgentStr,
 				DeviceInfo: deviceInfo,
 			}
 
-			ctx = context.WithValue(ctx, RequestInfoContextKey, &requestInfo)
+			ctx = context.WithValue(ctx, requestInfoContextKey, &requestInfo)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -66,7 +52,7 @@ func getClientIP(r *http.Request) string {
 	return ip
 }
 
-func parseUserAgent(userAgent string) DeviceInfo {
+func parseUserAgent(userAgent string) dtos.DeviceInfo {
 	ua := useragent.New(userAgent)
 
 	browser, _ := ua.Browser()
@@ -75,7 +61,7 @@ func parseUserAgent(userAgent string) DeviceInfo {
 	model := ua.Model()
 	displayName := generateDisplayName(browser, platform, model)
 
-	return DeviceInfo{
+	return dtos.DeviceInfo{
 		Browser:     browser,
 		Platform:    platform,
 		DeviceModel: model,

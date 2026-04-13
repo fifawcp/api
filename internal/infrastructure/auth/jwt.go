@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -37,9 +39,16 @@ func (ja *JWTAuthenticator) GenerateToken(
 	}
 
 	expiresAt := time.Now().Add(expiry)
+	b := make([]byte, 16)
+	_, err := rand.Read(b)
+	if err != nil {
+		return nil, err
+	}
+	jti := hex.EncodeToString(b)
 
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
 			Subject:   userID,
 			Issuer:    ja.issuer,
 			Audience:  jwt.ClaimStrings{ja.audience},

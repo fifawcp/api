@@ -1,4 +1,4 @@
-package repositories
+package storage
 
 import (
 	"context"
@@ -6,27 +6,27 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ncondes/fifa-world-cup-pickems/internal/domain"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/config"
+	"github.com/ncondes/fifawcp/internal/domain"
+	"github.com/ncondes/fifawcp/internal/infrastructure/config"
 	"github.com/redis/go-redis/v9"
 )
 
-type OTPRepository struct {
+type OTPStorage struct {
 	redis *redis.Client
 	cfg   *config.Config
 }
 
-func NewOTPRepository(
+func NewOTPStorage(
 	redis *redis.Client,
 	cfg *config.Config,
-) *OTPRepository {
-	return &OTPRepository{
+) *OTPStorage {
+	return &OTPStorage{
 		redis: redis,
 		cfg:   cfg,
 	}
 }
 
-func (r *OTPRepository) SetOTP(
+func (r *OTPStorage) SetOTP(
 	ctx context.Context,
 	otp *domain.OTP,
 	ttl time.Duration,
@@ -44,7 +44,7 @@ func (r *OTPRepository) SetOTP(
 	return r.redis.Set(ctx, key, jsonData, ttl).Err()
 }
 
-func (r *OTPRepository) GetOTP(
+func (r *OTPStorage) GetOTP(
 	ctx context.Context,
 	identifier string,
 	purpose domain.OTPPurpose,
@@ -71,7 +71,7 @@ func (r *OTPRepository) GetOTP(
 	return &otp, nil
 }
 
-func (r *OTPRepository) IncrementAttempts(
+func (r *OTPStorage) IncrementAttempts(
 	ctx context.Context,
 	identifier string,
 	purpose domain.OTPPurpose,
@@ -95,7 +95,7 @@ func (r *OTPRepository) IncrementAttempts(
 	return r.SetOTP(ctx, otp, ttl)
 }
 
-func (r *OTPRepository) DeleteOTP(
+func (r *OTPStorage) DeleteOTP(
 	ctx context.Context,
 	identifier string,
 	purpose domain.OTPPurpose,
@@ -107,6 +107,6 @@ func (r *OTPRepository) DeleteOTP(
 	return r.redis.Del(ctx, key).Err()
 }
 
-func (r *OTPRepository) createKey(purpose domain.OTPPurpose, identifier string) string {
+func (r *OTPStorage) createKey(purpose domain.OTPPurpose, identifier string) string {
 	return fmt.Sprintf("otp:%s:%s", purpose, identifier)
 }

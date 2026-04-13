@@ -3,23 +3,58 @@ package main
 import (
 	"errors"
 	"net/http"
+	"net/url"
 
 	"github.com/joho/godotenv"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/app"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/auth"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/cache"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/config"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/db"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/logging"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/validator"
+	docs "github.com/ncondes/fifawcp/docs/swagger"
+	"github.com/ncondes/fifawcp/internal/app"
+	"github.com/ncondes/fifawcp/internal/infrastructure/auth"
+	"github.com/ncondes/fifawcp/internal/infrastructure/cache"
+	"github.com/ncondes/fifawcp/internal/infrastructure/config"
+	"github.com/ncondes/fifawcp/internal/infrastructure/db"
+	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
+	"github.com/ncondes/fifawcp/internal/infrastructure/mailer"
+	"github.com/ncondes/fifawcp/internal/infrastructure/scheduler"
+	"github.com/ncondes/fifawcp/internal/infrastructure/validator"
 )
 
+const version = "0.0.1"
+
+//	@title			FIFA World Cup Pickems API
+//	@version		0.0.0
+//	@description	Passwordless authentication API with OTP, JWT, and multi-device session management.
+
+//	@schemes	http https
+
+//	@host
+//	@BasePath	/api
+
+//	@tag.name			auth
+//	@tag.description	OTP request, token exchange, refresh, logout, and session management
+
+//	@tag.name			users
+//	@tag.description	Authenticated user profile and data
+
+//	@tag.name			debug
+//	@tag.description	Non-production only. These endpoints are not registered in production.
+
+// @securityDefinitions.apikey	BearerAuth
+// @in							header
+// @name						Authorization
+// @description				Enter your JWT token in format: Bearer {token}
 func main() {
 	// Load environment variables from .env
 	godotenv.Load()
 
 	// Create config
 	cfg := config.NewConfig()
+
+	// Configure Swagger docs at runtime
+	if u, err := url.Parse(cfg.APIBaseURL); err == nil {
+		docs.SwaggerInfo.Host = u.Host
+	}
+	docs.SwaggerInfo.BasePath = "/api"
+	docs.SwaggerInfo.Version = version
 
 	// Create Logger
 	logger := logging.NewSlogLogger(cfg)
@@ -59,6 +94,12 @@ func main() {
 		cfg.JWT.RefreshTokenExpiry,
 	)
 
+	// Create Mailer
+	resendMailer := mailer.NewResendMailer(cfg)
+
+	// Create scheduler
+	scheduler := scheduler.NewCronScheduler(logger)
+
 	// Create app container
 	app := app.NewAppContainer(
 		cfg,
@@ -67,6 +108,8 @@ func main() {
 		redis,
 		validator,
 		jwtAuthenticator,
+		resendMailer,
+		scheduler,
 	)
 
 	// Create router

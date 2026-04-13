@@ -1,19 +1,24 @@
 package config
 
 import (
+	"strings"
 	"time"
 
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/env"
+	"github.com/ncondes/fifawcp/internal/infrastructure/env"
 )
 
 type Config struct {
-	Server ServerConfig
-	Port   string
-	Env    string
-	DB     DBConfig
-	Redis  RedisConfig
-	JWT    JWTConfig
-	Auth   AuthConfig
+	APIBaseURL string
+	Server     ServerConfig
+	Port       string
+	Env        string
+	DB         DBConfig
+	Redis      RedisConfig
+	JWT        JWTConfig
+	Auth       AuthConfig
+	Mailer     MailerConfig
+	Cron       CronConfig
+	RateLimit  RateLimitConfig
 }
 
 type ServerConfig struct {
@@ -21,6 +26,11 @@ type ServerConfig struct {
 	WriteTimeout   time.Duration
 	ReadTimeout    time.Duration
 	IdleTimeout    time.Duration
+	CORS           CORSConfig
+}
+
+type CORSConfig struct {
+	AllowedOrigins []string
 }
 
 type DBConfig struct {
@@ -37,6 +47,7 @@ type RedisConfig struct {
 	DB           int
 	PoolSize     int
 	QueryTimeout time.Duration
+	UserCacheTTL time.Duration
 }
 
 type JWTConfig struct {
@@ -54,15 +65,40 @@ type AuthConfig struct {
 	OTPCooldown    time.Duration
 }
 
+type MailerConfig struct {
+	APIKey      string
+	FromAddress string
+}
+
+type CronConfig struct {
+	CleanupSessionsSchedule string
+}
+
+type RateLimitConfig struct {
+	Enabled    bool
+	StrictIP   RateLimitTier
+	ModerateIP RateLimitTier
+	RelaxedIP  RateLimitTier
+}
+
+type RateLimitTier struct {
+	RequestsPerWindow int
+	Window            time.Duration
+}
+
 func NewConfig() *Config {
 	return &Config{
-		Port: env.GetString("PORT", "8080"),
-		Env:  env.GetString("ENV", "development"),
+		APIBaseURL: env.GetString("API_BASE_URL", "http://localhost:8080"),
+		Port:       env.GetString("PORT", "8080"),
+		Env:        env.GetString("ENV", "development"),
 		Server: ServerConfig{
 			ContextTimeout: env.GetDuration("SERVER_CONTEXT_TIMEOUT", 30*time.Second),
 			WriteTimeout:   env.GetDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
 			ReadTimeout:    env.GetDuration("SERVER_READ_TIMEOUT", 30*time.Second),
 			IdleTimeout:    env.GetDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
+			CORS: CORSConfig{
+				AllowedOrigins: strings.Split(env.GetString("CORS_ALLOWED_ORIGINS", "*"), ","),
+			},
 		},
 		DB: DBConfig{
 			Address:      env.GetString("DB_ADDRESS", "postgres://postgres:password@localhost:5432/pickems?sslmode=disable"),
@@ -77,6 +113,7 @@ func NewConfig() *Config {
 			DB:           env.GetInt("REDIS_DB", 0),
 			PoolSize:     env.GetInt("REDIS_POOL_SIZE", 10),
 			QueryTimeout: env.GetDuration("REDIS_QUERY_TIMEOUT", 2*time.Second),
+			UserCacheTTL: env.GetDuration("REDIS_USER_CACHE_TTL", 15*time.Minute),
 		},
 		JWT: JWTConfig{
 			Secret:             env.GetString("JWT_SECRET", "secret"),
@@ -91,5 +128,31 @@ func NewConfig() *Config {
 			MaxOTPAttempts: env.GetInt("AUTH_MAX_OTP_ATTEMPTS", 3),
 			OTPCooldown:    env.GetDuration("AUTH_OTP_COOLDOWN", 30*time.Second),
 		},
+		Mailer: MailerConfig{
+			APIKey:      env.GetString("MAILER_API_KEY", ""),
+			FromAddress: env.GetString("MAILER_FROM_ADDRESS", ""),
+		},
+		Cron: CronConfig{
+			CleanupSessionsSchedule: env.GetString("CRON_CLEANUP_SESSIONS_SCHEDULE", "0 0 * * *"), // Every day at midnight
+		},
+		RateLimit: RateLimitConfig{
+			Enabled: env.GetBool("RATE_LIMIT_ENABLED", true),
+			StrictIP: RateLimitTier{
+				RequestsPerWindow: env.GetInt("RATE_LIMIT_STRICT_IP_REQUESTS_PER_WINDOW", 10),
+				Window:            env.GetDuration("RATE_LIMIT_STRICT_IP_WINDOW", 1*time.Hour),
+			},
+			ModerateIP: RateLimitTier{
+				RequestsPerWindow: env.GetInt("RATE_LIMIT_MODERATE_IP_REQUESTS_PER_WINDOW", 20),
+				Window:            env.GetDuration("RATE_LIMIT_MODERATE_IP_WINDOW", 15*time.Minute),
+			},
+			RelaxedIP: RateLimitTier{
+				RequestsPerWindow: env.GetInt("RATE_LIMIT_RELAXED_IP_REQUESTS_PER_WINDOW", 60),
+				Window:            env.GetDuration("RATE_LIMIT_RELAXED_IP_WINDOW", 1*time.Hour),
+			},
+		},
 	}
+}
+
+func (c *Config) IsProd() bool {
+	return strings.EqualFold(c.Env, "production") || strings.EqualFold(c.Env, "prod")
 }

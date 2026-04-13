@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/ncondes/fifa-world-cup-pickems/internal/domain"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/config"
+	"github.com/ncondes/fifawcp/internal/domain"
+	"github.com/ncondes/fifawcp/internal/infrastructure/config"
 )
 
 type UserRepository struct {
@@ -77,6 +77,42 @@ func (r *UserRepository) GetUserByIdentifier(
 	var user domain.User
 
 	err := r.db.QueryRowContext(ctx, query, identifier).Scan(
+		&user.ID,
+		&user.FirstName,
+		&user.LastName,
+		&user.Username,
+		&user.Email,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		return nil, handleDBError(err, resourceUser)
+	}
+
+	return &user, nil
+}
+
+func (r *UserRepository) GetUserByID(
+	ctx context.Context,
+	userID string,
+) (*domain.User, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	query := `SELECT
+		id,
+		first_name,
+		last_name,
+		username,
+		email,
+		created_at,
+		updated_at
+	FROM users
+	WHERE id = $1`
+
+	var user domain.User
+
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(
 		&user.ID,
 		&user.FirstName,
 		&user.LastName,

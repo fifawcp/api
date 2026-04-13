@@ -20,7 +20,7 @@ type OTP struct {
 	CreatedAt  time.Time  `json:"created_at"`
 }
 
-type OTPRepositoryInterface interface {
+type OTPStorage interface {
 	SetOTP(ctx context.Context, otp *OTP, ttl time.Duration) error
 	GetOTP(ctx context.Context, identifier string, purpose OTPPurpose) (*OTP, error)
 	IncrementAttempts(ctx context.Context, identifier string, purpose OTPPurpose) error

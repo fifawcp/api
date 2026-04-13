@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/ncondes/fifa-world-cup-pickems/internal/domain"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/config"
+	"github.com/ncondes/fifawcp/internal/domain"
+	"github.com/ncondes/fifawcp/internal/infrastructure/config"
 )
 
 type SessionRepository struct {
@@ -205,13 +205,14 @@ func (r *SessionRepository) DeleteAllSessions(
 func (r *SessionRepository) DeleteSessionById(
 	ctx context.Context,
 	sessionID string,
+	userID string,
 ) error {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
 
-	query := `DELETE FROM sessions WHERE id = $1`
+	query := `DELETE FROM sessions WHERE id = $1 AND user_id = $2`
 
-	result, err := r.db.ExecContext(ctx, query, sessionID)
+	result, err := r.db.ExecContext(ctx, query, sessionID, userID)
 	if err != nil {
 		return handleDBError(err, resourceSession)
 	}
@@ -227,4 +228,23 @@ func (r *SessionRepository) DeleteSessionById(
 	}
 
 	return nil
+}
+
+func (r *SessionRepository) DeleteExpiredSessions(ctx context.Context) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	query := `DELETE FROM sessions WHERE expires_at < NOW()`
+
+	result, err := r.db.ExecContext(ctx, query)
+	if err != nil {
+		return 0, handleDBError(err, resourceSession)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, handleDBError(err, resourceSession)
+	}
+
+	return rowsAffected, nil
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/config"
+	"github.com/ncondes/fifawcp/internal/infrastructure/config"
 	"github.com/redis/go-redis/v9"
 )
 

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>{{if eq .Purpose "registration"}}Confirm your email{{else}}Your login code{{end}}</title>
+    <style>
+      /* ── Color tokens — edit here to retheme the email ── */
+      :root {
+        --color-bg:             #f5f5f5;
+        --color-card:           #ffffff;
+        --color-border:         #e5e5e5;
+        --color-text-primary:   #171717;
+        --color-text-secondary: #737373;
+        --color-text-muted:     #a3a3a3;
+        --color-otp-bg:         #fafafa;
+        --color-otp-border:     #d4d4d4;
+        --color-otp-code:       #171717;
+        --color-notice-bg:      #fafafa;
+        --color-notice-border:  #d4d4d4;
+        --color-header-bg:      #404040;
+        --color-header-text:    #f5f5f5;
+        --color-header-sub:     #a3a3a3;
+      }
+
+      .bg         { background-color: var(--color-bg); }
+      .card       { background-color: var(--color-card); }
+      .header     { background-color: var(--color-header-bg); }
+      .brand      { color: var(--color-header-text); font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
+      .brand-sub  { color: var(--color-header-sub); font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; }
+      .title      { color: var(--color-text-primary); font-size: 22px; font-weight: 700; line-height: 1.3; }
+      .subtitle   { color: var(--color-text-secondary); font-size: 14px; line-height: 1.7; }
+      .otp-box    { background-color: var(--color-otp-bg); border: 1px solid var(--color-otp-border); border-radius: 10px; }
+      .otp-label  { color: var(--color-text-muted); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; }
+      .otp-code   { color: var(--color-otp-code); font-size: 44px; font-weight: 800; letter-spacing: 12px; font-variant-numeric: tabular-nums; }
+      .otp-expiry { color: var(--color-text-muted); font-size: 12px; }
+      .notice     { background-color: var(--color-notice-bg); border-left: 3px solid var(--color-notice-border); border-radius: 0 6px 6px 0; }
+      .notice-text{ color: var(--color-text-secondary); font-size: 12px; line-height: 1.6; }
+      .divider    { border-top: 1px solid var(--color-border); }
+      .footer     { color: var(--color-text-muted); font-size: 12px; line-height: 1.6; }
+    </style>
+  </head>
+  <body class="bg" style="margin:0;padding:0;background-color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+
+    <!-- Outer wrapper -->
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f5f5;padding:48px 16px;">
+      <tr>
+        <td align="center">
+
+          <!-- Card -->
+          <table width="540" cellpadding="0" cellspacing="0" border="0" style="max-width:540px;width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e5e5;">
+
+            <!-- ── HEADER ── -->
+            <tr>
+              <td class="header" style="background-color:#404040;padding:28px 40px;text-align:center;">
+                <div class="brand" style="color:#f5f5f5;font-size:17px;font-weight:700;letter-spacing:-0.2px;">FIFA World Cup Pickems</div>
+                <div class="brand-sub" style="color:#a3a3a3;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-top:5px;">2026 Edition</div>
+              </td>
+            </tr>
+
+            <!-- ── BODY ── -->
+            <tr>
+              <td style="padding:40px 44px 32px;">
+
+                <!-- Title -->
+                <h1 class="title" style="margin:0 0 10px;font-size:22px;font-weight:700;color:#171717;text-align:center;line-height:1.3;">
+                  {{if eq .Purpose "registration"}}
+                    Confirm your email address
+                  {{else}}
+                    Your verification code
+                  {{end}}
+                </h1>
+
+                <!-- Subtitle -->
+                <p class="subtitle" style="margin:0 0 32px;font-size:14px;color:#737373;text-align:center;line-height:1.7;">
+                  {{if eq .Purpose "registration"}}
+                    Use the code below to verify your email and complete<br/>your registration for the World Cup prediction challenge.
+                  {{else}}
+                    Enter this code to sign in to your account.<br/>It is valid for 10 minutes.
+                  {{end}}
+                </p>
+
+                <!-- OTP Block -->
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                  <tr>
+                    <td class="otp-box" style="background-color:#fafafa;border:1px solid #d4d4d4;border-radius:10px;padding:28px 20px;text-align:center;">
+                      <div class="otp-label" style="color:#a3a3a3;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">Verification Code</div>
+                      <div class="otp-code" style="color:#171717;font-size:44px;font-weight:800;letter-spacing:12px;font-variant-numeric:tabular-nums;line-height:1;">{{.OTP}}</div>
+                      <div class="otp-expiry" style="color:#a3a3a3;font-size:12px;margin-top:12px;">Expires in 10 minutes</div>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Security notice -->
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td class="notice" style="background-color:#fafafa;border-left:3px solid #d4d4d4;border-radius:0 6px 6px 0;padding:12px 16px;">
+                      <p class="notice-text" style="margin:0;font-size:12px;color:#737373;line-height:1.6;">
+                        <strong>Keep this code private.</strong> FIFA World Cup Pickems will never ask for it by phone or email.
+                        If you did not request this, you can safely ignore it.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+
+              </td>
+            </tr>
+
+            <!-- ── DIVIDER ── -->
+            <tr>
+              <td style="padding:0 44px;">
+                <hr class="divider" style="border:none;border-top:1px solid #e5e5e5;margin:0;" />
+              </td>
+            </tr>
+
+            <!-- ── FOOTER ── -->
+            <tr>
+              <td style="padding:22px 44px 28px;text-align:center;">
+                <p class="footer" style="margin:0;font-size:12px;color:#a3a3a3;line-height:1.6;">
+                  © 2026 FIFA World Cup Pickems &nbsp;·&nbsp; All rights reserved
+                </p>
+              </td>
+            </tr>
+
+          </table>
+          <!-- End Card -->
+
+        </td>
+      </tr>
+    </table>
+
+  </body>
+</html>

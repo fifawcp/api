@@ -66,6 +66,17 @@ docker-restart:
 	@docker compose restart
 	@echo "Services restarted"
 
+# ==================== Swagger ====================
+ 
+.PHONY: swagger
+swagger:
+	@echo "Generating Swagger documentation..."
+	@swag init -g main.go \
+		-d ./cmd/api/,./internal/handlers,./internal/dtos,./internal/domain,./internal/packages/httputils \
+		-o ./docs/swagger \
+		&& swag fmt
+	@echo "Swagger documentation generated successfully"
+
 # Catch-all target to prevent make from treating migration names as targets
 %:
 	@: 

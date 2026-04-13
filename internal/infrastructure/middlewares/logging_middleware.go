@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/infrastructure/logging"
+	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
 )
 
-func LogRequest(logger logging.Logger) func(next http.Handler) http.Handler {
+func LogRequestMiddleware(logger logging.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)

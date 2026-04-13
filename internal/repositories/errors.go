@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lib/pq"
-	"github.com/ncondes/fifa-world-cup-pickems/internal/domain"
+	"github.com/ncondes/fifawcp/internal/domain"
 )
 
 type resourceType string
