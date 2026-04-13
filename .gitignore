@@ -1,0 +1,15 @@
+tmp/
+.env
+.vscode/
+
+coverage.out
+coverage.html
+coverage-integration.out
+
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+docs/
