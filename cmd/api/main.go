@@ -11,7 +11,7 @@ import (
 	"github.com/ncondes/fifawcp/internal/infrastructure/auth"
 	"github.com/ncondes/fifawcp/internal/infrastructure/cache"
 	"github.com/ncondes/fifawcp/internal/infrastructure/config"
-	"github.com/ncondes/fifawcp/internal/infrastructure/db"
+	infradb "github.com/ncondes/fifawcp/internal/infrastructure/db"
 	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
 	"github.com/ncondes/fifawcp/internal/infrastructure/mailer"
 	"github.com/ncondes/fifawcp/internal/infrastructure/scheduler"
@@ -60,7 +60,7 @@ func main() {
 	logger := logging.NewSlogLogger(cfg)
 
 	// Connect to Database
-	db, err := db.NewPostgresDB(
+	db, err := infradb.NewPostgresDB(
 		cfg.DB.Address,
 		cfg.DB.MaxOpenConns,
 		cfg.DB.MaxIdleConns,
@@ -72,6 +72,13 @@ func main() {
 	}
 	defer db.Close()
 	logger.Info("Connected to database successfully")
+
+	// Run database migrations
+	if err := infradb.RunMigrations(db, "file://cmd/db/migrations"); err != nil {
+		logger.Error("Error running database migrations", "error", err)
+		return
+	}
+	logger.Info("Database migrations applied successfully")
 
 	// Create Redis client
 	redis, err := cache.NewRedisClient(cfg)

@@ -7,6 +7,7 @@ require (
 	github.com/go-chi/cors v1.2.2
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/golang-migrate/migrate/v4 v4.18.3
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.12.3
 	github.com/mssola/useragent v1.0.0
@@ -20,6 +21,9 @@ require (
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
+	github.com/hashicorp/errwrap v1.1.0 // indirect
+	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/air-verse/air v1.65.0 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
