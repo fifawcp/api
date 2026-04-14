@@ -53,7 +53,7 @@ func AuthMiddleware(
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), authenticatedUserContextKey, user)
+			ctx := context.WithValue(r.Context(), AuthenticatedUserContextKey, user)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

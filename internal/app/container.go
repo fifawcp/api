@@ -141,7 +141,7 @@ func (app *AppContainer) NewRouter() *chi.Mux {
 	r.Route("/debug", func(r chi.Router) {
 		if !app.Config.IsProd() {
 			debugHandler := handlers.NewDebugHandler(app.Config)
-			r.Get("/auth/otp/request/{identifier}", debugHandler.GetOtp)
+			r.Get("/auth/otp/request/{identifier}", debugHandler.RequestOtp)
 		}
 	})
 

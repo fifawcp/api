@@ -25,7 +25,7 @@ func RequestInfoMiddleware() func(next http.Handler) http.Handler {
 				DeviceInfo: deviceInfo,
 			}
 
-			ctx = context.WithValue(ctx, requestInfoContextKey, &requestInfo)
+			ctx = context.WithValue(ctx, RequestInfoContextKey, &requestInfo)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

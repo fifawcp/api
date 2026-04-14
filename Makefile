@@ -1,6 +1,8 @@
 include .env
 MIGRATIONS_PATH = ./cmd/db/migrations
 
+CYAN  := \033[0;36m
+
 .DEFAULT_GOAL := help
 
 # ==================== Development ====================
@@ -9,6 +11,24 @@ MIGRATIONS_PATH = ./cmd/db/migrations
 dev:
 	@echo "Starting API with hot reload (air)..."
 	@air
+
+# ==================== Testing ====================
+
+.PHONY: test-unit
+test-unit:
+	@echo "Running unit tests..."
+	@go test -v -race -count=1 -timeout 60s ./internal/...
+	@echo "Unit tests completed"
+ 
+.PHONY: test-coverage
+test-coverage:
+	@echo "Running unit tests with coverage..."
+	@go test -race -count=1 -timeout 60s \
+		-coverprofile=coverage.out \
+		-covermode=atomic \
+		./internal/...
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report: $(CYAN)coverage.html$(RESET)"
 
 # ==================== Migrations ====================
 
