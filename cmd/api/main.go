@@ -6,7 +6,7 @@ import (
 	"net/url"
 
 	"github.com/joho/godotenv"
-	docs "github.com/ncondes/fifawcp/docs/swagger"
+	"github.com/ncondes/fifawcp/docs"
 	"github.com/ncondes/fifawcp/internal/app"
 	"github.com/ncondes/fifawcp/internal/infrastructure/auth"
 	"github.com/ncondes/fifawcp/internal/infrastructure/cache"

@@ -311,7 +311,7 @@ func (s *AuthService) generateAndStoreOTP(
 	}
 
 	// Log OTP in development for debugging
-	if s.cfg.Env == "development" {
+	if !s.cfg.IsProd() {
 		s.logger.Info(
 			"[DEBUG] OTP",
 			"purpose", purpose,

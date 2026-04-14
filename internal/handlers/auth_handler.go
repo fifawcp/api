@@ -102,7 +102,7 @@ func (h *AuthHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 		w,
 		authenticationResponse.Auth.RefreshToken,
 		authenticationResponse.Auth.ExpiresAt,
-		h.cfg.Env == "production",
+		h.cfg.IsProd(),
 	)
 	httputils.RespondWithData(w, http.StatusOK, authenticationResponse)
 }
@@ -136,7 +136,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		w,
 		authResponse.RefreshToken,
 		authResponse.ExpiresAt,
-		h.cfg.Env == "production",
+		h.cfg.IsProd(),
 	)
 	httputils.RespondWithData(w, http.StatusOK, authResponse)
 }
@@ -164,7 +164,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.ClearRefreshTokenCookie(w, h.cfg.Env == "production")
+	httputils.ClearRefreshTokenCookie(w, h.cfg.IsProd())
 	httputils.RespondWithData(w, http.StatusNoContent, nil)
 }
 
@@ -191,7 +191,7 @@ func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.ClearRefreshTokenCookie(w, h.cfg.Env == "production")
+	httputils.ClearRefreshTokenCookie(w, h.cfg.IsProd())
 	httputils.RespondWithData(w, http.StatusNoContent, nil)
 }
 

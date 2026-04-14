@@ -35,7 +35,7 @@ func (m *ResendMailer) SendOTPEmail(
 	to, otp string,
 	purpose domain.OTPPurpose,
 ) error {
-	if m.cfg.Env != "production" {
+	if !m.cfg.IsProd() {
 		return nil
 	}
 
@@ -66,7 +66,7 @@ func (m *ResendMailer) SendWelcomeEmail(
 	ctx context.Context,
 	to, firstName string,
 ) error {
-	if m.cfg.Env != "production" {
+	if !m.cfg.IsProd() {
 		return nil
 	}
 

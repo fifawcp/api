@@ -19,7 +19,7 @@ func NewSlogLogger(config *config.Config) *SlogLogger {
 		Level: slog.LevelInfo,
 	}
 
-	if config.Env == "production" {
+	if config.IsProd() {
 		handler = slog.NewJSONHandler(os.Stdout, options)
 	} else {
 		options.Level = slog.LevelDebug

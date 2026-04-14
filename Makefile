@@ -2,6 +2,7 @@ include .env
 MIGRATIONS_PATH = ./cmd/db/migrations
 
 CYAN  := \033[0;36m
+RESET := \033[0m
 
 .DEFAULT_GOAL := help
 
@@ -105,13 +106,17 @@ docker-restart:
 	@echo "Services restarted"
 
 # ==================== Swagger ====================
- 
+
+# docs is an alias used by CI (make docs). Both targets run the same command.
+.PHONY: docs
+docs: swagger
+
 .PHONY: swagger
 swagger:
 	@echo "Generating Swagger documentation..."
 	@swag init -g main.go \
 		-d ./cmd/api/,./internal/handlers,./internal/dtos,./internal/domain,./internal/packages/httputils \
-		-o ./docs/swagger \
+		-o ./docs \
 		&& swag fmt
 	@echo "Swagger documentation generated successfully"
 

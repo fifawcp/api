@@ -1,0 +1,68 @@
+name: release
+
+# Triggers when a version tag (e.g. v1.2.3) is pushed to any branch.
+# Creates a DRAFT GitHub Release pre-populated with commits since the
+# last tag. You then edit the draft and publish it manually.
+# Publishing the release triggers deploy-prod.yml.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  # Create release draft
+  create-release:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+
+    # Needs write access to create GitHub Releases.
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch full history so we can diff against the previous tag.
+          fetch-depth: 0
+
+      # Build a raw commit log since the previous tag as a starting point
+      # for the changelog. Edit and clean this up before publishing.
+      - name: Generate commit log since last tag
+        id: log
+        run: |
+          PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV" ]; then
+            echo "Commits since ${PREV}:"
+            LOG=$(git log ${PREV}..HEAD --oneline --no-merges)
+          else
+            echo "First release — no previous tag found."
+            LOG=$(git log --oneline --no-merges)
+          fi
+          # Write to output using multiline syntax.
+          {
+            echo "log<<EOF"
+            echo "$LOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # Creates the draft release. Edit the body in GitHub UI before publishing.
+      # Publishing the release will trigger deploy-prod.yml.
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: ${{ github.ref_name }}
+          body: |
+            ## What's changed
+
+            <!-- Replace the raw commit log below with a clean, human-written changelog. -->
+            <!-- Group by: Features, Bug fixes, Breaking changes, Internal. -->
+
+            ${{ steps.log.outputs.log }}
+
+            ## Breaking changes
+
+            <!-- List any breaking changes here, or remove this section. -->
+
+            ---
+            **Full diff:** https://github.com/${{ github.repository }}/compare/PREV...${{ github.ref_name }}
