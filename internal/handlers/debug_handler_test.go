@@ -45,7 +45,7 @@ func TestDebugHandler_RequestOtp(t *testing.T) {
 		req := makeRequestOtpReq(t)
 
 		w := httptest.NewRecorder()
-		h.RequestOtp(w, req)
+		h.RequestTotp(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 

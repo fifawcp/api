@@ -19,7 +19,7 @@ func NewDebugHandler(cfg *config.Config) *DebugHandler {
 	}
 }
 
-// RequestOtp godoc
+// RequestTotp godoc
 //
 //	@Summary		Get non-production OTP
 //	@Description	Returns the current TOTP-style bypass OTP for a given identifier.
@@ -29,8 +29,8 @@ func NewDebugHandler(cfg *config.Config) *DebugHandler {
 //	@Produce		json
 //	@Param			identifier	path		string					true	"User identifier"
 //	@Success		200			{object}	httputils.Response{}	"OTP and seconds until rotation"
-//	@Router			/debug/auth/otp/request/{identifier} [get]
-func (h *DebugHandler) RequestOtp(w http.ResponseWriter, r *http.Request) {
+//	@Router			/debug/totp/{identifier} [get]
+func (h *DebugHandler) RequestTotp(w http.ResponseWriter, r *http.Request) {
 	identifier := chi.URLParam(r, "identifier")
 
 	httputils.RespondWithData(w, http.StatusOK, map[string]any{

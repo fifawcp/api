@@ -47,13 +47,6 @@ func (app *AppContainer) NewRouter() *chi.Mux {
 		httpSwagger.URL(app.Config.APIBaseURL+"/swagger/doc.json"),
 	))
 
-	r.Route("/debug", func(r chi.Router) {
-		if !app.Config.IsProd() {
-			debugHandler := handlers.NewDebugHandler(app.Config)
-			r.Get("/auth/otp/request/{identifier}", debugHandler.RequestOtp)
-		}
-	})
-
 	// API routes
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +88,13 @@ func (app *AppContainer) NewRouter() *chi.Mux {
 		r.Route("/users", func(r chi.Router) {
 			r.Use(middlewares.AuthMiddleware(app.Authenticator, app.UserService, app.Logger))
 			r.Get("/profile", app.UserHandler.GetProfile)
+		})
+
+		r.Route("/debug", func(r chi.Router) {
+			if !app.Config.IsProd() {
+				debugHandler := handlers.NewDebugHandler(app.Config)
+				r.Get("/totp/{identifier}", debugHandler.RequestTotp)
+			}
 		})
 	})
 
