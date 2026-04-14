@@ -18,6 +18,9 @@ RUN go mod download && go mod verify
 # Required because cmd/api imports the generated docs package.
 RUN go install github.com/swaggo/swag/cmd/swag@latest
 
+# Install migrate for running database migrations at deploy time.
+RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+
 # Copy the rest of the source code.
 COPY . .
 
@@ -36,17 +39,19 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     ./cmd/api/
 
 # ---- Run Stage ----
-# scratch is an empty base image — the smallest and most secure option.
-# Only the compiled binary and TLS certificates are included.
-FROM scratch
+# Alpine is minimal but includes a shell, required for pre-deploy command.
+FROM alpine:3.21
 WORKDIR /app
 
-# Copy TLS certificates so the app can make outbound HTTPS calls
-# (e.g. to GCP APIs, mailer, external services).
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+# Install CA certificates for outbound HTTPS calls.
+RUN apk add --no-cache ca-certificates
 
 # Copy the compiled binary from the build stage.
 COPY --from=builder /app/api .
+
+# Copy the migrate binary and migrations for pre-deploy migrations.
+COPY --from=builder /go/bin/migrate /migrate
+COPY --from=builder /app/cmd/db/migrations /migrations
 
 # Cloud Run injects the PORT env var and routes traffic to it.
 # 8080 is the default expected port.
