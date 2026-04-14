@@ -39,14 +39,12 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     ./cmd/api/
 
 # ---- Run Stage ----
-# scratch is an empty base image — the smallest and most secure option.
-# Only the compiled binary and TLS certificates are included.
-FROM scratch
+# alpine is minimal but includes a shell, required for Railway's pre-deploy command.
+FROM alpine:3.21
 WORKDIR /app
 
-# Copy TLS certificates so the app can make outbound HTTPS calls
-# (e.g. to GCP APIs, mailer, external services).
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+# Install CA certificates for outbound HTTPS calls.
+RUN apk add --no-cache ca-certificates
 
 # Copy the compiled binary from the build stage.
 COPY --from=builder /app/api .
