@@ -18,6 +18,9 @@ RUN go mod download && go mod verify
 # Required because cmd/api imports the generated docs package.
 RUN go install github.com/swaggo/swag/cmd/swag@latest
 
+# Install migrate for running database migrations at deploy time.
+RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+
 # Copy the rest of the source code.
 COPY . .
 
@@ -47,6 +50,10 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Copy the compiled binary from the build stage.
 COPY --from=builder /app/api .
+
+# Copy the migrate binary and migrations for pre-deploy migrations.
+COPY --from=builder /go/bin/migrate /migrate
+COPY --from=builder /app/cmd/db/migrations /migrations
 
 # Cloud Run injects the PORT env var and routes traffic to it.
 # 8080 is the default expected port.
