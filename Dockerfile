@@ -39,7 +39,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     ./cmd/api/
 
 # ---- Run Stage ----
-# alpine is minimal but includes a shell, required for Railway's pre-deploy command.
+# Alpine is minimal but includes a shell, required for pre-deploy command.
 FROM alpine:3.21
 WORKDIR /app
 
