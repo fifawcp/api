@@ -20,7 +20,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # Fetch full history so we can diff against the previous tag.
           fetch-depth: 0
@@ -53,16 +53,67 @@ jobs:
           draft: true
           name: ${{ github.ref_name }}
           body: |
+            <!-- Raw commit log since previous tag - replace with clean changelog below -->
+            ${{ steps.log.outputs.log }}
+
+            <!-- ============================================================ -->
+            <!-- Release Notes Template - Fill in the sections below -->
+            <!-- ============================================================ -->
+
+            # Release ${{ github.ref_name }}
+
+            Brief summary of the release.
+
+            ## Highlights
+
+            - Highlight 1
+            - Highlight 2
+            - Highlight 3
+
             ## What's changed
 
-            <!-- Replace the raw commit log below with a clean, human-written changelog. -->
-            <!-- Group by: Features, Bug fixes, Breaking changes, Internal. -->
+            ### Features
+            - Added ...
 
-            ${{ steps.log.outputs.log }}
+            ### Improvements
+            - Improved ...
+
+            ### Bug fixes
+            - Fixed ...
+
+            ### Testing
+            - Added/updated ...
+
+            ### Developer experience
+            - Added/updated ...
+
+            ### Internal
+            - Refactored ...
+            - Updated dependencies ...
 
             ## Breaking changes
 
-            <!-- List any breaking changes here, or remove this section. -->
+            None.
 
-            ---
-            **Full diff:** https://github.com/${{ github.repository }}/compare/PREV...${{ github.ref_name }}
+            ## Migration notes
+
+            - Run ...
+            - Update ...
+            - Verify ...
+
+            ## Deployment notes
+
+            - Required environment variables:
+              - `VAR_NAME`
+            - Infra notes:
+              - ...
+            - Operational notes:
+              - ...
+
+            ## Contributors
+
+            - @username
+
+            ## Full diff
+
+            https://github.com/${{ github.repository }}/compare/PREV...${{ github.ref_name }}

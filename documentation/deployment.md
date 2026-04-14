@@ -81,89 +81,6 @@ git push origin feature/my-feature
 
 ---
 
-## GCP Cloud Build Setup
-
-All build logic lives in the `Dockerfile` at the root of the repository. Cloud Build uses a minimal `cloudbuild.yaml` to orchestrate: build the image, push it to Artifact Registry, and deploy to Cloud Run.
-
-### `cloudbuild.yaml`
-
-```yaml
-substitutions:
-  _REGION: europe-west1            # override per trigger if needed
-  _SERVICE: fifawcp-dev            # set to fifawcp-dev or fifawcp-prod in each trigger
-  _REGISTRY: europe-west1-docker.pkg.dev  # Artifact Registry host
-
-steps:
-  # Build the Docker image using the Dockerfile.
-  # Tagged with the commit SHA for full traceability.
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - build
-      - -t
-      - $_REGISTRY/$PROJECT_ID/$_SERVICE:$COMMIT_SHA
-      - .
-
-  # Push the image to Artifact Registry.
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - push
-      - $_REGISTRY/$PROJECT_ID/$_SERVICE:$COMMIT_SHA
-
-  # Deploy the new image to Cloud Run.
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    args:
-      - gcloud
-      - run
-      - deploy
-      - $_SERVICE
-      - --image=$_REGISTRY/$PROJECT_ID/$_SERVICE:$COMMIT_SHA
-      - --region=$_REGION
-      - --platform=managed
-      - --quiet
-
-images:
-  - $_REGISTRY/$PROJECT_ID/$_SERVICE:$COMMIT_SHA
-```
-
-### Creating the Triggers
-
-1. Go to **GCP Console → Cloud Build → Triggers → Create trigger**
-2. Connect your GitHub repository
-3. Create two triggers:
-
-**Dev trigger**
-
-- Name: `fifawcp-deploy-dev`
-- Event: Push to branch — regex `^develop$`
-- Configuration: `cloudbuild.yaml`
-- Substitutions: `_SERVICE=fifawcp-dev`
-
-**Prod trigger**
-
-- Name: `fifawcp-deploy-prod`
-- Event: Push to branch — regex `^main$`
-- Configuration: `cloudbuild.yaml`
-- Substitutions: `_SERVICE=fifawcp-prod`
-
-> Adjust `_REGION` and `_REGISTRY` to match your GCP project location and Artifact Registry repository.
-
----
-
-## Secrets & Environment Variables
-
-Runtime secrets (DB credentials, JWT secret, etc.) should be stored in **GCP Secret Manager** and injected into Cloud Run at deploy time — not stored in GitHub.
-
-In the GCP console: **Cloud Run → Service → Edit → Variables & Secrets**
-
-Or via CLI:
-
-```bash
-gcloud run deploy fifawcp-prod \
-  --update-secrets=DB_URL=db-url:latest,JWT_SECRET=jwt-secret:latest
-```
-
----
-
 ## Full Flow Summary
 
 | Step | Action | Handled by |
@@ -175,3 +92,70 @@ gcloud run deploy fifawcp-prod \
 | Merge → `main` | Deploy to production | GCP Cloud Build |
 | `git tag v1.2.3` | Draft release created | GitHub Actions |
 | Publish release | Changelog published | You (manual) |
+
+---
+
+## Release Notes Template
+
+Use this template when writing release notes for GitHub Releases:
+
+```md
+# Release vX.Y.Z
+
+Brief summary of the release.
+
+## Highlights
+
+- Highlight 1
+- Highlight 2
+- Highlight 3
+
+## What's changed
+
+### Features
+- Added ...
+
+### Improvements
+- Improved ...
+
+### Bug fixes
+- Fixed ...
+
+### Testing
+- Added/updated ...
+
+### Developer experience
+- Added/updated ...
+
+### Internal
+- Refactored ...
+- Updated dependencies ...
+
+## Breaking changes
+
+None.
+
+## Migration notes
+
+- Run ...
+- Update ...
+- Verify ...
+
+## Deployment notes
+
+- Required environment variables:
+  - `VAR_NAME`
+- Infra notes:
+  - ...
+- Operational notes:
+  - ...
+
+## Contributors
+
+- @username
+- @username
+
+## Full diff
+
+[PREV...vX.Y.Z](https://github.com/OWNER/REPO/compare/PREV...vX.Y.Z)
+```
