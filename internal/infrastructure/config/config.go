@@ -22,11 +22,12 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	ContextTimeout time.Duration
-	WriteTimeout   time.Duration
-	ReadTimeout    time.Duration
-	IdleTimeout    time.Duration
-	CORS           CORSConfig
+	ContextTimeout  time.Duration
+	WriteTimeout    time.Duration
+	ReadTimeout     time.Duration
+	IdleTimeout     time.Duration
+	ShutdownTimeout time.Duration
+	CORS            CORSConfig
 }
 
 type CORSConfig struct {
@@ -92,10 +93,11 @@ func NewConfig() *Config {
 		Port:       env.GetString("PORT", "8080"),
 		Env:        env.GetString("ENV", "development"),
 		Server: ServerConfig{
-			ContextTimeout: env.GetDuration("SERVER_CONTEXT_TIMEOUT", 30*time.Second),
-			WriteTimeout:   env.GetDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
-			ReadTimeout:    env.GetDuration("SERVER_READ_TIMEOUT", 30*time.Second),
-			IdleTimeout:    env.GetDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
+			ContextTimeout:  env.GetDuration("SERVER_CONTEXT_TIMEOUT", 30*time.Second),
+			WriteTimeout:    env.GetDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
+			ReadTimeout:     env.GetDuration("SERVER_READ_TIMEOUT", 30*time.Second),
+			IdleTimeout:     env.GetDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
+			ShutdownTimeout: env.GetDuration("SERVER_SHUTDOWN_TIMEOUT", 3*time.Second),
 			CORS: CORSConfig{
 				AllowedOrigins: strings.Split(env.GetString("CORS_ALLOWED_ORIGINS", "*"), ","),
 			},

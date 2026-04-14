@@ -12,7 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/ncondes/fifawcp/internal/domain"
 	"github.com/ncondes/fifawcp/internal/dtos"
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
 	"github.com/ncondes/fifawcp/internal/infrastructure/middlewares"
 	"github.com/ncondes/fifawcp/internal/infrastructure/validator"
 	"github.com/ncondes/fifawcp/internal/packages/testutils"
@@ -22,7 +21,7 @@ import (
 func newTestAuthHandler(s *testutils.MockAuthService) *AuthHandler {
 	return NewAuthHandler(
 		s,
-		logging.NewNoopLogger(),
+		&testutils.MockLogger{},
 		validator.NewValidator(),
 		testutils.NewTestConfig(),
 	)

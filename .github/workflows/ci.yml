@@ -101,4 +101,4 @@ jobs:
 
       # -race detects data races; -count=1 disables the test result cache.
       - name: Run unit tests with coverage
-        run: make test-coverage
+        run: make test-unit

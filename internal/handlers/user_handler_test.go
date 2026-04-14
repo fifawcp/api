@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
 	"github.com/ncondes/fifawcp/internal/packages/testutils"
 	"github.com/stretchr/testify/assert"
 )
@@ -15,7 +14,7 @@ import (
 func newTestUserHandler(s *testutils.MockUserService) *UserHandler {
 	return NewUserHandler(
 		s,
-		logging.NewNoopLogger(),
+		&testutils.MockLogger{},
 	)
 }
 
