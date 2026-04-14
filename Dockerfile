@@ -53,6 +53,9 @@ COPY --from=builder /app/api .
 COPY --from=builder /go/bin/migrate /migrate
 COPY --from=builder /app/cmd/db/migrations /migrations
 
+# Copy migrations to the absolute path expected by the Go application.
+COPY --from=builder /app/cmd/db/migrations /app/cmd/db/migrations
+
 # Cloud Run injects the PORT env var and routes traffic to it.
 # 8080 is the default expected port.
 EXPOSE 8080
