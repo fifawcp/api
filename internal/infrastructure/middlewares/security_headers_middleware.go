@@ -6,7 +6,7 @@ import (
 	"github.com/ncondes/fifawcp/internal/infrastructure/config"
 )
 
-func SecurityHeadersMiddleware(cfg *config.Config) func(next http.Handler) http.Handler {
+func SecurityHeaders(cfg *config.Config) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Browser MIME-type sniffing protection

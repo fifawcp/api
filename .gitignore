@@ -1,6 +1,7 @@
 tmp/
 .env
 .vscode/
+.DS_Store
 
 coverage.out
 coverage.html

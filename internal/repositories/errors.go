@@ -11,15 +11,19 @@ import (
 type resourceType string
 
 const (
-	foreignKeyViolation      = "23503"
-	uniqueViolation          = "23505"
-	checkConstraintViolation = "23514"
+	foreignKeyViolation       = "23503"
+	uniqueViolation           = "23505"
+	checkConstraintViolation  = "23514"
+	invalidTextRepresentation = "22P02"
 )
 
 const (
 	resourceUser         resourceType = "user"
 	resourceSession      resourceType = "session"
 	resourceRefreshToken resourceType = "refresh_token"
+	resourceBoard        resourceType = "board"
+	resourceBoardMember  resourceType = "board_member"
+	resourceBoardRanking resourceType = "board_ranking"
 )
 
 func handleDBError(
@@ -57,6 +61,10 @@ func translateSQLNoRowsError(err error, resource resourceType) error {
 		return domain.ErrSessionNotFound
 	case resourceRefreshToken:
 		return domain.ErrRefreshTokenNotFound
+	case resourceBoard:
+		return domain.ErrBoardNotFound
+	case resourceBoardMember:
+		return domain.ErrBoardMemberNotFound
 	default:
 		return err
 	}
@@ -64,6 +72,13 @@ func translateSQLNoRowsError(err error, resource resourceType) error {
 
 func translateForeignKeyViolation(pqErr *pq.Error) error {
 	switch pqErr.Constraint {
+	case
+		"boards_owner_user_id_fkey",
+		"board_members_board_id_fkey",
+		"board_members_user_id_fkey",
+		"board_rankings_board_id_fkey",
+		"board_rankings_user_id_fkey":
+		return domain.ErrUserNotFound
 	default:
 		return buildErrorFromPQError(pqErr)
 	}
@@ -75,6 +90,12 @@ func translateUniqueViolation(pqErr *pq.Error) error {
 		return domain.ErrUsernameAlreadyExists
 	case "users_email_key":
 		return domain.ErrUserAlreadyExists
+	case "boards_join_code_key":
+		return domain.ErrBoardAlreadyExists
+	case "board_members_pkey":
+		return domain.ErrBoardMemberAlreadyInBoard
+	case "board_rankings_pkey":
+		return domain.ErrBoardMemberAlreadyInBoard
 	default:
 		return buildErrorFromPQError(pqErr)
 	}

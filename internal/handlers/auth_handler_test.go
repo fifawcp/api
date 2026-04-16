@@ -12,7 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/ncondes/fifawcp/internal/domain"
 	"github.com/ncondes/fifawcp/internal/dtos"
-	"github.com/ncondes/fifawcp/internal/infrastructure/middlewares"
 	"github.com/ncondes/fifawcp/internal/infrastructure/validator"
 	"github.com/ncondes/fifawcp/internal/packages/testutils"
 	"github.com/stretchr/testify/assert"
@@ -27,16 +26,6 @@ func newTestAuthHandler(s *testutils.MockAuthService) *AuthHandler {
 	)
 }
 
-func withRequestInfo(req *http.Request, info *dtos.RequestInfo) *http.Request {
-	ctx := context.WithValue(req.Context(), middlewares.RequestInfoContextKey, info)
-	return req.WithContext(ctx)
-}
-
-func withAuthUser(req *http.Request, user *domain.User) *http.Request {
-	ctx := context.WithValue(req.Context(), middlewares.AuthenticatedUserContextKey, user)
-	return req.WithContext(ctx)
-}
-
 // ---------------------------------------------------------------------------
 // TestAuthHandler_RequestOtp
 // ---------------------------------------------------------------------------
@@ -47,6 +36,14 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 	loginPurpose := domain.OTPPurposeLogin
 	registrationPurpose := domain.OTPPurposeRegistration
 
+	makeRequestOtpReq := func(t *testing.T, body any) *http.Request {
+		t.Helper()
+
+		return testutils.MakeJSONRequest(
+			t, http.MethodPost, "/auth/otp/request", body,
+		)
+	}
+
 	t.Run("returns 204 on success (login)", func(t *testing.T) {
 		t.Parallel()
 
@@ -55,10 +52,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(
-			t,
-			http.MethodPost,
-			"/auth/otp/request",
+		req := makeRequestOtpReq(t,
 			dtos.RequestOtpDto{
 				Identifier: "john@example.com",
 				Purpose:    &loginPurpose,
@@ -78,10 +72,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(
-			t,
-			http.MethodPost,
-			"/auth/otp/request",
+		req := makeRequestOtpReq(t,
 			dtos.RequestOtpDto{
 				Identifier: "john@example.com",
 				Purpose:    &registrationPurpose,
@@ -134,7 +125,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
 
-				req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request", tc.payload)
+				req := makeRequestOtpReq(t, tc.payload)
 				w := httptest.NewRecorder()
 				h.RequestOtp(w, req)
 
@@ -162,7 +153,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request", dtos.RequestOtpDto{
+		req := makeRequestOtpReq(t, dtos.RequestOtpDto{
 			Identifier: "john@example.com",
 			Purpose:    &registrationPurpose,
 		})
@@ -189,7 +180,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request", dtos.RequestOtpDto{
+		req := makeRequestOtpReq(t, dtos.RequestOtpDto{
 			Identifier: "john@example.com",
 			Purpose:    &loginPurpose,
 		})
@@ -216,7 +207,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request", dtos.RequestOtpDto{
+		req := makeRequestOtpReq(t, dtos.RequestOtpDto{
 			Identifier: "john@example.com",
 			Purpose:    &loginPurpose,
 		})
@@ -246,8 +237,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request",
-			map[string]any{"identifier": "john@example.com", "purpose": "login"})
+		req := makeRequestOtpReq(t, map[string]any{"identifier": "john@example.com", "purpose": "login"})
 		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()
 
@@ -266,7 +256,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request", dtos.RequestOtpDto{
+		req := makeRequestOtpReq(t, dtos.RequestOtpDto{
 			Identifier: "john@example.com",
 			Purpose:    &loginPurpose,
 		})
@@ -296,8 +286,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request",
-			map[string]any{"identifier": "john@example.com", "purpose": "login"})
+		req := makeRequestOtpReq(t, map[string]any{"identifier": "john@example.com", "purpose": "login"})
 		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()
 
@@ -327,8 +316,12 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 
 	makeAuthReq := func(t *testing.T, body any) *http.Request {
 		t.Helper()
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/token", body)
-		req = withRequestInfo(req, defaultRequestInfo)
+
+		req := testutils.MakeJSONRequest(
+			t, http.MethodPost, "/auth/token", body,
+			testutils.WithRequestInfo(defaultRequestInfo),
+		)
+
 		return req
 	}
 
@@ -338,10 +331,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		expectedAccessToken := "access-token-value"
 		expectedRefreshToken := "refresh-token-value"
 		expectedExpiresAt := time.Now().Add(7 * 24 * time.Hour)
-		expectedUser := &domain.User{
-			ID:    "user-123",
-			Email: "john@example.com",
-		}
+		expectedUser := testutils.CreateTestUser()
 
 		s := &testutils.MockAuthService{
 			AuthenticateFunc: func(
@@ -397,12 +387,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		expectedAccessToken := "access-token-value"
 		expectedRefreshToken := "refresh-token-value"
 		expectedExpiresAt := time.Now().Add(time.Hour)
-		expectedUser := &domain.User{
-			Email:     "jane@example.com",
-			Username:  "janedoe",
-			FirstName: "Jane",
-			LastName:  "Doe",
-		}
+		expectedUser := testutils.CreateTestUser()
 
 		s := &testutils.MockAuthService{
 			AuthenticateFunc: func(
@@ -423,14 +408,14 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		h := newTestAuthHandler(s)
 
 		req := makeAuthReq(t, map[string]any{
-			"identifier": "jane@example.com",
+			"identifier": expectedUser.Email,
 			"purpose":    "registration",
 			"otp":        "123456",
 			"user": map[string]any{
-				"email":      "jane@example.com",
-				"username":   "janedoe",
-				"first_name": "Jane",
-				"last_name":  "Doe",
+				"email":      expectedUser.Email,
+				"username":   expectedUser.Username,
+				"first_name": expectedUser.FirstName,
+				"last_name":  expectedUser.LastName,
 			},
 		})
 		w := httptest.NewRecorder()
@@ -525,8 +510,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
 
-				req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/token", tc.payload)
-				req = withRequestInfo(req, defaultRequestInfo)
+				req := makeAuthReq(t, tc.payload)
 				w := httptest.NewRecorder()
 
 				h.Authenticate(w, req)
@@ -805,6 +789,12 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 	const cookieName = "refresh_token"
 	const existingToken = "existing-refresh-token"
 
+	makeRefreshTokenReq := func(t *testing.T, cookieValue string) *http.Request {
+		t.Helper()
+
+		return testutils.MakeRequestWithCookie(t, http.MethodPost, "/auth/token/refresh", cookieName, cookieValue)
+	}
+
 	t.Run("returns 200 and rotates the refresh token cookie", func(t *testing.T) {
 		t.Parallel()
 
@@ -822,13 +812,7 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/token/refresh",
-			cookieName,
-			existingToken,
-		)
+		req := makeRefreshTokenReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.RefreshToken(w, req)
@@ -880,13 +864,7 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/token/refresh",
-			cookieName,
-			existingToken,
-		)
+		req := makeRefreshTokenReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.RefreshToken(w, req)
@@ -911,13 +889,7 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/token/refresh",
-			cookieName,
-			existingToken,
-		)
+		req := makeRefreshTokenReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.RefreshToken(w, req)
@@ -936,6 +908,12 @@ func TestAuthHandler_Logout(t *testing.T) {
 	const cookieName = "refresh_token"
 	const existingToken = "valid-refresh-token"
 
+	makeLogoutReq := func(t *testing.T, cookieValue string) *http.Request {
+		t.Helper()
+
+		return testutils.MakeRequestWithCookie(t, http.MethodPost, "/auth/logout", cookieName, cookieValue)
+	}
+
 	t.Run("returns 204 and clears the refresh token cookie", func(t *testing.T) {
 		t.Parallel()
 
@@ -944,13 +922,7 @@ func TestAuthHandler_Logout(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/logout",
-			cookieName,
-			existingToken,
-		)
+		req := makeLogoutReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.Logout(w, req)
@@ -994,13 +966,7 @@ func TestAuthHandler_Logout(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/logout",
-			cookieName,
-			existingToken,
-		)
+		req := makeLogoutReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.Logout(w, req)
@@ -1025,13 +991,7 @@ func TestAuthHandler_Logout(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/logout",
-			cookieName,
-			existingToken,
-		)
+		req := makeLogoutReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.Logout(w, req)
@@ -1050,6 +1010,12 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 	const cookieName = "refresh_token"
 	const existingToken = "valid-refresh-token"
 
+	makeLogoutAllReq := func(t *testing.T, cookieValue string) *http.Request {
+		t.Helper()
+
+		return testutils.MakeRequestWithCookie(t, http.MethodPost, "/auth/logout/all", cookieName, cookieValue)
+	}
+
 	t.Run("returns 204 and clears the refresh token cookie", func(t *testing.T) {
 		t.Parallel()
 
@@ -1058,13 +1024,7 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/logout/all",
-			cookieName,
-			existingToken,
-		)
+		req := makeLogoutAllReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.LogoutAll(w, req)
@@ -1108,13 +1068,7 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/logout/all",
-			cookieName,
-			existingToken,
-		)
+		req := makeLogoutAllReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.LogoutAll(w, req)
@@ -1139,13 +1093,7 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/logout/all",
-			cookieName,
-			existingToken,
-		)
+		req := makeLogoutAllReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.LogoutAll(w, req)
@@ -1170,6 +1118,12 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 
 	const cookieName = "refresh_token"
 	const existingToken = "valid-refresh-token"
+
+	makeGetSessionsReq := func(t *testing.T, cookieValue string) *http.Request {
+		t.Helper()
+
+		return testutils.MakeRequestWithCookie(t, http.MethodGet, "/auth/sessions", cookieName, cookieValue)
+	}
 
 	t.Run("returns 200 with a list of sessions", func(t *testing.T) {
 		t.Parallel()
@@ -1197,13 +1151,7 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodGet,
-			"/auth/sessions",
-			cookieName,
-			existingToken,
-		)
+		req := makeGetSessionsReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.GetSessions(w, req)
@@ -1261,13 +1209,7 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodGet,
-			"/auth/sessions",
-			cookieName,
-			existingToken,
-		)
+		req := makeGetSessionsReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.GetSessions(w, req)
@@ -1292,13 +1234,7 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodGet,
-			"/auth/sessions",
-			cookieName,
-			existingToken,
-		)
+		req := makeGetSessionsReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.GetSessions(w, req)
@@ -1325,7 +1261,11 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 
 	makeDeleteReq := func(t *testing.T, user *domain.User) *http.Request {
 		t.Helper()
-		req := httptest.NewRequest(http.MethodDelete, "/auth/sessions/"+sessionID, nil)
+
+		req := testutils.MakeJSONRequest(
+			t, http.MethodDelete, "/auth/sessions/"+sessionID, nil,
+			testutils.WithAuthUser(user),
+		)
 
 		// chi normally injects URL params during routing; in tests we must
 		// build the route context manually and attach it to the request.
@@ -1333,17 +1273,10 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 		rctx.URLParams.Add("id", sessionID)
 		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
-		if user != nil {
-			// Inject the authenticated user into the request context
-			req = withAuthUser(req, user)
-		}
-
 		return req
 	}
 
-	authenticatedUser := &domain.User{
-		ID: "user-123",
-	}
+	authenticatedUser := testutils.CreateTestUser()
 
 	t.Run("returns 204 on success", func(t *testing.T) {
 		t.Parallel()

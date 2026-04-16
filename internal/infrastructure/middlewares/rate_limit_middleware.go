@@ -11,7 +11,7 @@ import (
 	"github.com/ncondes/fifawcp/internal/packages/httputils"
 )
 
-func RateLimitByIPMiddleware(
+func RateLimitByIP(
 	rl ratelimit.RateLimiter,
 	scope string,
 	logger logging.Logger,

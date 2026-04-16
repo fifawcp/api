@@ -12,7 +12,7 @@ import (
 	"github.com/ncondes/fifawcp/internal/services"
 )
 
-func AuthMiddleware(
+func Auth(
 	authenticator auth.Authenticator,
 	userService services.UserServiceInterface,
 	logger logging.Logger,
