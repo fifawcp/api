@@ -5,10 +5,10 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/infrastructure/logging"
+	httputils "github.com/fifawcp/api/internal/packages/httputils"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
-	httputils "github.com/ncondes/fifawcp/internal/packages/httputils"
 )
 
 func handleServiceError(

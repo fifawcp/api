@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
 )
 
 func LogRequest(logger logging.Logger) func(next http.Handler) http.Handler {

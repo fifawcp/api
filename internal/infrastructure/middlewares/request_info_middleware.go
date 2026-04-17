@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/fifawcp/api/internal/dtos"
 	"github.com/mssola/useragent"
-	"github.com/ncondes/fifawcp/internal/dtos"
 )
 
 func RequestInfo() func(next http.Handler) http.Handler {

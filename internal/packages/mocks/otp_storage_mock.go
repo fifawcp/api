@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ncondes/fifawcp/internal/domain"
+	"github.com/fifawcp/api/internal/domain"
 )
 
 type MockOTPStorage struct {

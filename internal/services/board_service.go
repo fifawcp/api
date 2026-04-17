@@ -6,8 +6,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/dtos"
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/dtos"
 )
 
 type BoardServiceInterface interface {

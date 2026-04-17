@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/ncondes/fifawcp/internal/infrastructure/config"
-	"github.com/ncondes/fifawcp/internal/infrastructure/ratelimit"
+	"github.com/fifawcp/api/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/ratelimit"
 	"github.com/redis/go-redis/v9"
 )
 

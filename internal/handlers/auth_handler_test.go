@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/dtos"
+	"github.com/fifawcp/api/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/validator"
+	"github.com/fifawcp/api/internal/packages/mocks"
+	"github.com/fifawcp/api/internal/packages/testutils"
 	"github.com/go-chi/chi/v5"
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/dtos"
-	"github.com/ncondes/fifawcp/internal/infrastructure/config"
-	"github.com/ncondes/fifawcp/internal/infrastructure/validator"
-	"github.com/ncondes/fifawcp/internal/packages/mocks"
-	"github.com/ncondes/fifawcp/internal/packages/testutils"
 	"github.com/stretchr/testify/assert"
 )
 

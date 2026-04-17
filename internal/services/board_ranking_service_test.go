@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/packages/mocks"
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/packages/mocks"
 	"github.com/stretchr/testify/assert"
 )
 

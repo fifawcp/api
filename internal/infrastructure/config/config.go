@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ncondes/fifawcp/internal/infrastructure/env"
+	"github.com/fifawcp/api/internal/infrastructure/env"
 )
 
 type Config struct {

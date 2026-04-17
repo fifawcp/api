@@ -3,7 +3,7 @@ package middlewares
 import (
 	"net/http"
 
-	"github.com/ncondes/fifawcp/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/config"
 )
 
 func SecurityHeaders(cfg *config.Config) func(next http.Handler) http.Handler {

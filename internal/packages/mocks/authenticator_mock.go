@@ -1,6 +1,6 @@
 package mocks
 
-import "github.com/ncondes/fifawcp/internal/infrastructure/auth"
+import "github.com/fifawcp/api/internal/infrastructure/auth"
 
 type MockAuthenticator struct {
 	GenerateTokenFunc func(userID string, tokenType auth.TokenType) (*auth.TokenResult, error)

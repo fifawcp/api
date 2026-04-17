@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/dtos"
 	"github.com/go-playground/validator/v10"
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/dtos"
 )
 
 type Validator struct {

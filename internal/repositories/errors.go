@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/fifawcp/api/internal/domain"
 	"github.com/lib/pq"
-	"github.com/ncondes/fifawcp/internal/domain"
 )
 
 type resourceType string

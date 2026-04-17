@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ncondes/fifawcp/internal/infrastructure/auth"
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
-	"github.com/ncondes/fifawcp/internal/packages/httputils"
-	"github.com/ncondes/fifawcp/internal/services"
+	"github.com/fifawcp/api/internal/infrastructure/auth"
+	"github.com/fifawcp/api/internal/infrastructure/logging"
+	"github.com/fifawcp/api/internal/packages/httputils"
+	"github.com/fifawcp/api/internal/services"
 )
 
 func Auth(

@@ -1,6 +1,6 @@
 package dtos
 
-import "github.com/ncondes/fifawcp/internal/domain"
+import "github.com/fifawcp/api/internal/domain"
 
 type CreateBoardDto struct {
 	Name string `json:"name" validate:"required,max=120" example:"League of Dummies"`
