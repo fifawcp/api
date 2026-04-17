@@ -8,6 +8,7 @@ import (
 // Generic
 var ErrInvalidCredentials = errors.New("invalid credentials")
 var ErrRegistrationFailed = errors.New("registration failed")
+var ErrForbidden = errors.New("insufficient permissions")
 
 // OTP
 var ErrOTPInvalidOrExpired = errors.New("otp is invalid or expired, try again")
@@ -38,3 +39,14 @@ var ErrRefreshTokenInvalidOrExpired = errors.New("refresh token is invalid or ex
 var ErrSessionNotFound = errors.New("session not found")
 var ErrInvalidSessionExpiration = errors.New("invalid session expiration")
 var ErrInvalidSessionLastUsed = errors.New("invalid session last used time")
+
+// Board
+var ErrBoardNotFound = errors.New("board not found")
+var ErrBoardAlreadyExists = errors.New("board already exists")
+var ErrBoardInvalidJoinCode = errors.New("invalid or expired board join code")
+var ErrBoardUserAlreadyInBoard = errors.New("user is already in this board")
+var ErrMaxBoardMembersExceeded = errors.New("maximum board members exceeded")
+
+// Board Member
+var ErrBoardMemberNotFound = errors.New("board member not found")
+var ErrBoardMemberAlreadyInBoard = errors.New("user is already a member of this board")

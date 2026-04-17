@@ -8,7 +8,7 @@ import (
 	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
 )
 
-func LogRequestMiddleware(logger logging.Logger) func(next http.Handler) http.Handler {
+func LogRequest(logger logging.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)

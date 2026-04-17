@@ -1,0 +1,135 @@
+package services
+
+import (
+	"context"
+	"crypto/rand"
+	"errors"
+	"math/big"
+
+	"github.com/ncondes/fifawcp/internal/domain"
+	"github.com/ncondes/fifawcp/internal/dtos"
+)
+
+type BoardServiceInterface interface {
+	CreateBoard(ctx context.Context, payload dtos.CreateBoardDto, userID string) (*domain.Board, error)
+	GetUserBoards(ctx context.Context, userID string) ([]*domain.Board, error)
+	GetBoardByID(ctx context.Context, boardID string) (*domain.Board, error)
+	RegenerateJoinCode(ctx context.Context, boardID string) (string, error)
+	UpdateBoard(ctx context.Context, boardID string, role domain.BoardMemberRole, payload dtos.UpdateBoardDto) error
+	DeleteBoard(ctx context.Context, boardID string, userID string) error
+}
+
+type BoardService struct {
+	boardRepository domain.BoardRepository
+}
+
+func NewBoardService(
+	boardRepository domain.BoardRepository,
+) BoardServiceInterface {
+	return &BoardService{
+		boardRepository: boardRepository,
+	}
+}
+
+func (s *BoardService) CreateBoard(
+	ctx context.Context,
+	payload dtos.CreateBoardDto,
+	userID string,
+) (*domain.Board, error) {
+	var joinCode string
+	var err error
+	maxRetries := 5
+
+	for range maxRetries {
+		joinCode, err = s.generateJoinCode()
+		if err != nil {
+			return nil, err
+		}
+
+		board := &domain.Board{
+			Name:        payload.Name,
+			OwnerUserID: userID,
+			JoinCode:    joinCode,
+		}
+
+		// Single CTE handles board + member + ranking atomically
+		if err = s.boardRepository.CreateBoardWithOwner(ctx, board); err != nil {
+			switch {
+			// If error is unique violation, retry with new code
+			case errors.Is(err, domain.ErrBoardAlreadyExists):
+				continue
+			default:
+				return nil, err
+			}
+		}
+
+		return board, nil
+	}
+
+	return nil, err
+}
+
+func (s *BoardService) GetUserBoards(ctx context.Context, userID string) ([]*domain.Board, error) {
+	return s.boardRepository.GetUserBoards(ctx, userID)
+}
+
+func (s *BoardService) GetBoardByID(ctx context.Context, boardID string) (*domain.Board, error) {
+	return s.boardRepository.GetBoardByID(ctx, boardID)
+}
+
+func (s *BoardService) RegenerateJoinCode(ctx context.Context, boardID string) (string, error) {
+	joinCode, err := s.generateJoinCode()
+	if err != nil {
+		return "", err
+	}
+
+	if err := s.boardRepository.UpdateJoinCode(ctx, boardID, joinCode); err != nil {
+		return "", err
+	}
+
+	return joinCode, nil
+}
+
+func (s *BoardService) UpdateBoard(
+	ctx context.Context,
+	boardID string,
+	role domain.BoardMemberRole,
+	payload dtos.UpdateBoardDto,
+) error {
+	if !s.isAdminMember(role) {
+		return domain.ErrForbidden
+	}
+
+	board := &domain.Board{
+		Name: payload.Name,
+	}
+
+	return s.boardRepository.UpdateBoard(ctx, boardID, board)
+}
+
+func (s *BoardService) generateJoinCode() (string, error) {
+	const (
+		charset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		length  = 8
+	)
+
+	result := make([]byte, length)
+	for i := range result {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", err
+		}
+
+		result[i] = charset[num.Int64()]
+	}
+
+	return string(result), nil
+}
+
+func (s *BoardService) DeleteBoard(ctx context.Context, boardID string, userID string) error {
+	return s.boardRepository.DeleteBoard(ctx, boardID, userID)
+}
+
+func (s *BoardService) isAdminMember(role domain.BoardMemberRole) bool {
+	return role == domain.BoardMemberRoleAdmin
+}

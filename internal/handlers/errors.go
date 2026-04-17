@@ -30,20 +30,24 @@ func handleServiceError(
 	// Not found
 	case
 		errors.Is(err, domain.ErrUserNotFound),
-		errors.Is(err, domain.ErrSessionNotFound):
+		errors.Is(err, domain.ErrSessionNotFound),
+		errors.Is(err, domain.ErrBoardNotFound),
+		errors.Is(err, domain.ErrBoardMemberNotFound):
 		httputils.RespondWithError(w, http.StatusNotFound, err)
 
 	// Conflict
 	case
 		errors.Is(err, domain.ErrUserAlreadyExists),
-		errors.Is(err, domain.ErrUsernameAlreadyExists):
+		errors.Is(err, domain.ErrUsernameAlreadyExists),
+		errors.Is(err, domain.ErrBoardMemberAlreadyInBoard):
 		httputils.RespondWithError(w, http.StatusConflict, err)
 
 	// Unauthorized
 	case
 		errors.Is(err, domain.ErrOTPInvalidOrExpired),
 		errors.Is(err, domain.ErrInvalidCredentials),
-		errors.Is(err, domain.ErrRefreshTokenInvalidOrExpired):
+		errors.Is(err, domain.ErrRefreshTokenInvalidOrExpired),
+		errors.Is(err, domain.ErrBoardInvalidJoinCode):
 		httputils.RespondWithError(w, http.StatusUnauthorized, err)
 
 	// Rate limit
@@ -51,6 +55,11 @@ func handleServiceError(
 		errors.Is(err, domain.ErrOTPTooManyAttempts),
 		errors.As(err, &cooldownErr):
 		httputils.RespondWithError(w, http.StatusTooManyRequests, err)
+
+	// Forbidden
+	case
+		errors.Is(err, domain.ErrForbidden):
+		httputils.RespondWithError(w, http.StatusForbidden, err)
 
 	// Internal server error
 	default:

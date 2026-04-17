@@ -25,15 +25,17 @@ import (
 )
 
 type AppContainer struct {
-	Config         *config.Config
-	Logger         logging.Logger
-	AuthHandler    *handlers.AuthHandler
-	UserHandler    *handlers.UserHandler
-	UserService    services.UserServiceInterface
-	Authenticator  auth.Authenticator
-	Scheduler      scheduler.Scheduler
-	RateLimiters   *RateLimiters
-	shutdownServer func(*http.Server) error
+	shutdownServer     func(*http.Server) error
+	Config             *config.Config
+	Logger             logging.Logger
+	RateLimiters       *RateLimiters
+	Scheduler          scheduler.Scheduler
+	AuthHandler        *handlers.AuthHandler
+	UserHandler        *handlers.UserHandler
+	BoardHandler       *handlers.BoardHandler
+	Authenticator      auth.Authenticator
+	UserService        services.UserServiceInterface
+	BoardMemberService services.BoardMemberServiceInterface
 }
 
 func NewAppContainer(
@@ -50,6 +52,9 @@ func NewAppContainer(
 	userRepository := repositories.NewUserRepository(db, cfg)
 	sessionRepository := repositories.NewSessionRepository(db, cfg)
 	refreshTokenRepository := repositories.NewRefreshTokenRepository(db, cfg)
+	boardRepository := repositories.NewBoardRepository(db, cfg)
+	boardMemberRepository := repositories.NewBoardMemberRepository(db, cfg)
+	boardRankingRepository := repositories.NewBoardRankingRepository(db, cfg)
 
 	// Storages
 	otpStorage := storage.NewOTPStorage(redis, cfg)
@@ -67,10 +72,14 @@ func NewAppContainer(
 		mailer,
 	)
 	userService := services.NewUserService(userRepository, userStorage, logger)
+	boardService := services.NewBoardService(boardRepository)
+	boardMemberService := services.NewBoardMemberService(boardRepository, boardMemberRepository)
+	boardRankingService := services.NewBoardRankingService(boardRankingRepository)
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(authService, logger, validator, cfg)
 	userHandler := handlers.NewUserHandler(userService, logger)
+	boardHandler := handlers.NewBoardHandler(boardService, boardMemberService, boardRankingService, cfg, validator, logger)
 
 	// Jobs
 	cleanupSessionsJob := jobs.NewCleanupSessionsJob(sessionRepository, logger)
@@ -87,14 +96,16 @@ func NewAppContainer(
 	rls := newRateLimiters(redis, &cfg.RateLimit)
 
 	c := &AppContainer{
-		Config:        cfg,
-		Logger:        logger,
-		AuthHandler:   authHandler,
-		UserHandler:   userHandler,
-		UserService:   userService,
-		Authenticator: authenticator,
-		Scheduler:     scheduler,
-		RateLimiters:  rls,
+		Config:             cfg,
+		Logger:             logger,
+		Scheduler:          scheduler,
+		RateLimiters:       rls,
+		Authenticator:      authenticator,
+		AuthHandler:        authHandler,
+		UserHandler:        userHandler,
+		BoardHandler:       boardHandler,
+		UserService:        userService,
+		BoardMemberService: boardMemberService,
 	}
 	c.shutdownServer = c.ShutdownServer
 	return c

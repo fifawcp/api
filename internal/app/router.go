@@ -14,10 +14,10 @@ import (
 func (app *AppContainer) NewRouter() *chi.Mux {
 	r := chi.NewRouter()
 
-	r.Use(middleware.RequestID)                         // Add a request ID to the context
-	r.Use(middleware.RealIP)                            // Get the real IP address of the client
-	r.Use(middleware.Recoverer)                         // Recover from panics without crashing the server
-	r.Use(middlewares.LogRequestMiddleware(app.Logger)) // Log requests
+	r.Use(middleware.RequestID)               // Add a request ID to the context
+	r.Use(middleware.RealIP)                  // Get the real IP address of the client
+	r.Use(middleware.Recoverer)               // Recover from panics without crashing the server
+	r.Use(middlewares.LogRequest(app.Logger)) // Log requests
 
 	// Set a timeout value on the request context (ctx), that will signal
 	// through ctx.Done() that the request has timed out and further
@@ -25,7 +25,7 @@ func (app *AppContainer) NewRouter() *chi.Mux {
 	r.Use(middleware.Timeout(app.Config.Server.ContextTimeout))
 
 	// Security headers
-	r.Use(middlewares.SecurityHeadersMiddleware(app.Config))
+	r.Use(middlewares.SecurityHeaders(app.Config))
 
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   app.Config.Server.CORS.AllowedOrigins,
@@ -54,22 +54,22 @@ func (app *AppContainer) NewRouter() *chi.Mux {
 		})
 
 		r.Route("/auth", func(r chi.Router) {
-			r.With(middlewares.RateLimitByIPMiddleware(
+			r.With(middlewares.RateLimitByIP(
 				app.RateLimiters.StrictIP,
 				"auth:otp:request",
 				app.Logger,
 			)).Post("/otp/request", app.AuthHandler.RequestOtp)
 
 			r.With(
-				middlewares.RateLimitByIPMiddleware(
+				middlewares.RateLimitByIP(
 					app.RateLimiters.ModerateIP,
 					"auth:token",
 					app.Logger,
 				),
-				middlewares.RequestInfoMiddleware(),
+				middlewares.RequestInfo(),
 			).Post("/token", app.AuthHandler.Authenticate)
 
-			r.With(middlewares.RateLimitByIPMiddleware(
+			r.With(middlewares.RateLimitByIP(
 				app.RateLimiters.RelaxedIP,
 				"auth:token:refresh",
 				app.Logger,
@@ -78,15 +78,50 @@ func (app *AppContainer) NewRouter() *chi.Mux {
 			r.Post("/logout", app.AuthHandler.Logout)
 			r.Post("/logout/all", app.AuthHandler.LogoutAll)
 			r.Get("/sessions", app.AuthHandler.GetSessions)
-			r.With(middlewares.AuthMiddleware(
+
+			r.With(middlewares.Auth(
 				app.Authenticator,
 				app.UserService,
 				app.Logger,
 			)).Delete("/sessions/{id}", app.AuthHandler.DeleteSession)
 		})
 
+		r.Route("/boards", func(r chi.Router) {
+			r.Use(middlewares.Auth(
+				app.Authenticator,
+				app.UserService,
+				app.Logger,
+			))
+
+			r.Get("/", app.BoardHandler.GetUserBoards)
+			r.Post("/", app.BoardHandler.CreateBoard)
+			r.Post("/join", app.BoardHandler.JoinBoard)
+
+			r.Route("/{boardId}", func(r chi.Router) {
+				r.Use(middlewares.RequireBoardMembership(
+					app.BoardMemberService,
+				))
+
+				r.Get("/", app.BoardHandler.GetBoardByID)
+				r.Patch("/", app.BoardHandler.UpdateBoard)
+				r.Delete("/", app.BoardHandler.DeleteBoard)
+				r.Get("/ranking", app.BoardHandler.GetBoardRanking)
+				r.Post("/regenerate-join-code", app.BoardHandler.RegenerateJoinCode)
+
+				r.Route("/members", func(r chi.Router) {
+					r.Get("/", app.BoardHandler.GetBoardMembers)
+					r.With(
+						middlewares.RequireValidUserID,
+					).Patch("/{userId}/role", app.BoardHandler.UpdateBoardMemberRole)
+					r.With(
+						middlewares.RequireValidUserID,
+					).Delete("/{userId}", app.BoardHandler.RemoveBoardMember)
+				})
+			})
+		})
+
 		r.Route("/users", func(r chi.Router) {
-			r.Use(middlewares.AuthMiddleware(app.Authenticator, app.UserService, app.Logger))
+			r.Use(middlewares.Auth(app.Authenticator, app.UserService, app.Logger))
 			r.Get("/profile", app.UserHandler.GetProfile)
 		})
 
