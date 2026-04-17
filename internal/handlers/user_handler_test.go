@@ -7,14 +7,15 @@ import (
 	"testing"
 
 	"github.com/ncondes/fifawcp/internal/domain"
+	"github.com/ncondes/fifawcp/internal/packages/mocks"
 	"github.com/ncondes/fifawcp/internal/packages/testutils"
 	"github.com/stretchr/testify/assert"
 )
 
-func newTestUserHandler(s *testutils.MockUserService) *UserHandler {
+func newTestUserHandler(s *mocks.MockUserService) *UserHandler {
 	return NewUserHandler(
 		s,
-		&testutils.MockLogger{},
+		&mocks.MockLogger{},
 	)
 }
 
@@ -40,7 +41,7 @@ func TestUserHandler_GetProfile(t *testing.T) {
 	t.Run("returns 200 with user profile on success", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockUserService{
+		s := &mocks.MockUserService{
 			GetUserFunc: func(
 				ctx context.Context,
 				userID string,

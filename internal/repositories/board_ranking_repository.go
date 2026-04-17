@@ -44,7 +44,7 @@ func (r *BoardRankingRepository) GetBoardRanking(
 	ORDER BY total_points DESC
 	`
 
-	var boardRankings []*domain.BoardRanking
+	boardRankings := []*domain.BoardRanking{}
 
 	rows, err := r.db.QueryContext(ctx, query, boardID)
 	if err != nil {

@@ -142,10 +142,7 @@ func (s *AuthService) Authenticate(
 	}
 
 	// Create session
-	deviceInfoJson, err := json.Marshal(requestInfo.DeviceInfo)
-	if err != nil {
-		return nil, err
-	}
+	deviceInfoJson, _ := json.Marshal(requestInfo.DeviceInfo)
 
 	session := &domain.Session{
 		UserID:     user.ID,
@@ -283,7 +280,6 @@ func (s *AuthService) validateUserForPurpose(
 
 	case domain.OTPPurposeLogin:
 		if err != nil {
-			s.logger.Warn("Login failed: user not found", "identifier", identifier)
 			return nil, domain.ErrInvalidCredentials
 		}
 	}
@@ -329,10 +325,8 @@ func (s *AuthService) generateOTP(length int) string {
 
 	for i := range otp {
 		// Generate a random number between 0 and len(digits)
-		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(digits))))
-		if err != nil {
-			return ""
-		}
+		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(digits))))
+
 		// Convert the random number to a byte and add it to the OTP
 		otp[i] = digits[num.Int64()]
 	}
@@ -364,6 +358,7 @@ func (s *AuthService) verifyOTP(
 
 	// Check attempts
 	if otp.Attempts >= s.cfg.Auth.MaxOTPAttempts-1 {
+		// Error can be ignored as it will eventually be deleted by TTL
 		s.otpStorage.DeleteOTP(ctx, identifier, purpose)
 		return domain.ErrOTPTooManyAttempts
 	}

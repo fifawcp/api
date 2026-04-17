@@ -37,14 +37,10 @@ func (s *BoardService) CreateBoard(
 	userID string,
 ) (*domain.Board, error) {
 	var joinCode string
-	var err error
 	maxRetries := 5
 
 	for range maxRetries {
-		joinCode, err = s.generateJoinCode()
-		if err != nil {
-			return nil, err
-		}
+		joinCode = s.generateJoinCode()
 
 		board := &domain.Board{
 			Name:        payload.Name,
@@ -53,7 +49,7 @@ func (s *BoardService) CreateBoard(
 		}
 
 		// Single CTE handles board + member + ranking atomically
-		if err = s.boardRepository.CreateBoardWithOwner(ctx, board); err != nil {
+		if err := s.boardRepository.CreateBoardWithOwner(ctx, board); err != nil {
 			switch {
 			// If error is unique violation, retry with new code
 			case errors.Is(err, domain.ErrBoardAlreadyExists):
@@ -66,7 +62,8 @@ func (s *BoardService) CreateBoard(
 		return board, nil
 	}
 
-	return nil, err
+	// If we exhausted all retries, return board already exists error
+	return nil, domain.ErrBoardAlreadyExists
 }
 
 func (s *BoardService) GetUserBoards(ctx context.Context, userID string) ([]*domain.Board, error) {
@@ -78,10 +75,7 @@ func (s *BoardService) GetBoardByID(ctx context.Context, boardID string) (*domai
 }
 
 func (s *BoardService) RegenerateJoinCode(ctx context.Context, boardID string) (string, error) {
-	joinCode, err := s.generateJoinCode()
-	if err != nil {
-		return "", err
-	}
+	joinCode := s.generateJoinCode()
 
 	if err := s.boardRepository.UpdateJoinCode(ctx, boardID, joinCode); err != nil {
 		return "", err
@@ -107,7 +101,7 @@ func (s *BoardService) UpdateBoard(
 	return s.boardRepository.UpdateBoard(ctx, boardID, board)
 }
 
-func (s *BoardService) generateJoinCode() (string, error) {
+func (s *BoardService) generateJoinCode() string {
 	const (
 		charset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 		length  = 8
@@ -115,15 +109,11 @@ func (s *BoardService) generateJoinCode() (string, error) {
 
 	result := make([]byte, length)
 	for i := range result {
-		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		if err != nil {
-			return "", err
-		}
-
+		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
 		result[i] = charset[num.Int64()]
 	}
 
-	return string(result), nil
+	return string(result)
 }
 
 func (s *BoardService) DeleteBoard(ctx context.Context, boardID string, userID string) error {

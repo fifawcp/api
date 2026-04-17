@@ -12,23 +12,30 @@ import (
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/ncondes/fifawcp/internal/domain"
 	"github.com/ncondes/fifawcp/internal/dtos"
+	"github.com/ncondes/fifawcp/internal/infrastructure/config"
 	"github.com/ncondes/fifawcp/internal/infrastructure/validator"
+	"github.com/ncondes/fifawcp/internal/packages/mocks"
 	"github.com/ncondes/fifawcp/internal/packages/testutils"
 	"github.com/stretchr/testify/assert"
 )
 
 func newTestBoardHandler(
-	bs *testutils.MockBoardService,
-	bms *testutils.MockBoardMemberService,
-	brs *testutils.MockBoardRankingService,
+	bs *mocks.MockBoardService,
+	bms *mocks.MockBoardMemberService,
+	brs *mocks.MockBoardRankingService,
 ) *BoardHandler {
+	cfg := &config.Config{
+		Auth: config.AuthConfig{
+			SessionTTL: 24 * time.Hour,
+		},
+	}
 	return NewBoardHandler(
 		bs,
 		bms,
 		brs,
-		testutils.NewTestConfig(),
+		cfg,
 		validator.NewValidator(),
-		&testutils.MockLogger{},
+		&mocks.MockLogger{},
 	)
 }
 
@@ -54,7 +61,7 @@ func TestBoardHandler_CreateBoard(t *testing.T) {
 	t.Run("returns 201 on success with board data", func(t *testing.T) {
 		t.Parallel()
 
-		bs := &testutils.MockBoardService{
+		bs := &mocks.MockBoardService{
 			CreateBoardFunc: func(
 				ctx context.Context,
 				payload dtos.CreateBoardDto,
@@ -139,7 +146,7 @@ func TestBoardHandler_CreateBoard(t *testing.T) {
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
-		bs := &testutils.MockBoardService{
+		bs := &mocks.MockBoardService{
 			CreateBoardFunc: func(
 				ctx context.Context,
 				payload dtos.CreateBoardDto,
@@ -189,7 +196,7 @@ func TestBoardHandler_GetUserBoards(t *testing.T) {
 			{ID: "board-2", Name: "Test Board 2"},
 		}
 
-		bs := &testutils.MockBoardService{
+		bs := &mocks.MockBoardService{
 			GetUserBoardsFunc: func(
 				ctx context.Context,
 				userID string,
@@ -218,7 +225,7 @@ func TestBoardHandler_GetUserBoards(t *testing.T) {
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
-		bs := &testutils.MockBoardService{
+		bs := &mocks.MockBoardService{
 			GetUserBoardsFunc: func(
 				ctx context.Context,
 				userID string,
@@ -262,7 +269,7 @@ func TestBoardHandler_JoinBoard(t *testing.T) {
 			JoinCode: "ABCD1234",
 		}
 
-		bms := &testutils.MockBoardMemberService{
+		bms := &mocks.MockBoardMemberService{
 			JoinBoardFunc: func(ctx context.Context, joinCode string, userID string) error {
 				return nil
 			},
@@ -337,7 +344,7 @@ func TestBoardHandler_JoinBoard(t *testing.T) {
 			JoinCode: "ABCD1234",
 		}
 
-		bms := &testutils.MockBoardMemberService{
+		bms := &mocks.MockBoardMemberService{
 			JoinBoardFunc: func(ctx context.Context, joinCode string, userID string) error {
 				return errors.New("db error")
 			},
@@ -376,7 +383,7 @@ func TestBoardHandler_GetBoardByID(t *testing.T) {
 	t.Run("returns 200 with board data", func(t *testing.T) {
 		t.Parallel()
 
-		bs := &testutils.MockBoardService{
+		bs := &mocks.MockBoardService{
 			GetBoardByIDFunc: func(ctx context.Context, boardID string) (*domain.Board, error) {
 				return &domain.Board{
 					ID:   boardID,
@@ -405,7 +412,7 @@ func TestBoardHandler_GetBoardByID(t *testing.T) {
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
-		bs := &testutils.MockBoardService{
+		bs := &mocks.MockBoardService{
 			GetBoardByIDFunc: func(ctx context.Context, boardID string) (*domain.Board, error) {
 				return nil, errors.New("db error")
 			},
@@ -443,7 +450,7 @@ func TestBoardHandler_GetBoardMembers(t *testing.T) {
 	t.Run("returns 200 with board members data", func(t *testing.T) {
 		t.Parallel()
 
-		bms := &testutils.MockBoardMemberService{
+		bms := &mocks.MockBoardMemberService{
 			GetBoardMembersFunc: func(ctx context.Context, boardID string) ([]*domain.BoardMember, error) {
 				return []*domain.BoardMember{
 					{
@@ -476,7 +483,7 @@ func TestBoardHandler_GetBoardMembers(t *testing.T) {
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
-		bms := &testutils.MockBoardMemberService{
+		bms := &mocks.MockBoardMemberService{
 			GetBoardMembersFunc: func(ctx context.Context, boardID string) ([]*domain.BoardMember, error) {
 				return nil, errors.New("db error")
 			},
@@ -516,7 +523,7 @@ func TestBoardHandler_RegenerateJoinCode(t *testing.T) {
 
 		newJoinCode := "NEWCODE1"
 
-		bs := &testutils.MockBoardService{
+		bs := &mocks.MockBoardService{
 			RegenerateJoinCodeFunc: func(ctx context.Context, boardID string) (string, error) {
 				return newJoinCode, nil
 			},
@@ -542,7 +549,7 @@ func TestBoardHandler_RegenerateJoinCode(t *testing.T) {
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
-		bs := &testutils.MockBoardService{
+		bs := &mocks.MockBoardService{
 			RegenerateJoinCodeFunc: func(ctx context.Context, boardID string) (string, error) {
 				return "", errors.New("db error")
 			},
@@ -581,7 +588,7 @@ func TestBoardHandler_UpdateBoard(t *testing.T) {
 	t.Run("returns 204 on success", func(t *testing.T) {
 		t.Parallel()
 
-		bs := &testutils.MockBoardService{
+		bs := &mocks.MockBoardService{
 			UpdateBoardFunc: func(
 				ctx context.Context,
 				boardID string,
@@ -655,7 +662,7 @@ func TestBoardHandler_UpdateBoard(t *testing.T) {
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
-		bs := &testutils.MockBoardService{
+		bs := &mocks.MockBoardService{
 			UpdateBoardFunc: func(
 				ctx context.Context,
 				boardID string,
@@ -704,7 +711,7 @@ func TestBoardHandler_DeleteBoard(t *testing.T) {
 	t.Run("returns 204 on success", func(t *testing.T) {
 		t.Parallel()
 
-		bs := &testutils.MockBoardService{
+		bs := &mocks.MockBoardService{
 			DeleteBoardFunc: func(ctx context.Context, boardID string, userID string) error {
 				return nil
 			},
@@ -723,7 +730,7 @@ func TestBoardHandler_DeleteBoard(t *testing.T) {
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
-		bs := &testutils.MockBoardService{
+		bs := &mocks.MockBoardService{
 			DeleteBoardFunc: func(ctx context.Context, boardID string, userID string) error {
 				return errors.New("db error")
 			},
@@ -764,7 +771,7 @@ func TestBoardHandler_UpdateBoardMemberRole(t *testing.T) {
 	t.Run("returns 204 on success", func(t *testing.T) {
 		t.Parallel()
 
-		bms := &testutils.MockBoardMemberService{
+		bms := &mocks.MockBoardMemberService{
 			UpdateBoardMemberRoleFunc: func(
 				ctx context.Context,
 				boardID string,
@@ -839,7 +846,7 @@ func TestBoardHandler_UpdateBoardMemberRole(t *testing.T) {
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
-		bms := &testutils.MockBoardMemberService{
+		bms := &mocks.MockBoardMemberService{
 			UpdateBoardMemberRoleFunc: func(
 				ctx context.Context,
 				boardID string,
@@ -890,7 +897,7 @@ func TestBoardHandler_RemoveBoardMember(t *testing.T) {
 	t.Run("returns 204 on success", func(t *testing.T) {
 		t.Parallel()
 
-		bms := &testutils.MockBoardMemberService{
+		bms := &mocks.MockBoardMemberService{
 			RemoveBoardMemberFunc: func(
 				ctx context.Context,
 				boardID string,
@@ -914,7 +921,7 @@ func TestBoardHandler_RemoveBoardMember(t *testing.T) {
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
-		bms := &testutils.MockBoardMemberService{
+		bms := &mocks.MockBoardMemberService{
 			RemoveBoardMemberFunc: func(
 				ctx context.Context,
 				boardID string,
@@ -957,7 +964,7 @@ func TestBoardHandler_GetBoardRanking(t *testing.T) {
 	t.Run("returns 200 with board ranking data", func(t *testing.T) {
 		t.Parallel()
 
-		brs := &testutils.MockBoardRankingService{
+		brs := &mocks.MockBoardRankingService{
 			GetBoardRankingFunc: func(ctx context.Context, boardID string) ([]*domain.BoardRanking, error) {
 				return []*domain.BoardRanking{
 					{
@@ -994,7 +1001,7 @@ func TestBoardHandler_GetBoardRanking(t *testing.T) {
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
-		brs := &testutils.MockBoardRankingService{
+		brs := &mocks.MockBoardRankingService{
 			GetBoardRankingFunc: func(ctx context.Context, boardID string) ([]*domain.BoardRanking, error) {
 				return nil, errors.New("db error")
 			},

@@ -1,4 +1,4 @@
-package testutils
+package mocks
 
 import "github.com/ncondes/fifawcp/internal/infrastructure/auth"
 

@@ -7,12 +7,14 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/ncondes/fifawcp/internal/infrastructure/config"
 	"github.com/ncondes/fifawcp/internal/packages/testutils"
 	"github.com/stretchr/testify/assert"
 )
 
 func newTestDebugHandler() *DebugHandler {
-	return NewDebugHandler(testutils.NewTestConfig())
+	cfg := &config.Config{}
+	return NewDebugHandler(cfg)
 }
 
 // ---------------------------------------------------------------------------

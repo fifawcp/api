@@ -13,7 +13,7 @@ import (
 	"github.com/ncondes/fifawcp/internal/domain"
 	"github.com/ncondes/fifawcp/internal/infrastructure/config"
 	"github.com/ncondes/fifawcp/internal/infrastructure/validator"
-	"github.com/ncondes/fifawcp/internal/packages/testutils"
+	"github.com/ncondes/fifawcp/internal/packages/mocks"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 )
@@ -23,20 +23,30 @@ func newTestContainer(t *testing.T, cfg *config.Config) *AppContainer {
 	cfg.Server.ShutdownTimeout = 200 * time.Millisecond
 	return NewAppContainer(
 		cfg,
-		&testutils.MockLogger{},
+		&mocks.MockLogger{},
 		&sql.DB{},
 		&redis.Client{},
 		&validator.Validator{},
-		&testutils.MockAuthenticator{},
-		&testutils.MockMailer{},
-		&testutils.MockScheduler{},
+		&mocks.MockAuthenticator{},
+		&mocks.MockMailer{},
+		&mocks.MockScheduler{},
 	)
 }
 
 func TestAppContainer_NewAppContainer(t *testing.T) {
 	t.Parallel()
 
-	cfg := testutils.NewTestConfig()
+	cfg := &config.Config{
+		Auth: config.AuthConfig{
+			SessionTTL:     24 * time.Hour,
+			OTPTTL:         10 * time.Minute,
+			OTPCooldown:    30 * time.Second,
+			MaxOTPAttempts: 5,
+		},
+		Server: config.ServerConfig{
+			ShutdownTimeout: 200 * time.Millisecond,
+		},
+	}
 
 	t.Run("creates container with all dependencies wired", func(t *testing.T) {
 		t.Parallel()
@@ -60,13 +70,13 @@ func TestAppContainer_NewAppContainer(t *testing.T) {
 
 		container := NewAppContainer(
 			cfg,
-			&testutils.MockLogger{},
+			&mocks.MockLogger{},
 			&sql.DB{},
 			&redis.Client{},
 			&validator.Validator{},
-			&testutils.MockAuthenticator{},
-			&testutils.MockMailer{},
-			&testutils.MockScheduler{
+			&mocks.MockAuthenticator{},
+			&mocks.MockMailer{},
+			&mocks.MockScheduler{
 				RegisterJobFunc: func(spec string, job domain.Job) error {
 					return errors.New("job registration failed")
 				},
