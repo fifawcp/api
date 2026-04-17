@@ -12,17 +12,30 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/ncondes/fifawcp/internal/domain"
 	"github.com/ncondes/fifawcp/internal/dtos"
+	"github.com/ncondes/fifawcp/internal/infrastructure/config"
 	"github.com/ncondes/fifawcp/internal/infrastructure/validator"
+	"github.com/ncondes/fifawcp/internal/packages/mocks"
 	"github.com/ncondes/fifawcp/internal/packages/testutils"
 	"github.com/stretchr/testify/assert"
 )
 
-func newTestAuthHandler(s *testutils.MockAuthService) *AuthHandler {
+func newTestAuthHandler(s *mocks.MockAuthService) *AuthHandler {
+	cfg := &config.Config{
+		Auth: config.AuthConfig{
+			SessionTTL:     24 * time.Hour,
+			OTPTTL:         10 * time.Minute,
+			OTPCooldown:    30 * time.Second,
+			MaxOTPAttempts: 5,
+		},
+		Server: config.ServerConfig{
+			ShutdownTimeout: 200 * time.Millisecond,
+		},
+	}
 	return NewAuthHandler(
 		s,
-		&testutils.MockLogger{},
+		&mocks.MockLogger{},
 		validator.NewValidator(),
-		testutils.NewTestConfig(),
+		cfg,
 	)
 }
 
@@ -47,7 +60,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 	t.Run("returns 204 on success (login)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error { return nil },
 		}
 		h := newTestAuthHandler(s)
@@ -67,7 +80,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 	t.Run("returns 204 on success (registration)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error { return nil },
 		}
 		h := newTestAuthHandler(s)
@@ -87,7 +100,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 	t.Run("returns 400 when validation fails", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestAuthHandler(&testutils.MockAuthService{})
+		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		testCases := []struct {
 			name        string
@@ -146,7 +159,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 	t.Run("returns 409 when user already exists (registration)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error {
 				return domain.ErrUserAlreadyExists
 			},
@@ -173,7 +186,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 	t.Run("returns 401 when user already exists (login)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error {
 				return domain.ErrInvalidCredentials
 			},
@@ -200,7 +213,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 	t.Run("returns 429 when OTP cooldown is active", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error {
 				return domain.ErrOtpCooldown(30 * time.Second)
 			},
@@ -230,7 +243,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // already cancelled
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error {
 				return context.Canceled
 			},
@@ -249,7 +262,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error {
 				return errors.New("database connection error")
 			},
@@ -279,7 +292,7 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error {
 				return context.Canceled
 			},
@@ -333,7 +346,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		expectedExpiresAt := time.Now().Add(7 * 24 * time.Hour)
 		expectedUser := testutils.CreateTestUser()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -389,7 +402,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		expectedExpiresAt := time.Now().Add(time.Hour)
 		expectedUser := testutils.CreateTestUser()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -449,7 +462,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 	t.Run("returns 400 when validation fails", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestAuthHandler(&testutils.MockAuthService{})
+		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		testCases := []struct {
 			name        string
@@ -532,7 +545,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 	t.Run("returns 401 when OTP is invalid or expired", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -565,7 +578,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 	t.Run("returns 401 when invalid credentials", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -598,7 +611,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 	t.Run("returns 409 when user already exists (registration)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -637,7 +650,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 	t.Run("returns 409 when username already taken (registration)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -676,7 +689,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 	t.Run("returns 429 when too many OTP attempts (login)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -709,7 +722,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 	t.Run("returns 429 when too many OTP attempts (registration)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -748,7 +761,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -801,7 +814,7 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 		newToken := "new-refresh-token"
 		expiresAt := time.Now().Add(7 * 24 * time.Hour)
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RefreshTokenFunc: func(context.Context, string) (*dtos.AuthData, error) {
 				return &dtos.AuthData{
 					AccessToken:  "new-access-token",
@@ -837,7 +850,7 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 	t.Run("returns 401 when refresh token cookie is missing", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestAuthHandler(&testutils.MockAuthService{})
+		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		req := httptest.NewRequest(http.MethodPost, "/auth/token/refresh", nil)
 		w := httptest.NewRecorder()
@@ -857,7 +870,7 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 	t.Run("returns 401 when refresh token is invalid or expired", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RefreshTokenFunc: func(context.Context, string) (*dtos.AuthData, error) {
 				return nil, domain.ErrRefreshTokenInvalidOrExpired
 			},
@@ -882,7 +895,7 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RefreshTokenFunc: func(context.Context, string) (*dtos.AuthData, error) {
 				return nil, errors.New("db error")
 			},
@@ -917,7 +930,7 @@ func TestAuthHandler_Logout(t *testing.T) {
 	t.Run("returns 204 and clears the refresh token cookie", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			LogoutFunc: func(context.Context, string) error { return nil },
 		}
 		h := newTestAuthHandler(s)
@@ -939,7 +952,7 @@ func TestAuthHandler_Logout(t *testing.T) {
 	t.Run("returns 401 when refresh token cookie is missing", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestAuthHandler(&testutils.MockAuthService{})
+		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
 		w := httptest.NewRecorder()
@@ -959,7 +972,7 @@ func TestAuthHandler_Logout(t *testing.T) {
 	t.Run("returns 401 when refresh token is invalid or expired", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			LogoutFunc: func(context.Context, string) error {
 				return domain.ErrRefreshTokenInvalidOrExpired
 			},
@@ -984,7 +997,7 @@ func TestAuthHandler_Logout(t *testing.T) {
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			LogoutFunc: func(context.Context, string) error {
 				return errors.New("db error")
 			},
@@ -1019,7 +1032,7 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 	t.Run("returns 204 and clears the refresh token cookie", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			LogoutAllFunc: func(context.Context, string) error { return nil },
 		}
 		h := newTestAuthHandler(s)
@@ -1041,7 +1054,7 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 	t.Run("returns 401 when refresh token cookie is missing", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestAuthHandler(&testutils.MockAuthService{})
+		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		req := httptest.NewRequest(http.MethodPost, "/auth/logout/all", nil)
 		w := httptest.NewRecorder()
@@ -1061,7 +1074,7 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 	t.Run("returns 401 when refresh token is invalid or expired", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			LogoutAllFunc: func(context.Context, string) error {
 				return domain.ErrRefreshTokenInvalidOrExpired
 			},
@@ -1086,7 +1099,7 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			LogoutAllFunc: func(context.Context, string) error {
 				return errors.New("db error")
 			},
@@ -1144,7 +1157,7 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 			},
 		}
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			GetSessionsFunc: func(context.Context, string) ([]domain.Session, error) {
 				return expectedSessions, nil
 			},
@@ -1183,7 +1196,7 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 	t.Run("returns 401 when refresh token cookie is missing", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestAuthHandler(&testutils.MockAuthService{})
+		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		req := httptest.NewRequest(http.MethodGet, "/auth/sessions", nil)
 		w := httptest.NewRecorder()
@@ -1202,7 +1215,7 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 	t.Run("returns 401 when refresh token is invalid or expired", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			GetSessionsFunc: func(context.Context, string) ([]domain.Session, error) {
 				return nil, domain.ErrRefreshTokenInvalidOrExpired
 			},
@@ -1227,7 +1240,7 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			GetSessionsFunc: func(context.Context, string) ([]domain.Session, error) {
 				return nil, errors.New("db error")
 			},
@@ -1283,7 +1296,7 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 
 		var capturedSessionID, capturedUserID string
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			DeleteSessionFunc: func(
 				ctx context.Context,
 				sessionID string,
@@ -1309,7 +1322,7 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 	t.Run("returns 404 when session is not found", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			DeleteSessionFunc: func(
 				ctx context.Context,
 				sessionID string,
@@ -1338,7 +1351,7 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			DeleteSessionFunc: func(
 				ctx context.Context,
 				sessionID string,

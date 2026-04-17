@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 
 	"github.com/ncondes/fifawcp/internal/domain"
 	"github.com/ncondes/fifawcp/internal/infrastructure/config"
@@ -54,9 +53,6 @@ func (r *BoardMemberRepository) CreateBoardMember(
 
 	err := r.db.QueryRowContext(ctx, query, joinCode, userID).Scan(&boardID)
 	if err != nil {
-		// TODO: remove
-		fmt.Printf("Error creating board member: %v\n", err)
-
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.ErrBoardInvalidJoinCode
 		}

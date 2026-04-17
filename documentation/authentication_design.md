@@ -31,7 +31,7 @@ Email-based OTP with JWT access tokens, rotatable refresh tokens, and multi-devi
      - Check user does NOT exist (returns 401 if already registered)
      - Generate 6-digit OTP
      - Store OTP hash in Redis (10min TTL, max 3 attempts)
-     - Send OTP via email (TODO)
+     - Send OTP via email
 
 2. POST /api/auth/token
    Request: {
@@ -68,7 +68,7 @@ Email-based OTP with JWT access tokens, rotatable refresh tokens, and multi-devi
      - Check user EXISTS (returns 401 if not found)
      - Generate 6-digit OTP
      - Store OTP hash in Redis (10min TTL, max 3 attempts)
-     - Send OTP via email (TODO)
+     - Send OTP via email
 
 2. POST /api/auth/token
    Request: {

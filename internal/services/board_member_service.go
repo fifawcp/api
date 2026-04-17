@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ncondes/fifawcp/internal/domain"
 	"github.com/ncondes/fifawcp/internal/dtos"
@@ -36,7 +35,6 @@ func (s *BoardMemberService) JoinBoard(
 	joinCode string,
 	userID string,
 ) error {
-	fmt.Printf("Joining board with join code: %s and user ID: %s\n", joinCode, userID)
 	return s.boardMemberRepository.CreateBoardMember(ctx, joinCode, userID)
 }
 

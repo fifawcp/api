@@ -1,0 +1,362 @@
+package services
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/brianvoe/gofakeit/v6"
+	"github.com/ncondes/fifawcp/internal/domain"
+	"github.com/ncondes/fifawcp/internal/dtos"
+	"github.com/ncondes/fifawcp/internal/packages/mocks"
+	"github.com/stretchr/testify/assert"
+)
+
+func newTestBoardMemberService(
+	br *mocks.MockBoardRepository,
+	bmr *mocks.MockBoardMemberRepository,
+) BoardMemberServiceInterface {
+	return NewBoardMemberService(br, bmr)
+}
+
+// ---------------------------------------------------------------------------
+// TestBoardMemberService_JoinBoard
+// ---------------------------------------------------------------------------
+func TestBoardMemberService_JoinBoard(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns nil on success", func(t *testing.T) {
+		t.Parallel()
+
+		joinCode := "ABCD1234"
+		userID := gofakeit.UUID()
+
+		bmr := &mocks.MockBoardMemberRepository{
+			CreateBoardMemberFunc: func(ctx context.Context, jc string, uid string) error {
+				assert.Equal(t, joinCode, jc)
+				assert.Equal(t, userID, uid)
+				return nil
+			},
+		}
+
+		service := newTestBoardMemberService(nil, bmr)
+
+		err := service.JoinBoard(context.Background(), joinCode, userID)
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("propagates repository error", func(t *testing.T) {
+		t.Parallel()
+
+		joinCode := "ABCD1234"
+		userID := gofakeit.UUID()
+
+		bmr := &mocks.MockBoardMemberRepository{
+			CreateBoardMemberFunc: func(ctx context.Context, jc string, uid string) error {
+				return errors.New("database error")
+			},
+		}
+
+		service := newTestBoardMemberService(nil, bmr)
+
+		err := service.JoinBoard(context.Background(), joinCode, userID)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "database error")
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestBoardMemberService_GetBoardMember
+// ---------------------------------------------------------------------------
+func TestBoardMemberService_GetBoardMember(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns board member on success", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.UUID()
+		userID := gofakeit.UUID()
+		expectedBoard := &domain.Board{ID: boardID, Name: "Test Board"}
+		expectedMember := &domain.BoardMember{
+			BoardID: boardID,
+			UserID:  userID,
+			Role:    domain.BoardMemberRoleAdmin,
+		}
+
+		br := &mocks.MockBoardRepository{
+			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
+				assert.Equal(t, boardID, bid)
+				return expectedBoard, nil
+			},
+		}
+
+		bmr := &mocks.MockBoardMemberRepository{
+			GetBoardMemberFunc: func(ctx context.Context, bid string, uid string) (*domain.BoardMember, error) {
+				assert.Equal(t, boardID, bid)
+				assert.Equal(t, userID, uid)
+				return expectedMember, nil
+			},
+		}
+
+		service := newTestBoardMemberService(br, bmr)
+
+		result, err := service.GetBoardMember(context.Background(), boardID, userID)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedMember, result)
+	})
+
+	t.Run("propagates board repository error", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.UUID()
+		userID := gofakeit.UUID()
+
+		br := &mocks.MockBoardRepository{
+			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
+				return nil, domain.ErrBoardNotFound
+			},
+		}
+
+		service := newTestBoardMemberService(br, nil)
+
+		result, err := service.GetBoardMember(context.Background(), boardID, userID)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, domain.ErrBoardNotFound)
+	})
+
+	t.Run("propagates board member repository error", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.UUID()
+		userID := gofakeit.UUID()
+
+		br := &mocks.MockBoardRepository{
+			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
+				return &domain.Board{ID: boardID}, nil
+			},
+		}
+
+		bmr := &mocks.MockBoardMemberRepository{
+			GetBoardMemberFunc: func(ctx context.Context, bid string, uid string) (*domain.BoardMember, error) {
+				return nil, errors.New("database error")
+			},
+		}
+
+		service := newTestBoardMemberService(br, bmr)
+
+		result, err := service.GetBoardMember(context.Background(), boardID, userID)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "database error")
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestBoardMemberService_GetBoardMembers
+// ---------------------------------------------------------------------------
+func TestBoardMemberService_GetBoardMembers(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns board members on success", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.UUID()
+		expectedMembers := []*domain.BoardMember{
+			{BoardID: boardID, UserID: gofakeit.UUID(), Role: domain.BoardMemberRoleAdmin},
+			{BoardID: boardID, UserID: gofakeit.UUID(), Role: domain.BoardMemberRoleMember},
+		}
+
+		bmr := &mocks.MockBoardMemberRepository{
+			GetBoardMembersFunc: func(ctx context.Context, bid string) ([]*domain.BoardMember, error) {
+				assert.Equal(t, boardID, bid)
+				return expectedMembers, nil
+			},
+		}
+
+		service := newTestBoardMemberService(nil, bmr)
+
+		result, err := service.GetBoardMembers(context.Background(), boardID)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedMembers, result)
+	})
+
+	t.Run("propagates repository error", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.UUID()
+
+		bmr := &mocks.MockBoardMemberRepository{
+			GetBoardMembersFunc: func(ctx context.Context, bid string) ([]*domain.BoardMember, error) {
+				return nil, errors.New("database error")
+			},
+		}
+
+		service := newTestBoardMemberService(nil, bmr)
+
+		result, err := service.GetBoardMembers(context.Background(), boardID)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "database error")
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestBoardMemberService_UpdateBoardMemberRole
+// ---------------------------------------------------------------------------
+func TestBoardMemberService_UpdateBoardMemberRole(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns nil on success for admin", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.UUID()
+		userID := gofakeit.UUID()
+		payload := dtos.UpdateBoardMemberRoleDto{Role: domain.BoardMemberRoleMember}
+
+		bmr := &mocks.MockBoardMemberRepository{
+			UpdateBoardMemberRoleFunc: func(ctx context.Context, bid string, uid string, role domain.BoardMemberRole) error {
+				assert.Equal(t, boardID, bid)
+				assert.Equal(t, userID, uid)
+				assert.Equal(t, payload.Role, role)
+				return nil
+			},
+		}
+
+		service := newTestBoardMemberService(nil, bmr)
+
+		err := service.UpdateBoardMemberRole(context.Background(), boardID, userID, domain.BoardMemberRoleAdmin, payload)
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("returns forbidden for non-admin", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.UUID()
+		userID := gofakeit.UUID()
+		payload := dtos.UpdateBoardMemberRoleDto{Role: domain.BoardMemberRoleAdmin}
+
+		service := newTestBoardMemberService(nil, nil)
+
+		err := service.UpdateBoardMemberRole(context.Background(), boardID, userID, domain.BoardMemberRoleMember, payload)
+
+		assert.Error(t, err)
+		assert.Equal(t, domain.ErrForbidden, err)
+	})
+
+	t.Run("propagates repository error", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.UUID()
+		userID := gofakeit.UUID()
+		payload := dtos.UpdateBoardMemberRoleDto{Role: domain.BoardMemberRoleMember}
+
+		bmr := &mocks.MockBoardMemberRepository{
+			UpdateBoardMemberRoleFunc: func(ctx context.Context, bid string, uid string, role domain.BoardMemberRole) error {
+				return errors.New("database error")
+			},
+		}
+
+		service := newTestBoardMemberService(nil, bmr)
+
+		err := service.UpdateBoardMemberRole(context.Background(), boardID, userID, domain.BoardMemberRoleAdmin, payload)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "database error")
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestBoardMemberService_RemoveBoardMember
+// ---------------------------------------------------------------------------
+func TestBoardMemberService_RemoveBoardMember(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns nil on success for admin", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.UUID()
+		userID := gofakeit.UUID()
+
+		bmr := &mocks.MockBoardMemberRepository{
+			RemoveBoardMemberFunc: func(ctx context.Context, bid string, uid string) error {
+				assert.Equal(t, boardID, bid)
+				assert.Equal(t, userID, uid)
+				return nil
+			},
+		}
+
+		service := newTestBoardMemberService(nil, bmr)
+
+		err := service.RemoveBoardMember(context.Background(), boardID, userID, domain.BoardMemberRoleAdmin)
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("returns forbidden for non-admin", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.UUID()
+		userID := gofakeit.UUID()
+
+		service := newTestBoardMemberService(nil, nil)
+
+		err := service.RemoveBoardMember(context.Background(), boardID, userID, domain.BoardMemberRoleMember)
+
+		assert.Error(t, err)
+		assert.Equal(t, domain.ErrForbidden, err)
+	})
+
+	t.Run("propagates repository error", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.UUID()
+		userID := gofakeit.UUID()
+
+		bmr := &mocks.MockBoardMemberRepository{
+			RemoveBoardMemberFunc: func(ctx context.Context, bid string, uid string) error {
+				return errors.New("database error")
+			},
+		}
+
+		service := newTestBoardMemberService(nil, bmr)
+
+		err := service.RemoveBoardMember(context.Background(), boardID, userID, domain.BoardMemberRoleAdmin)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "database error")
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestBoardMemberService_isAdminMember
+// ---------------------------------------------------------------------------
+func TestBoardMemberService_isAdminMember(t *testing.T) {
+	t.Parallel()
+
+	service := NewBoardMemberService(nil, nil).(*BoardMemberService)
+
+	t.Run("returns true for admin role", func(t *testing.T) {
+		t.Parallel()
+
+		result := service.isAdminMember(domain.BoardMemberRoleAdmin)
+
+		assert.True(t, result)
+	})
+
+	t.Run("returns false for member role", func(t *testing.T) {
+		t.Parallel()
+
+		result := service.isAdminMember(domain.BoardMemberRoleMember)
+
+		assert.False(t, result)
+	})
+}
