@@ -14,4 +14,4 @@ CREATE TABLE IF NOT EXISTS board_rankings (
     ON DELETE CASCADE
 );
 
-CREATE INDEX idx_board_rankings_total_points ON board_rankings(total_points DESC);
+CREATE INDEX IF NOT EXISTS idx_board_rankings_total_points ON board_rankings(total_points DESC);

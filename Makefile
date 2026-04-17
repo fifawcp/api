@@ -32,6 +32,16 @@ test-coverage-inner:
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: $(CYAN)coverage.html$(RESET)"
 
+# ==================== Database ====================
+
+.PHONY: db-seed
+db-seed:
+	@go run ./cmd/db/seed
+
+.PHONY: db-flush
+db-flush:
+	@go run ./cmd/db/seed -flush
+
 # ==================== Migrations ====================
 
 .PHONY: db-migrate-create
@@ -163,4 +173,4 @@ help:
 
 # Catch-all target to prevent make from treating migration names as targets
 %:
-	@: 
+	@:

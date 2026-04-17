@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/fifawcp/api/docs"
 	"github.com/fifawcp/api/internal/app"
@@ -45,6 +46,9 @@ const version = "0.0.1"
 func main() {
 	// Load environment variables from .env
 	godotenv.Load()
+
+	// Set timezone to GMT-5 (Eastern Tim)
+	time.Local = time.FixedZone("GMT-5", -5*60*60)
 
 	// Create config
 	cfg := config.NewConfig()

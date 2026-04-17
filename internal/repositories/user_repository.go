@@ -69,6 +69,7 @@ func (r *UserRepository) GetUserByIdentifier(
 		last_name,
 		username,
 		email,
+		role,
 		created_at,
 		updated_at
 	FROM users
@@ -82,6 +83,7 @@ func (r *UserRepository) GetUserByIdentifier(
 		&user.LastName,
 		&user.Username,
 		&user.Email,
+		&user.Role,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -105,6 +107,7 @@ func (r *UserRepository) GetUserByID(
 		last_name,
 		username,
 		email,
+		role,
 		created_at,
 		updated_at
 	FROM users
@@ -118,6 +121,7 @@ func (r *UserRepository) GetUserByID(
 		&user.LastName,
 		&user.Username,
 		&user.Email,
+		&user.Role,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)

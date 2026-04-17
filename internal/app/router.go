@@ -93,6 +93,41 @@ func (app *AppContainer) NewRouter() *chi.Mux {
 			)).Delete("/sessions/{id}", app.AuthHandler.DeleteSession)
 		})
 
+		r.Route("/admin", func(r chi.Router) {
+			r.Use(middlewares.Auth(
+				app.Authenticator,
+				app.UserService,
+				app.Logger,
+			))
+			r.Use(middlewares.RequireAdminRole)
+
+			r.Route("/matches", func(r chi.Router) {
+				r.Post("/results", app.AdminHandler.BulkUpdateMatchResults)
+
+				r.Route("/{id}", func(r chi.Router) {
+					r.Use(middlewares.RequireValidMatchID(app.Logger))
+					r.Post("/result", app.AdminHandler.UpdateMatchResult)
+					r.Delete("/result", app.AdminHandler.ResetMatchResult)
+				})
+			})
+
+			r.Route("/standings", func(r chi.Router) {
+				r.Post("/recalculate", app.AdminHandler.RecalculateStandings)
+
+				r.Route("/third-place", func(r chi.Router) {
+					r.Post("/resolve", app.AdminHandler.ResolveThirdPlaceConflict)
+				})
+			})
+		})
+
+		r.Route("/standings", func(r chi.Router) {
+			r.Get("/", app.GroupHandler.GetGroupStandings)
+		})
+
+		r.Route("/matches", func(r chi.Router) {
+			r.Get("/", app.MatchHandler.GetMatches)
+		})
+
 		r.Route("/boards", func(r chi.Router) {
 			r.Use(middlewares.Auth(
 				app.Authenticator,

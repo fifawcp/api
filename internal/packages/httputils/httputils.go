@@ -3,6 +3,7 @@ package httputils
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -179,4 +180,47 @@ func GetRefreshTokenFromCookie(r *http.Request) (string, error) {
 	}
 
 	return cookie.Value, nil
+}
+
+func ParseStringSliceParam(r *http.Request, key string) []string {
+	values := []string{}
+
+	for _, value := range r.URL.Query()[key] {
+		// Each value might be comma-separated
+		for item := range strings.SplitSeq(value, ",") {
+			if trimmed := strings.TrimSpace(item); trimmed != "" {
+				values = append(values, trimmed)
+			}
+		}
+	}
+
+	return values
+}
+
+func ParseDateParam(r *http.Request, key string) (*time.Time, error) {
+	str := r.URL.Query().Get(key)
+	if str == "" {
+		return nil, nil
+	}
+
+	parsed, err := time.Parse(time.RFC3339, str)
+	if err != nil {
+		return nil, fmt.Errorf("invalid '%s' date format, expected RFC3339", key)
+	}
+
+	return &parsed, nil
+}
+
+func ParseInt64Param(r *http.Request, key string) (*int64, error) {
+	str := r.URL.Query().Get(key)
+	if str == "" {
+		return nil, nil
+	}
+
+	parsed, err := strconv.ParseInt(str, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid '%s' parameter, expected int64", key)
+	}
+
+	return &parsed, nil
 }

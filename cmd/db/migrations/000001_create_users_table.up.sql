@@ -12,5 +12,5 @@ CREATE TABLE IF NOT EXISTS users (
   CONSTRAINT check_users_email_lowercase CHECK (email = LOWER(TRIM(email)))
 );
 
-CREATE INDEX idx_users_email ON users(LOWER(TRIM(email)));
-CREATE INDEX idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(LOWER(TRIM(email)));
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
