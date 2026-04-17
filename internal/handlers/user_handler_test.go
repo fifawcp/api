@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/packages/mocks"
-	"github.com/ncondes/fifawcp/internal/packages/testutils"
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/packages/mocks"
+	"github.com/fifawcp/api/internal/packages/testutils"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -1,7 +1,7 @@
 package mocks
 
 import (
-	"github.com/ncondes/fifawcp/internal/domain"
+	"github.com/fifawcp/api/internal/domain"
 )
 
 type MockScheduler struct {

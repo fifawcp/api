@@ -3,11 +3,11 @@ package app
 import (
 	"net/http"
 
+	"github.com/fifawcp/api/internal/handlers"
+	"github.com/fifawcp/api/internal/infrastructure/middlewares"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/ncondes/fifawcp/internal/handlers"
-	"github.com/ncondes/fifawcp/internal/infrastructure/middlewares"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 

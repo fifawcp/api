@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/ncondes/fifawcp/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/config"
 )
 
 type SlogLogger struct {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/infrastructure/config"
 )
 
 type BoardRankingRepository struct {

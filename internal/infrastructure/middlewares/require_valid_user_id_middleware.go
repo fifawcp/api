@@ -5,9 +5,9 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/fifawcp/api/internal/packages/httputils"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/ncondes/fifawcp/internal/packages/httputils"
 )
 
 func RequireValidUserID(next http.Handler) http.Handler {

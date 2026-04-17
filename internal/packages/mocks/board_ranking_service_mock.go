@@ -3,7 +3,7 @@ package mocks
 import (
 	"context"
 
-	"github.com/ncondes/fifawcp/internal/domain"
+	"github.com/fifawcp/api/internal/domain"
 )
 
 type MockBoardRankingService struct {

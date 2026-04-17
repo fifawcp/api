@@ -3,10 +3,10 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
-	"github.com/ncondes/fifawcp/internal/infrastructure/middlewares"
-	"github.com/ncondes/fifawcp/internal/packages/httputils"
-	"github.com/ncondes/fifawcp/internal/services"
+	"github.com/fifawcp/api/internal/infrastructure/logging"
+	"github.com/fifawcp/api/internal/infrastructure/middlewares"
+	"github.com/fifawcp/api/internal/packages/httputils"
+	"github.com/fifawcp/api/internal/services"
 )
 
 type UserHandler struct {

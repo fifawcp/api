@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ncondes/fifawcp/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/stretchr/testify/assert"
 )
 

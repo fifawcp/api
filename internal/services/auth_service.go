@@ -10,13 +10,13 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/dtos"
-	"github.com/ncondes/fifawcp/internal/infrastructure/auth"
-	"github.com/ncondes/fifawcp/internal/infrastructure/config"
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
-	"github.com/ncondes/fifawcp/internal/infrastructure/mailer"
-	"github.com/ncondes/fifawcp/internal/packages/totp"
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/dtos"
+	"github.com/fifawcp/api/internal/infrastructure/auth"
+	"github.com/fifawcp/api/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/logging"
+	"github.com/fifawcp/api/internal/infrastructure/mailer"
+	"github.com/fifawcp/api/internal/packages/totp"
 )
 
 type AuthServiceInterface interface {

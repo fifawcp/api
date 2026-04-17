@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ncondes/fifawcp/internal/infrastructure/validator"
+	"github.com/fifawcp/api/internal/infrastructure/validator"
 )
 
 const refreshTokenCookieName = "refresh_token"

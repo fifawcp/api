@@ -3,8 +3,8 @@ package services
 import (
 	"context"
 
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/infrastructure/logging"
 )
 
 type UserServiceInterface interface {

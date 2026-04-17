@@ -5,11 +5,11 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/packages/httputils"
+	"github.com/fifawcp/api/internal/services"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/packages/httputils"
-	"github.com/ncondes/fifawcp/internal/services"
 )
 
 func RequireBoardMembership(boardMemberService services.BoardMemberServiceInterface) func(next http.Handler) http.Handler {
