@@ -6,11 +6,17 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: pickems
+      POSTGRES_DB: fifawcp
     ports:
       - "5432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fifawcp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
   # Test database
   test-db:
@@ -19,11 +25,17 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: pickems_test
+      POSTGRES_DB: fifawcp_test
     ports:
       - "5433:5432"
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fifawcp_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
   # Redis cache
   redis:
@@ -37,6 +49,12 @@ services:
       - redis_data:/data
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "PING"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
   # Redis Commander - Web UI for Redis
   redis-commander:
@@ -52,7 +70,37 @@ services:
     depends_on:
       - redis
 
+  # API server
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: server
+    working_dir: /app
+    volumes:
+      - .:/app
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    env_file:
+      - .env
+    environment:
+      DB_ADDRESS: ${DB_ADDRESS}
+      DB_TEST_ADDRESS: ${DB_TEST_ADDRESS}
+      REDIS_ADDRESS: ${REDIS_ADDRESS}
+      PORT: ${PORT}
+      CGO_ENABLED: "1"
+      GOFLAGS: "-buildvcs=false"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
 volumes:
   postgres_dev_data:
   postgres_test_data:
   redis_data:
+  go_mod_cache:
+  go_build_cache:

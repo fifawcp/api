@@ -11,6 +11,7 @@ This API handles authentication, user management, and private board creation for
 - Go
 - PostgreSQL
 - Redis
+- Docker
 
 ## Architecture
 
@@ -37,9 +38,8 @@ internal/
 
 ### Prerequisites
 
-- [Go 1.26.2 or higher](https://go.dev/dl/)
-- [Docker and Docker Compose](https://docs.docker.com/get-docker/)
-- Make (usually pre-installed on macOS/Linux)
+- [Docker](https://docs.docker.com/get-docker/)
+- GNU Make (optional, for command shortcuts)
 
 ### Setup
 
@@ -50,19 +50,7 @@ internal/
       cd api
       ```
 
-2. **Start Docker services**
-
-      ```bash
-      make docker-up
-      ```
-
-      This starts:
-      - PostgreSQL (dev): `localhost:5432`
-      - PostgreSQL (test): `localhost:5433`
-      - Redis: `localhost:6379`
-      - Redis Commander: `http://localhost:8081`
-
-3. **Configure environment variables**
+2. **Configure environment variables**
 
       The application loads configuration from environment variables. See `internal/infrastructure/config/config.go` for all available options.
 
@@ -70,42 +58,111 @@ internal/
 
       ```env
       # Database
-      DB_ADDRESS=postgres://postgres:password@localhost:5432/pickems?sslmode=disable
-      DB_TEST_ADDRESS=postgres://postgres:password@localhost:5433/pickems_test?sslmode=disable
+      DB_ADDRESS=postgres://postgres:password@db:5432/fifawcp?sslmode=disable
+      DB_TEST_ADDRESS=postgres://postgres:password@test-db:5432/fifawcp_test?sslmode=disable
 
       # Redis
-      REDIS_ADDRESS=localhost:6379
-      REDIS_PASSWORD=your_redis_password
-
-      # JWT
-      JWT_SECRET=your_jwt_secret_key
-      JWT_ACCESS_TOKEN_EXPIRY=15m
+      REDIS_PASSWORD=password
+      REDIS_ADDRESS=redis:6379
 
       # CORS
-      CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+      CORS_ALLOWED_ORIGINS=http://localhost:3000
 
       # Email (Resend)
       MAILER_API_KEY=your_resend_api_key
       MAILER_FROM_ADDRESS=noreply@yourdomain.com
+
+      ...
       ```
 
       _Note: Replace all placeholder values with your actual configuration._
+      
+      _Docker note: `db`, `test-db`, and `redis` are Docker Compose service names. Inside containers, use these hostnames instead of `localhost`._
+
+3. **Start Docker services**
+
+      ```bash
+      docker compose up --build -d
+      ```
+
+      This starts:
+      - API Server: `http://localhost:8080`
+      - PostgreSQL (dev): `localhost:5432`
+      - PostgreSQL (test): `localhost:5433`
+      - Redis: `localhost:6379`
+      - Redis Commander: `http://localhost:8081`
 
 4. **Run database migrations**
 
       ```bash
-      make migrate-up
+      make db-migrate-up
       ```
+
+      _Windows users: see `Running Commands` -> `Windows` for the direct `docker compose exec ...` equivalent._
+
+### Shutdown
+
+Stop all services:
+
+```bash
+docker compose down
+```
+
+### Clean setup (reset everything)
+
+If your local state is broken and you want a fully clean environment:
+
+```bash
+docker compose down -v
+docker compose up --build -d
+make db-migrate-up
+```
 
 ## Running the Project
 
-### Development Mode (with hot reload)
+The API will be available at `http://localhost:8080`
+
+_Note: Development is Docker-only. The API runs inside the `server` compose service using `Dockerfile.dev` and `.air.docker.toml`._
+
+## Running Commands
+
+### macOS/Linux
+
+Use `make` shortcuts from the project root:
 
 ```bash
-make dev
+make help
+make test-unit
+make swagger
+...
 ```
 
-The API will be available at `http://localhost:8080`
+### Windows
+
+If you do not use `make` on Windows, run the equivalent command directly from `Makefile`.
+
+`Makefile` target:
+
+```make
+db-migrate-up:
+	@docker compose exec server make db-migrate-up-inner
+```
+
+Equivalent command you can run directly:
+
+```bash
+docker compose exec server make db-migrate-up-inner
+```
+
+More examples:
+
+```bash
+# make test-unit
+docker compose exec server make test-unit-inner
+
+# make swagger
+docker compose exec server make swagger-inner
+```
 
 ## Testing
 
