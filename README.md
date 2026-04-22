@@ -57,6 +57,8 @@ internal/
       Create a `.env` file in the project root with the following required variables:
 
       ```env
+      PORT=8080
+
       # Database
       DB_ADDRESS=postgres://postgres:password@db:5432/fifawcp?sslmode=disable
       DB_TEST_ADDRESS=postgres://postgres:password@test-db:5432/fifawcp_test?sslmode=disable
@@ -71,8 +73,6 @@ internal/
       # Email (Resend)
       MAILER_API_KEY=your_resend_api_key
       MAILER_FROM_ADDRESS=noreply@yourdomain.com
-
-      ...
       ```
 
       _Note: Replace all placeholder values with your actual configuration._

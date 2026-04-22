@@ -107,6 +107,36 @@ func (h *AuthHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 	httputils.RespondWithData(w, http.StatusOK, authenticationResponse)
 }
 
+// VerifyOtp godoc
+//
+//	@Summary		Verify OTP
+//	@Description	Validates a 6-digit OTP for a given identifier and purpose (registration or login).
+//	@Description	Does NOT create a session or return tokens — only verifies the OTP.
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		dtos.VerifyOtpDto	true	"Verify OTP payload"
+//	@Success		204
+//	@Failure		400	{object}	httputils.ErrorResponse	"Invalid request body or validation error"
+//	@Failure		401	{object}	httputils.ErrorResponse	"OTP invalid or expired"
+//	@Failure		429	{object}	httputils.ErrorResponse	"Too many attempts"
+//	@Failure		500	{object}	httputils.ErrorResponse	"Internal server error"
+//	@Router			/auth/otp/verify [post]
+func (h *AuthHandler) VerifyOtp(w http.ResponseWriter, r *http.Request) {
+	var payload dtos.VerifyOtpDto
+
+	if err := httputils.ReadAndValidateJSON(w, r, &payload, h.validator); err != nil {
+		return
+	}
+
+	if err := h.authService.VerifyOTP(r.Context(), &payload); err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	httputils.RespondWithData(w, http.StatusNoContent, nil)
+}
+
 // RefreshToken godoc
 //
 //	@Summary		Rotate refresh token
