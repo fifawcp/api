@@ -15,6 +15,7 @@ type MockAuthService struct {
 	LogoutAllFunc     func(ctx context.Context, refreshToken string) error
 	GetSessionsFunc   func(ctx context.Context, refreshToken string) ([]domain.Session, error)
 	DeleteSessionFunc func(ctx context.Context, sessionID string, userID string) error
+	VerifyOTPFunc     func(ctx context.Context, payload *dtos.VerifyOtpDto) error
 }
 
 func (m *MockAuthService) RequestOtp(ctx context.Context, payload *dtos.RequestOtpDto) error {
@@ -27,6 +28,13 @@ func (m *MockAuthService) RequestOtp(ctx context.Context, payload *dtos.RequestO
 func (m *MockAuthService) Authenticate(ctx context.Context, payload *dtos.AuthenticationInputDto, requestInfo dtos.RequestInfo) (*dtos.AuthenticationDto, error) {
 	if m.AuthenticateFunc != nil {
 		return m.AuthenticateFunc(ctx, payload, requestInfo)
+	}
+	panic("Authenticate called unexpectedly")
+}
+
+func (m *MockAuthService) VerifyOTP(ctx context.Context, payload *dtos.VerifyOtpDto) error {
+	if m.VerifyOTPFunc != nil {
+		return m.VerifyOTPFunc(ctx, payload)
 	}
 	panic("Authenticate called unexpectedly")
 }

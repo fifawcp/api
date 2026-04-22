@@ -59,7 +59,14 @@ func (app *AppContainer) NewRouter() *chi.Mux {
 				"auth:otp:request",
 				app.Logger,
 			)).Post("/otp/request", app.AuthHandler.RequestOtp)
-
+			r.With(
+				middlewares.RateLimitByIP(
+					app.RateLimiters.ModerateIP,
+					"auth:otp:verify",
+					app.Logger,
+				),
+				middlewares.RequestInfo(),
+			).Post("/otp/verify", app.AuthHandler.VerifyOtp)
 			r.With(
 				middlewares.RateLimitByIP(
 					app.RateLimiters.ModerateIP,

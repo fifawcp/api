@@ -27,6 +27,7 @@ type AuthServiceInterface interface {
 	LogoutAll(ctx context.Context, refreshToken string) error
 	GetSessions(ctx context.Context, refreshToken string) ([]domain.Session, error)
 	DeleteSession(ctx context.Context, sessionID string, userID string) error
+	VerifyOTP(ctx context.Context, payload *dtos.VerifyOtpDto) error
 }
 
 type AuthService struct {
@@ -103,11 +104,14 @@ func (s *AuthService) Authenticate(
 	requestInfo dtos.RequestInfo,
 ) (*dtos.AuthenticationDto, error) {
 	// Verify OTP
-	if err := s.verifyOTP(
+	verifyDTO := dtos.VerifyOtpDto{
+		Purpose:    &payload.Purpose,
+		OTP:        payload.OTP,
+		Identifier: payload.Identifier,
+	}
+	if err := s.VerifyOTP(
 		ctx,
-		payload.Identifier,
-		payload.Purpose,
-		payload.OTP,
+		&verifyDTO,
 	); err != nil {
 		return nil, err
 	}
@@ -339,19 +343,17 @@ func (s *AuthService) hashToken(token string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func (s *AuthService) verifyOTP(
+func (s *AuthService) VerifyOTP(
 	ctx context.Context,
-	identifier string,
-	purpose domain.OTPPurpose,
-	plainOtp string,
+	payload *dtos.VerifyOtpDto,
 ) error {
 	// ! Non-prod env bypass
-	if !s.cfg.IsProd() && plainOtp == totp.Generate(identifier, s.cfg.JWT.Secret) {
+	if !s.cfg.IsProd() && payload.OTP == totp.Generate(payload.Identifier, s.cfg.JWT.Secret) {
 		return nil
 	}
 
 	// Get OTP from Redis
-	otp, err := s.otpStorage.GetOTP(ctx, identifier, purpose)
+	otp, err := s.otpStorage.GetOTP(ctx, payload.Identifier, *payload.Purpose)
 	if err != nil {
 		return err
 	}
@@ -359,13 +361,13 @@ func (s *AuthService) verifyOTP(
 	// Check attempts
 	if otp.Attempts >= s.cfg.Auth.MaxOTPAttempts-1 {
 		// Error can be ignored as it will eventually be deleted by TTL
-		s.otpStorage.DeleteOTP(ctx, identifier, purpose)
+		s.otpStorage.DeleteOTP(ctx, payload.Identifier, *payload.Purpose)
 		return domain.ErrOTPTooManyAttempts
 	}
 
 	// Verify OTP
-	if otp.OTPHash != s.hashToken(plainOtp) {
-		s.otpStorage.IncrementAttempts(ctx, identifier, purpose)
+	if otp.OTPHash != s.hashToken(payload.OTP) {
+		s.otpStorage.IncrementAttempts(ctx, payload.Identifier, *payload.Purpose)
 		return domain.ErrOTPInvalidOrExpired
 	}
 
