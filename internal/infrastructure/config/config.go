@@ -72,7 +72,8 @@ type MailerConfig struct {
 }
 
 type CronConfig struct {
-	CleanupSessionsSchedule string
+	CleanupSessionsSchedule  string
+	SyncMatchResultsSchedule string
 }
 
 type RateLimitConfig struct {
@@ -135,7 +136,8 @@ func NewConfig() *Config {
 			FromAddress: env.GetString("MAILER_FROM_ADDRESS", ""),
 		},
 		Cron: CronConfig{
-			CleanupSessionsSchedule: env.GetString("CRON_CLEANUP_SESSIONS_SCHEDULE", "0 0 * * *"), // Every day at midnight
+			CleanupSessionsSchedule:  env.GetString("CRON_CLEANUP_SESSIONS_SCHEDULE", "0 0 * * *"),      // Every day at midnight
+			SyncMatchResultsSchedule: env.GetString("CRON_SYNC_MATCH_RESULTS_SCHEDULE", "*/10 * * * *"), // Every 10 minutes
 		},
 		RateLimit: RateLimitConfig{
 			Enabled: env.GetBool("RATE_LIMIT_ENABLED", true),

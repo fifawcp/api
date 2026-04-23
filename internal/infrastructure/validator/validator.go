@@ -2,6 +2,7 @@ package validator
 
 import (
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/fifawcp/api/internal/domain"
@@ -35,6 +36,8 @@ func NewValidator() *Validator {
 		dtos.AuthenticationInputDto{},
 	)
 
+	v.validate.RegisterValidation("min_array_len", validateMinArrayLen)
+
 	return v
 }
 
@@ -64,10 +67,15 @@ func formatFieldError(err validator.FieldError) string {
 	param := err.Param()
 
 	messages := map[string]string{
-		"required": field + " is required",
-		"email":    field + " must be a valid email address",
-		"max":      field + " must be at most " + param + " characters",
-		"min":      field + " must be at least " + param + " characters",
+		"required":      field + " is required",
+		"email":         field + " must be a valid email address",
+		"max":           field + " must be at most " + param + " characters",
+		"min":           field + " must be at least " + param + " characters",
+		"min_array_len": field + " must have at least " + param + " items",
+		"gt":            field + " must be greater than " + param,
+		"lt":            field + " must be less than " + param,
+		"gte":           field + " must be greater than or equal to " + param,
+		"lte":           field + " must be less than or equal to " + param,
 	}
 
 	message, exists := messages[tag]
@@ -85,4 +93,22 @@ func validateAuthenticationInput(sl validator.StructLevel) {
 	if input.Purpose == domain.OTPPurposeRegistration && input.User == nil {
 		sl.ReportError(input.User, "User", "user", "required", "")
 	}
+}
+
+func validateMinArrayLen(fl validator.FieldLevel) bool {
+	field := fl.Field()
+
+	// Only validate slices/arrays
+	if field.Kind() != reflect.Slice && field.Kind() != reflect.Array {
+		return false
+	}
+
+	// Get the minimum length parameter
+	param := fl.Param()
+	minLen, err := strconv.Atoi(param)
+	if err != nil {
+		return false
+	}
+
+	return field.Len() >= minLen
 }

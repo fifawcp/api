@@ -84,7 +84,7 @@ db-test-migrate-down-inner:
 	@migrate -path $(MIGRATIONS_PATH) -database $(DB_TEST_ADDRESS) down
 	@echo "Migrations rolled back successfully"
 
-# ==================== Database ====================
+# ==================== Database Seeding ====================
 
 .PHONY: db-seed
 db-seed:
@@ -142,7 +142,7 @@ help:
 	@echo "  make test-unit               - Run unit tests (wrapper)"
 	@echo "  make test-coverage           - Run tests with coverage (wrapper)"
 	@echo ""
-	@echo "💾 Database:"
+	@echo "💾 Database Seeding:"
 	@echo "  make db-seed                - Seed database with test data (wrapper)"
 	@echo "  make db-flush               - Remove all data from database (wrapper)"
 	@echo ""
@@ -163,4 +163,4 @@ help:
 
 # Catch-all target to prevent make from treating migration names as targets
 %:
-	@: 
+	@:

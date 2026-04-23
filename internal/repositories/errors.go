@@ -18,12 +18,14 @@ const (
 )
 
 const (
-	resourceUser         resourceType = "user"
-	resourceSession      resourceType = "session"
-	resourceRefreshToken resourceType = "refresh_token"
-	resourceBoard        resourceType = "board"
-	resourceBoardMember  resourceType = "board_member"
-	resourceBoardRanking resourceType = "board_ranking"
+	resourceUser          resourceType = "user"
+	resourceSession       resourceType = "session"
+	resourceRefreshToken  resourceType = "refresh_token"
+	resourceBoard         resourceType = "board"
+	resourceBoardMember   resourceType = "board_member"
+	resourceBoardRanking  resourceType = "board_ranking"
+	resourceGroupStanding resourceType = "group_standing"
+	resourceMatch         resourceType = "match"
 )
 
 func handleDBError(
@@ -107,6 +109,8 @@ func translateCheckConstraintViolation(pqErr *pq.Error) error {
 		return domain.ErrInvalidSessionExpiration
 	case "check_last_used_before_expires":
 		return domain.ErrInvalidSessionLastUsed
+	case "check_winner_is_home_or_away":
+		return domain.ErrInvalidWinnerTeam
 	default:
 		return buildErrorFromPQError(pqErr)
 	}

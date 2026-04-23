@@ -6,5 +6,5 @@ CREATE TABLE IF NOT EXISTS boards (
   created_at TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_boards_owner_user_id ON boards(owner_user_id);
-CREATE INDEX idx_boards_created_at ON boards(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_boards_owner_user_id ON boards(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_boards_created_at ON boards(created_at DESC);

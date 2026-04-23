@@ -9,12 +9,13 @@ Email-based OTP with JWT access tokens, rotatable refresh tokens, and multi-devi
 | Method | Endpoint | Auth | Purpose |
 | ------ | -------- | ---- | ------- |
 | POST | `/api/auth/otp/request` | None | Request OTP (registration or login) |
+| POST | `/api/auth/otp/verify` | None | Verify OTP |
 | POST | `/api/auth/token` | None | Exchange OTP for tokens |
 | POST | `/api/auth/token/refresh` | Cookie | Rotate refresh token + get new access token |
 | POST | `/api/auth/logout` | Cookie | Logout current device |
 | POST | `/api/auth/logout/all` | Cookie | Logout all devices |
 | GET | `/api/auth/sessions` | Cookie | List active sessions |
-| DELETE | `/api/auth/sessions/{id}` | Bearer | Delete a specific session |
+| DELETE | `/api/auth/sessions/{id}` | Bearer | Revoke a remote session |
 | GET | `/api/users/profile` | Bearer | Get authenticated user profile |
 
 ---
@@ -26,19 +27,29 @@ Email-based OTP with JWT access tokens, rotatable refresh tokens, and multi-devi
 ```md
 1. POST /auth/otp/request
    Request:  { identifier: "user@email.com", purpose: "registration" }
-   Response: { message: "OTP sent" }
+   Response: 204 No Content
    Action:
      - Check user does NOT exist (returns 401 if already registered)
      - Generate 6-digit OTP
      - Store OTP hash in Redis (10min TTL, max 3 attempts)
      - Send OTP via email
 
-2. POST /api/auth/token
+2. POST /auth/otp/verify
+   Request:  { identifier: "user@email.com", purpose: "registration" otp: "123456" }
+   Response: 204 No Content
+   Action:
+     - Check user does NOT exist (returns 401 if already registered)
+     - Generate 6-digit OTP
+     - Store OTP hash in Redis (10min TTL, max 3 attempts)
+     - Send OTP via email
+  
+
+3. POST /api/auth/token
    Request: {
      identifier: "user@email.com",
      otp: "123456",
      purpose: "registration",
-     user: { username, first_name, last_name }
+     user: { email, username, first_name, last_name }
    }
    Response (JSON): {
      access_token: "jwt...",
@@ -63,7 +74,7 @@ Email-based OTP with JWT access tokens, rotatable refresh tokens, and multi-devi
 ```md
 1. POST /auth/otp/request
    Request:  { identifier: "user@email.com", purpose: "login" }
-   Response: { message: "OTP sent" }
+   Response: 204 No Content
    Action:
      - Check user EXISTS (returns 401 if not found)
      - Generate 6-digit OTP
@@ -160,7 +171,7 @@ Notes:
 
 ---
 
-### Sessions
+### List sessions
 
 ```md
 GET /api/auth/sessions
@@ -173,19 +184,34 @@ Response: [
     created_at: "2026-01-01T00:00:00Z",
     last_used_at: "2026-01-06T00:00:00Z"
   }
-]
+] }
 Action:
-  - Read refresh token from cookie, look up user via token hash
-  - Return all active sessions for that user
+  - Read refresh token from cookie; 401 if missing or invalid/expired
+  - Return all active sessions for that user (same `user_id` as the token’s session)
+```
 
+Use each session’s `id` as `{id}` when calling **DELETE** below (for example in a “Devices” screen to revoke access from a phone or laptop you no longer trust).
+
+---
+
+### Delete session (revoke remote device)
+
+`DELETE /api/auth/sessions/{id}` removes **one** login session for the **authenticated user**. That device’s refresh token row is removed by the database (cascade on `sessions` delete), so it can no longer call `/api/auth/token/refresh` or cookie-authenticated routes for that session.
+
+```md
 DELETE /api/auth/sessions/{id}
-Auth: Bearer token (Authorization header)
+Auth: Bearer access token (Authorization: Bearer <access_token>)
+Request: (no body)
 Response: 204 No Content
 Action:
-  - Validate JWT, extract user ID
-  - DELETE session WHERE id = ? AND user_id = ? (ownership enforced)
-  - If not found or not owned → 404
+  - Auth middleware validates JWT and loads the current user
+  - DELETE FROM sessions WHERE id = {id} AND user_id = <authenticated user id>
+  - If no row deleted (wrong id, another user’s session, or already revoked) → 404 `session not found`
 ```
+
+**Remote sign-out:** The browser calling DELETE only needs its **access token**; it does **not** need the victim device’s refresh cookie. Typical UX: user opens **Settings → Sessions** on a trusted device, lists rows from `GET /api/auth/sessions`, taps “Sign out” on another row → `DELETE` with that row’s `id`.
+
+**Signing out the current device via DELETE:** Possible if the UI knows the current session’s `id` (again from the list). Otherwise use `POST /api/auth/logout`, which uses the refresh cookie and does not require Bearer.
 
 ---
 
@@ -251,9 +277,38 @@ const { access_token } = await fetch("/api/auth/token/refresh", {
 await fetch("/api/auth/logout", { method: "POST", credentials: "include" })
 ```
 
+### Revoke a session remotely
+
+List sessions with the **cookie** (usually the device the user is on), then revoke another session with the **Bearer** access token:
+
+```js
+// 1) List devices (refresh cookie sent automatically)
+const { data: sessions } = await fetch("/api/auth/sessions", {
+  credentials: "include"
+}).then(r => r.json())
+
+// 2) Sign out a specific other device by session id
+const sessionIdToRevoke = sessions.find(s => s.id !== currentSessionId).id
+
+const res = await fetch(`/api/auth/sessions/${sessionIdToRevoke}`, {
+  method: "DELETE",
+  headers: { Authorization: `Bearer ${accessToken}` }
+})
+
+if (res.status === 204) {
+  // That device is logged out; its refresh token no longer works
+}
+if (res.status === 404) {
+  const { error } = await res.json()
+  // e.g. "session not found" — stale list or wrong id
+}
+```
+
+`credentials: "include"` is **not** required on DELETE unless you also rely on cookies for something else; the server only needs `Authorization` for this route.
+
 ### Token storage
 
-- **Access token** — store in a JS variable or React state. Do NOT put in `localStorage` (XSS risk).
+- **Access token** — store in React state. Do NOT put in `localStorage` (XSS risk).
 - **Refresh token** — never touched by JS. The browser handles it entirely.
 
 ### Handling expiry

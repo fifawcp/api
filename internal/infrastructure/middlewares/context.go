@@ -15,6 +15,7 @@ const (
 	BoardIDContextKey           ContextKey = "board_id"
 	BoardMemberRoleContextKey   ContextKey = "board_member_role"
 	UserIDContextKey            ContextKey = "user_id"
+	MatchIDContextKey           ContextKey = "match_id"
 )
 
 func GetRequestInfo(ctx context.Context) *dtos.RequestInfo {
@@ -55,4 +56,12 @@ func GetUserID(ctx context.Context) string {
 		return ""
 	}
 	return userID
+}
+
+func GetMatchID(ctx context.Context) int64 {
+	matchID, ok := ctx.Value(MatchIDContextKey).(int64)
+	if !ok {
+		return 0
+	}
+	return matchID
 }

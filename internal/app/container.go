@@ -29,11 +29,14 @@ type AppContainer struct {
 	Config             *config.Config
 	Logger             logging.Logger
 	RateLimiters       *RateLimiters
+	Authenticator      auth.Authenticator
 	Scheduler          scheduler.Scheduler
 	AuthHandler        *handlers.AuthHandler
 	UserHandler        *handlers.UserHandler
 	BoardHandler       *handlers.BoardHandler
-	Authenticator      auth.Authenticator
+	GroupHandler       *handlers.GroupStandingHandler
+	MatchHandler       *handlers.MatchHandler
+	AdminHandler       *handlers.AdminHandler
 	UserService        services.UserServiceInterface
 	BoardMemberService services.BoardMemberServiceInterface
 }
@@ -55,6 +58,8 @@ func NewAppContainer(
 	boardRepository := repositories.NewBoardRepository(db, cfg)
 	boardMemberRepository := repositories.NewBoardMemberRepository(db, cfg)
 	boardRankingRepository := repositories.NewBoardRankingRepository(db, cfg)
+	groupStandingRepository := repositories.NewGroupStandingRepository(db, cfg)
+	matchRepository := repositories.NewMatchRepository(db, cfg)
 
 	// Storages
 	otpStorage := storage.NewOTPStorage(redis, cfg)
@@ -75,20 +80,33 @@ func NewAppContainer(
 	boardService := services.NewBoardService(boardRepository)
 	boardMemberService := services.NewBoardMemberService(boardRepository, boardMemberRepository)
 	boardRankingService := services.NewBoardRankingService(boardRankingRepository)
+	groupStandingService := services.NewGroupStandingService(groupStandingRepository, matchRepository, logger)
+	matchService := services.NewMatchService(matchRepository, groupStandingRepository, groupStandingService, logger)
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(authService, logger, validator, cfg)
 	userHandler := handlers.NewUserHandler(userService, logger)
 	boardHandler := handlers.NewBoardHandler(boardService, boardMemberService, boardRankingService, cfg, validator, logger)
+	groupHandler := handlers.NewGroupStandingHandler(groupStandingService, logger)
+	matchHandler := handlers.NewMatchHandler(matchService, logger)
+	adminHandler := handlers.NewAdminHandler(matchService, groupStandingService, logger)
 
 	// Jobs
 	cleanupSessionsJob := jobs.NewCleanupSessionsJob(sessionRepository, logger)
+	syncMatchResultsJob := jobs.NewSyncMatchResultsJob(matchService, logger)
 
 	// Schedule jobs
 	if err := scheduler.RegisterJob(cfg.Cron.CleanupSessionsSchedule, cleanupSessionsJob); err != nil {
 		logger.Error(
 			"failed to register job",
 			"job", "cleanup:expired-sessions",
+			"error", err,
+		)
+	}
+	if err := scheduler.RegisterJob(cfg.Cron.SyncMatchResultsSchedule, syncMatchResultsJob); err != nil {
+		logger.Error(
+			"failed to register job",
+			"job", "sync:match_results",
 			"error", err,
 		)
 	}
@@ -104,6 +122,9 @@ func NewAppContainer(
 		AuthHandler:        authHandler,
 		UserHandler:        userHandler,
 		BoardHandler:       boardHandler,
+		GroupHandler:       groupHandler,
+		MatchHandler:       matchHandler,
+		AdminHandler:       adminHandler,
 		UserService:        userService,
 		BoardMemberService: boardMemberService,
 	}

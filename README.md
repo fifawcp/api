@@ -76,7 +76,7 @@ internal/
       ```
 
       _Note: Replace all placeholder values with your actual configuration._
-      
+
       _Docker note: `db`, `test-db`, and `redis` are Docker Compose service names. Inside containers, use these hostnames instead of `localhost`._
 
 3. **Start Docker services**
@@ -145,7 +145,7 @@ If you do not use `make` on Windows, run the equivalent command directly from `M
 
 ```make
 db-migrate-up:
-	@docker compose exec server make db-migrate-up-inner
+@docker compose exec server make db-migrate-up-inner
 ```
 
 Equivalent command you can run directly:

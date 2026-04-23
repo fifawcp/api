@@ -23,6 +23,7 @@ func handleServiceError(
 	}
 
 	var cooldownErr domain.OtpCooldownError
+	var matchesNotFoundErr domain.MatchesNotFoundError
 
 	// Map domain errors to HTTP responses
 	switch {
@@ -32,7 +33,9 @@ func handleServiceError(
 		errors.Is(err, domain.ErrUserNotFound),
 		errors.Is(err, domain.ErrSessionNotFound),
 		errors.Is(err, domain.ErrBoardNotFound),
-		errors.Is(err, domain.ErrBoardMemberNotFound):
+		errors.Is(err, domain.ErrBoardMemberNotFound),
+		errors.Is(err, domain.ErrMatchNotFound),
+		errors.As(err, &matchesNotFoundErr):
 		httputils.RespondWithError(w, http.StatusNotFound, err)
 
 	// Conflict
@@ -60,6 +63,14 @@ func handleServiceError(
 	case
 		errors.Is(err, domain.ErrForbidden):
 		httputils.RespondWithError(w, http.StatusForbidden, err)
+
+	// Bad request
+	case
+		errors.Is(err, domain.ErrInvalidWinnerTeam),
+		errors.Is(err, domain.ErrInvalidThirdPlaceTeam),
+		errors.Is(err, domain.ErrThirdPlaceNotInConflict),
+		errors.Is(err, domain.ErrThirdPlaceInvalidSelection):
+		httputils.RespondWithError(w, http.StatusBadRequest, err)
 
 	// Internal server error
 	default:
