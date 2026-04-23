@@ -85,3 +85,9 @@ func ErrMatchesNotFound(matchIDs []int64) error {
 var ErrInvalidThirdPlaceTeam = errors.New("team is not a valid third-place team")
 var ErrThirdPlaceNotInConflict = errors.New("third-place promotion is not in conflict, nothing to resolve")
 var ErrThirdPlaceInvalidSelection = errors.New("third-place conflict resolution requires exactly 8 distinct teams from the candidate set")
+
+// OAuth
+var ErrOAuthStateNotFound = errors.New("oauth state not found")
+var ErrMissingIDToken = errors.New("missing id_token")
+var ErrOAuthAccountNotFound = errors.New("oauth account not found")
+var ErrOAuthAccountNotVerified = errors.New("oauth account not verified")

@@ -12,6 +12,7 @@ import (
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/oauth"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
 	"github.com/fifawcp/api/internal/packages/mocks"
 	"github.com/redis/go-redis/v9"
@@ -21,6 +22,14 @@ import (
 func newTestContainer(t *testing.T, cfg *config.Config) *AppContainer {
 	t.Helper()
 	cfg.Server.ShutdownTimeout = 200 * time.Millisecond
+
+	googleOIDCProvider, err := oauth.NewOIDCProvider(cfg.Auth.GoogleOAuth.Issuer)
+	if err != nil {
+		t.Fatalf("Error creating Google OIDC provider: %v", err)
+	}
+	googleOAuthConfig := oauth.NewGoogleOAuth2Client(googleOIDCProvider, cfg.Auth.GoogleOAuth)
+	googleIDTokenVerifier := oauth.NewGoogleIDTokenVerifier(googleOIDCProvider, cfg.Auth.GoogleOAuth)
+
 	return NewAppContainer(
 		cfg,
 		&mocks.MockLogger{},
@@ -30,6 +39,8 @@ func newTestContainer(t *testing.T, cfg *config.Config) *AppContainer {
 		&mocks.MockAuthenticator{},
 		&mocks.MockMailer{},
 		&mocks.MockScheduler{},
+		googleOAuthConfig,
+		googleIDTokenVerifier,
 	)
 }
 
@@ -68,6 +79,13 @@ func TestAppContainer_NewAppContainer(t *testing.T) {
 	t.Run("creates container even when job registration fails", func(t *testing.T) {
 		t.Parallel()
 
+		googleOIDCProvider, err := oauth.NewOIDCProvider(cfg.Auth.GoogleOAuth.Issuer)
+		if err != nil {
+			t.Fatalf("Error creating Google OIDC provider: %v", err)
+		}
+		googleOAuthConfig := oauth.NewGoogleOAuth2Client(googleOIDCProvider, cfg.Auth.GoogleOAuth)
+		googleIDTokenVerifier := oauth.NewGoogleIDTokenVerifier(googleOIDCProvider, cfg.Auth.GoogleOAuth)
+
 		container := NewAppContainer(
 			cfg,
 			&mocks.MockLogger{},
@@ -81,6 +99,8 @@ func TestAppContainer_NewAppContainer(t *testing.T) {
 					return errors.New("job registration failed")
 				},
 			},
+			googleOAuthConfig,
+			googleIDTokenVerifier,
 		)
 
 		assert.NotNil(t, container)

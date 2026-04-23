@@ -93,6 +93,30 @@ func (app *AppContainer) NewRouter() *chi.Mux {
 			)).Delete("/sessions/{id}", app.AuthHandler.DeleteSession)
 		})
 
+		r.Route("/oauth", func(r chi.Router) {
+			r.With(
+				middlewares.RateLimitByIP(
+					app.RateLimiters.StrictIP,
+					"oauth:google",
+					app.Logger,
+				),
+				middlewares.RequireOAuthReturnTo(
+					app.Logger,
+					app.Config.Auth.GoogleOAuth.ReturnToAllowlist,
+				),
+			).Get("/google", app.OAuthHandler.GoogleOAuth)
+
+			r.With(
+				middlewares.RateLimitByIP(
+					app.RateLimiters.ModerateIP,
+					"oauth:google:callback",
+					app.Logger,
+				),
+				middlewares.ValidateOAuthCallback(app.Logger),
+				middlewares.RequestInfo(),
+			).Get("/google/callback", app.OAuthHandler.GoogleOAuthCallback)
+		})
+
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(middlewares.Auth(
 				app.Authenticator,

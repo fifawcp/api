@@ -73,7 +73,7 @@ func (h *AuthHandler) RequestOtp(w http.ResponseWriter, r *http.Request) {
 //	@Tags			auth
 //	@Accept			json
 //	@Produce		json
-//	@Param			body	body		dtos.VerifyOtpDto	true	"Verify OTP payload"
+//	@Param			body	body	dtos.VerifyOtpDto	true	"Verify OTP payload"
 //	@Success		204
 //	@Failure		400	{object}	httputils.ErrorResponse	"Invalid request body or validation error"
 //	@Failure		401	{object}	httputils.ErrorResponse	"OTP invalid or expired"

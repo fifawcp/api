@@ -61,7 +61,8 @@ func handleServiceError(
 
 	// Forbidden
 	case
-		errors.Is(err, domain.ErrForbidden):
+		errors.Is(err, domain.ErrForbidden),
+		errors.Is(err, domain.ErrOAuthAccountNotVerified):
 		httputils.RespondWithError(w, http.StatusForbidden, err)
 
 	// Bad request
@@ -69,8 +70,14 @@ func handleServiceError(
 		errors.Is(err, domain.ErrInvalidWinnerTeam),
 		errors.Is(err, domain.ErrInvalidThirdPlaceTeam),
 		errors.Is(err, domain.ErrThirdPlaceNotInConflict),
-		errors.Is(err, domain.ErrThirdPlaceInvalidSelection):
+		errors.Is(err, domain.ErrThirdPlaceInvalidSelection),
+		errors.Is(err, domain.ErrOAuthStateNotFound):
 		httputils.RespondWithError(w, http.StatusBadRequest, err)
+
+	// Bad gateway
+	case
+		errors.Is(err, domain.ErrMissingIDToken):
+		httputils.RespondWithError(w, http.StatusBadGateway, err)
 
 	// Internal server error
 	default:

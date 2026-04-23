@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/handlers"
 	"github.com/fifawcp/api/internal/infrastructure/auth"
 	"github.com/fifawcp/api/internal/infrastructure/config"
@@ -25,20 +26,23 @@ import (
 )
 
 type AppContainer struct {
-	shutdownServer     func(*http.Server) error
-	Config             *config.Config
-	Logger             logging.Logger
-	RateLimiters       *RateLimiters
-	Authenticator      auth.Authenticator
-	Scheduler          scheduler.Scheduler
-	AuthHandler        *handlers.AuthHandler
-	UserHandler        *handlers.UserHandler
-	BoardHandler       *handlers.BoardHandler
-	GroupHandler       *handlers.GroupStandingHandler
-	MatchHandler       *handlers.MatchHandler
-	AdminHandler       *handlers.AdminHandler
-	UserService        services.UserServiceInterface
-	BoardMemberService services.BoardMemberServiceInterface
+	shutdownServer       func(*http.Server) error
+	Config               *config.Config
+	Logger               logging.Logger
+	RateLimiters         *RateLimiters
+	Authenticator        auth.Authenticator
+	Scheduler            scheduler.Scheduler
+	GoogleOauthConfig    domain.OAuth2Client
+	OIDCIdentityVerifier domain.IDTokenVerifier
+	AuthHandler          *handlers.AuthHandler
+	OAuthHandler         *handlers.OAuthHandler
+	UserHandler          *handlers.UserHandler
+	BoardHandler         *handlers.BoardHandler
+	GroupHandler         *handlers.GroupStandingHandler
+	MatchHandler         *handlers.MatchHandler
+	AdminHandler         *handlers.AdminHandler
+	UserService          services.UserServiceInterface
+	BoardMemberService   services.BoardMemberServiceInterface
 }
 
 func NewAppContainer(
@@ -50,6 +54,8 @@ func NewAppContainer(
 	authenticator auth.Authenticator,
 	mailer mailer.Mailer,
 	scheduler scheduler.Scheduler,
+	googleOAuthConfig domain.OAuth2Client,
+	googleIDTokenVerifier domain.IDTokenVerifier,
 ) *AppContainer {
 	// Repositories
 	userRepository := repositories.NewUserRepository(db, cfg)
@@ -60,28 +66,22 @@ func NewAppContainer(
 	boardRankingRepository := repositories.NewBoardRankingRepository(db, cfg)
 	groupStandingRepository := repositories.NewGroupStandingRepository(db, cfg)
 	matchRepository := repositories.NewMatchRepository(db, cfg)
+	oauthAccountRepository := repositories.NewOAuthAccountRepository(db, cfg)
 
 	// Storages
 	otpStorage := storage.NewOTPStorage(redis, cfg)
 	userStorage := storage.NewUserStorage(redis, cfg)
+	oauthStateStorage := storage.NewOAuthStorage(redis, cfg)
 
 	// Services
-	authService := services.NewAuthService(
-		userRepository,
-		sessionRepository,
-		refreshTokenRepository,
-		otpStorage,
-		logger,
-		cfg,
-		authenticator,
-		mailer,
-	)
+	authService := services.NewAuthService(userRepository, sessionRepository, refreshTokenRepository, otpStorage, logger, cfg, authenticator, mailer)
 	userService := services.NewUserService(userRepository, userStorage, logger)
 	boardService := services.NewBoardService(boardRepository)
 	boardMemberService := services.NewBoardMemberService(boardRepository, boardMemberRepository)
 	boardRankingService := services.NewBoardRankingService(boardRankingRepository)
 	groupStandingService := services.NewGroupStandingService(groupStandingRepository, matchRepository, logger)
 	matchService := services.NewMatchService(matchRepository, groupStandingRepository, groupStandingService, logger)
+	oauthService := services.NewOAuthService(oauthStateStorage, googleOAuthConfig, googleIDTokenVerifier, oauthAccountRepository, userRepository, authService)
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(authService, logger, validator, cfg)
@@ -90,6 +90,7 @@ func NewAppContainer(
 	groupHandler := handlers.NewGroupStandingHandler(groupStandingService, logger)
 	matchHandler := handlers.NewMatchHandler(matchService, logger)
 	adminHandler := handlers.NewAdminHandler(matchService, groupStandingService, logger)
+	oauthHandler := handlers.NewOAuthHandler(oauthService, logger, cfg)
 
 	// Jobs
 	cleanupSessionsJob := jobs.NewCleanupSessionsJob(sessionRepository, logger)
@@ -119,7 +120,9 @@ func NewAppContainer(
 		Scheduler:          scheduler,
 		RateLimiters:       rls,
 		Authenticator:      authenticator,
+		GoogleOauthConfig:  googleOAuthConfig,
 		AuthHandler:        authHandler,
+		OAuthHandler:       oauthHandler,
 		UserHandler:        userHandler,
 		BoardHandler:       boardHandler,
 		GroupHandler:       groupHandler,

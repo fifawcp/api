@@ -14,6 +14,7 @@ import (
 	"github.com/fifawcp/api/internal/infrastructure/db"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/infrastructure/mailer"
+	"github.com/fifawcp/api/internal/infrastructure/oauth"
 	"github.com/fifawcp/api/internal/infrastructure/scheduler"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
 	"github.com/joho/godotenv"
@@ -30,15 +31,6 @@ const version = "0.0.1"
 //	@host
 //	@BasePath	/api
 
-//	@tag.name			auth
-//	@tag.description	OTP request, token exchange, refresh, logout, and session management
-
-//	@tag.name			users
-//	@tag.description	Authenticated user profile and data
-
-//	@tag.name			debug
-//	@tag.description	Non-production only. These endpoints are not registered in production.
-
 // @securityDefinitions.apikey	BearerAuth
 // @in							header
 // @name						Authorization
@@ -53,15 +45,28 @@ func main() {
 	// Create config
 	cfg := config.NewConfig()
 
+	// Create Logger
+	logger := logging.NewSlogLogger(cfg)
+
+	// Create Google OIDC provider
+	googleOIDCProvider, err := oauth.NewOIDCProvider(cfg.Auth.GoogleOAuth.Issuer)
+	if err != nil {
+		logger.Error("Error creating Google OIDC provider", "error", err)
+		return
+	}
+
+	// Create Google OAuth client
+	googleOAuthClient := oauth.NewGoogleOAuth2Client(googleOIDCProvider, cfg.Auth.GoogleOAuth)
+
+	// Create Google identity verifier
+	googleIDTokenVerifier := oauth.NewGoogleIDTokenVerifier(googleOIDCProvider, cfg.Auth.GoogleOAuth)
+
 	// Configure Swagger docs at runtime
 	if u, err := url.Parse(cfg.APIBaseURL); err == nil {
 		docs.SwaggerInfo.Host = u.Host
 	}
 	docs.SwaggerInfo.BasePath = "/api"
 	docs.SwaggerInfo.Version = version
-
-	// Create Logger
-	logger := logging.NewSlogLogger(cfg)
 
 	// Connect to Database
 	db, err := db.NewPostgresDB(
@@ -114,6 +119,8 @@ func main() {
 		jwtAuthenticator,
 		resendMailer,
 		scheduler,
+		googleOAuthClient,
+		googleIDTokenVerifier,
 	)
 
 	// Create router
