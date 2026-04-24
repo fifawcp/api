@@ -6,7 +6,7 @@ import (
 	"github.com/fifawcp/api/internal/dtos"
 	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
-	"github.com/fifawcp/api/internal/infrastructure/middlewares"
+	"github.com/fifawcp/api/internal/httpctx"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
 	"github.com/fifawcp/api/internal/packages/httputils"
 	"github.com/fifawcp/api/internal/services"
@@ -54,7 +54,7 @@ func NewBoardHandler(
 //	@Security		BearerAuth
 //	@Router			/boards [post]
 func (h *BoardHandler) CreateBoard(w http.ResponseWriter, r *http.Request) {
-	user := middlewares.GetAuthenticatedUser(r.Context())
+	user := httpctx.GetAuthenticatedUser(r.Context())
 
 	var body dtos.CreateBoardDto
 
@@ -83,7 +83,7 @@ func (h *BoardHandler) CreateBoard(w http.ResponseWriter, r *http.Request) {
 //	@Security		BearerAuth
 //	@Router			/boards [get]
 func (h *BoardHandler) GetUserBoards(w http.ResponseWriter, r *http.Request) {
-	user := middlewares.GetAuthenticatedUser(r.Context())
+	user := httpctx.GetAuthenticatedUser(r.Context())
 
 	boards, err := h.boardService.GetUserBoards(r.Context(), user.ID)
 	if err != nil {
@@ -111,7 +111,7 @@ func (h *BoardHandler) GetUserBoards(w http.ResponseWriter, r *http.Request) {
 //	@Security		BearerAuth
 //	@Router			/boards/join [post]
 func (h *BoardHandler) JoinBoard(w http.ResponseWriter, r *http.Request) {
-	user := middlewares.GetAuthenticatedUser(r.Context())
+	user := httpctx.GetAuthenticatedUser(r.Context())
 
 	var body dtos.JoinBoardDto
 
@@ -142,7 +142,7 @@ func (h *BoardHandler) JoinBoard(w http.ResponseWriter, r *http.Request) {
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId} [get]
 func (h *BoardHandler) GetBoardByID(w http.ResponseWriter, r *http.Request) {
-	boardID := middlewares.GetBoardID(r.Context())
+	boardID := httpctx.GetBoardID(r.Context())
 
 	board, err := h.boardService.GetBoardByID(r.Context(), boardID)
 	if err != nil {
@@ -168,7 +168,7 @@ func (h *BoardHandler) GetBoardByID(w http.ResponseWriter, r *http.Request) {
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId}/members [get]
 func (h *BoardHandler) GetBoardMembers(w http.ResponseWriter, r *http.Request) {
-	boardID := middlewares.GetBoardID(r.Context())
+	boardID := httpctx.GetBoardID(r.Context())
 
 	members, err := h.boardMemberService.GetBoardMembers(r.Context(), boardID)
 	if err != nil {
@@ -194,7 +194,7 @@ func (h *BoardHandler) GetBoardMembers(w http.ResponseWriter, r *http.Request) {
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId}/ranking [get]
 func (h *BoardHandler) GetBoardRanking(w http.ResponseWriter, r *http.Request) {
-	boardID := middlewares.GetBoardID(r.Context())
+	boardID := httpctx.GetBoardID(r.Context())
 
 	ranking, err := h.boardRankingService.GetBoardRanking(r.Context(), boardID)
 	if err != nil {
@@ -220,7 +220,7 @@ func (h *BoardHandler) GetBoardRanking(w http.ResponseWriter, r *http.Request) {
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId}/regenerate-join-code [post]
 func (h *BoardHandler) RegenerateJoinCode(w http.ResponseWriter, r *http.Request) {
-	boardID := middlewares.GetBoardID(r.Context())
+	boardID := httpctx.GetBoardID(r.Context())
 
 	joinCode, err := h.boardService.RegenerateJoinCode(r.Context(), boardID)
 	if err != nil {
@@ -251,8 +251,8 @@ func (h *BoardHandler) RegenerateJoinCode(w http.ResponseWriter, r *http.Request
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId} [patch]
 func (h *BoardHandler) UpdateBoard(w http.ResponseWriter, r *http.Request) {
-	boardID := middlewares.GetBoardID(r.Context())
-	boardMemberRole := middlewares.GetBoardMemberRole(r.Context())
+	boardID := httpctx.GetBoardID(r.Context())
+	boardMemberRole := httpctx.GetBoardMemberRole(r.Context())
 
 	var body dtos.UpdateBoardDto
 
@@ -283,8 +283,8 @@ func (h *BoardHandler) UpdateBoard(w http.ResponseWriter, r *http.Request) {
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId} [delete]
 func (h *BoardHandler) DeleteBoard(w http.ResponseWriter, r *http.Request) {
-	user := middlewares.GetAuthenticatedUser(r.Context())
-	boardID := middlewares.GetBoardID(r.Context())
+	user := httpctx.GetAuthenticatedUser(r.Context())
+	boardID := httpctx.GetBoardID(r.Context())
 
 	if err := h.boardService.DeleteBoard(r.Context(), boardID, user.ID); err != nil {
 		handleServiceError(w, r, err, h.logger)
@@ -314,9 +314,9 @@ func (h *BoardHandler) DeleteBoard(w http.ResponseWriter, r *http.Request) {
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId}/members/{userId}/role [patch]
 func (h *BoardHandler) UpdateBoardMemberRole(w http.ResponseWriter, r *http.Request) {
-	boardID := middlewares.GetBoardID(r.Context())
-	userID := middlewares.GetUserID(r.Context())
-	boardMemberRole := middlewares.GetBoardMemberRole(r.Context())
+	boardID := httpctx.GetBoardID(r.Context())
+	userID := httpctx.GetUserID(r.Context())
+	boardMemberRole := httpctx.GetBoardMemberRole(r.Context())
 
 	var body dtos.UpdateBoardMemberRoleDto
 
@@ -349,9 +349,9 @@ func (h *BoardHandler) UpdateBoardMemberRole(w http.ResponseWriter, r *http.Requ
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId}/members/{userId} [delete]
 func (h *BoardHandler) RemoveBoardMember(w http.ResponseWriter, r *http.Request) {
-	boardID := middlewares.GetBoardID(r.Context())
-	userID := middlewares.GetUserID(r.Context())
-	boardMemberRole := middlewares.GetBoardMemberRole(r.Context())
+	boardID := httpctx.GetBoardID(r.Context())
+	userID := httpctx.GetUserID(r.Context())
+	boardMemberRole := httpctx.GetBoardMemberRole(r.Context())
 
 	if err := h.boardMemberService.RemoveBoardMember(r.Context(), boardID, userID, boardMemberRole); err != nil {
 		handleServiceError(w, r, err, h.logger)

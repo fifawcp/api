@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/fifawcp/api/internal/dtos"
+	"github.com/fifawcp/api/internal/httpctx"
 	"github.com/mssola/useragent"
 )
 
@@ -25,7 +26,7 @@ func RequestInfo() func(next http.Handler) http.Handler {
 				DeviceInfo: deviceInfo,
 			}
 
-			ctx = context.WithValue(ctx, RequestInfoContextKey, &requestInfo)
+			ctx = context.WithValue(ctx, httpctx.RequestInfoContextKey, &requestInfo)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -71,7 +72,6 @@ func parseUserAgent(userAgent string) dtos.DeviceInfo {
 }
 
 func generateDisplayName(browser, platform, model string) string {
-	// If we have a specific device model, use it
 	if model != "" {
 		if browser != "" {
 			return fmt.Sprintf("%s on %s", browser, model)
@@ -79,17 +79,14 @@ func generateDisplayName(browser, platform, model string) string {
 		return model
 	}
 
-	// If we have both browser and platform
 	if browser != "" && platform != "" {
 		return fmt.Sprintf("%s on %s", browser, platform)
 	}
 
-	// If we only have browser
 	if browser != "" {
 		return browser
 	}
 
-	// If we only have platform
 	if platform != "" {
 		return platform
 	}

@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/fifawcp/api/internal/dtos"
+	"github.com/fifawcp/api/internal/httpctx"
 	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
-	"github.com/fifawcp/api/internal/infrastructure/middlewares"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
 	"github.com/fifawcp/api/internal/packages/httputils"
 	"github.com/fifawcp/api/internal/services"
@@ -120,7 +120,7 @@ func (h *AuthHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requestInfo := middlewares.GetRequestInfo(r.Context())
+	requestInfo := httpctx.GetRequestInfo(r.Context())
 
 	authenticationResponse, err := h.authService.Authenticate(r.Context(), &body, *requestInfo)
 	if err != nil {
@@ -268,7 +268,7 @@ func (h *AuthHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 //	@Router			/auth/sessions/{id} [delete]
 func (h *AuthHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
-	user := middlewares.GetAuthenticatedUser(r.Context())
+	user := httpctx.GetAuthenticatedUser(r.Context())
 
 	if err := h.authService.DeleteSession(
 		r.Context(),

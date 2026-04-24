@@ -5,7 +5,7 @@ import (
 
 	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
-	"github.com/fifawcp/api/internal/infrastructure/middlewares"
+	"github.com/fifawcp/api/internal/httpctx"
 	"github.com/fifawcp/api/internal/packages/httputils"
 	"github.com/fifawcp/api/internal/services"
 )
@@ -40,7 +40,7 @@ func NewOAuthHandler(
 //	@Failure		500			{object}	httputils.ErrorResponse	"Internal server error"
 //	@Router			/oauth/google [get]
 func (h *OAuthHandler) GoogleOAuth(w http.ResponseWriter, r *http.Request) {
-	returnTo := middlewares.GetReturnTo(r.Context())
+	returnTo := httpctx.GetReturnTo(r.Context())
 
 	url, err := h.oauthService.BeginGoogleLogin(r.Context(), returnTo)
 	if err != nil {
@@ -67,9 +67,9 @@ func (h *OAuthHandler) GoogleOAuth(w http.ResponseWriter, r *http.Request) {
 //	@Failure		500		{object}	httputils.ErrorResponse	"Internal server error"
 //	@Router			/oauth/google/callback [get]
 func (h *OAuthHandler) GoogleOAuthCallback(w http.ResponseWriter, r *http.Request) {
-	state := middlewares.GetOAuthState(r.Context())
-	code := middlewares.GetOAuthCode(r.Context())
-	requestInfo := middlewares.GetRequestInfo(r.Context())
+	state := httpctx.GetOAuthState(r.Context())
+	code := httpctx.GetOAuthCode(r.Context())
+	requestInfo := httpctx.GetRequestInfo(r.Context())
 
 	authentication, returnTo, err := h.oauthService.CompleteGoogleLogin(r.Context(), state, code, *requestInfo)
 	if err != nil {

@@ -12,7 +12,7 @@ import (
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/dtos"
 	"github.com/fifawcp/api/internal/infrastructure/config"
-	"github.com/fifawcp/api/internal/infrastructure/middlewares"
+	"github.com/fifawcp/api/internal/httpctx"
 )
 
 func NewTestConfig() *config.Config {
@@ -51,35 +51,35 @@ func MakeJSONRequest(
 
 func WithRequestInfo(info *dtos.RequestInfo) RequestOption {
 	return func(r *http.Request) *http.Request {
-		ctx := context.WithValue(r.Context(), middlewares.RequestInfoContextKey, info)
+		ctx := context.WithValue(r.Context(), httpctx.RequestInfoContextKey, info)
 		return r.WithContext(ctx)
 	}
 }
 
 func WithAuthUser(user *domain.User) RequestOption {
 	return func(r *http.Request) *http.Request {
-		ctx := context.WithValue(r.Context(), middlewares.AuthenticatedUserContextKey, user)
+		ctx := context.WithValue(r.Context(), httpctx.AuthenticatedUserContextKey, user)
 		return r.WithContext(ctx)
 	}
 }
 
 func WithBoardID(boardID string) RequestOption {
 	return func(r *http.Request) *http.Request {
-		ctx := context.WithValue(r.Context(), middlewares.BoardIDContextKey, boardID)
+		ctx := context.WithValue(r.Context(), httpctx.BoardIDContextKey, boardID)
 		return r.WithContext(ctx)
 	}
 }
 
 func WithBoardMemberRole(role domain.BoardMemberRole) RequestOption {
 	return func(r *http.Request) *http.Request {
-		ctx := context.WithValue(r.Context(), middlewares.BoardMemberRoleContextKey, role)
+		ctx := context.WithValue(r.Context(), httpctx.BoardMemberRoleContextKey, role)
 		return r.WithContext(ctx)
 	}
 }
 
 func WithUserID(userID string) RequestOption {
 	return func(r *http.Request) *http.Request {
-		ctx := context.WithValue(r.Context(), middlewares.UserIDContextKey, userID)
+		ctx := context.WithValue(r.Context(), httpctx.UserIDContextKey, userID)
 		return r.WithContext(ctx)
 	}
 }

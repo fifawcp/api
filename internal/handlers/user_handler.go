@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/fifawcp/api/internal/infrastructure/logging"
-	"github.com/fifawcp/api/internal/infrastructure/middlewares"
+	"github.com/fifawcp/api/internal/httpctx"
 	"github.com/fifawcp/api/internal/packages/httputils"
 	"github.com/fifawcp/api/internal/services"
 )
@@ -35,6 +35,6 @@ func NewUserHandler(
 //	@Security		BearerAuth
 //	@Router			/users/profile [get]
 func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
-	user := middlewares.GetAuthenticatedUser(r.Context())
+	user := httpctx.GetAuthenticatedUser(r.Context())
 	httputils.RespondWithData(w, http.StatusOK, user)
 }

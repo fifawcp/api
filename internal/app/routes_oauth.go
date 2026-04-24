@@ -1,7 +1,7 @@
 package app
 
 import (
-	"github.com/fifawcp/api/internal/infrastructure/middlewares"
+	"github.com/fifawcp/api/internal/middlewares"
 	"github.com/go-chi/chi/v5"
 )
 
