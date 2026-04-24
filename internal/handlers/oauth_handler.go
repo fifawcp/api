@@ -3,10 +3,10 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/fifawcp/api/internal/infrastructure/config"
-	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/httpctx"
 	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/services"
 )
 

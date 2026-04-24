@@ -42,7 +42,6 @@ func newTestAuthHandler(s *mocks.MockAuthService) *AuthHandler {
 // ---------------------------------------------------------------------------
 // TestAuthHandler_RequestOtp
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_RequestOtp(t *testing.T) {
 	t.Parallel()
 
@@ -312,7 +311,6 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 // ---------------------------------------------------------------------------
 // TestAuthHandler_Authenticate
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_Authenticate(t *testing.T) {
 	t.Parallel()
 
@@ -795,7 +793,6 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 // ---------------------------------------------------------------------------
 // TestAuthHandler_RefreshToken
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_RefreshToken(t *testing.T) {
 	t.Parallel()
 
@@ -914,7 +911,6 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 // ---------------------------------------------------------------------------
 // TestAuthHandler_Logout
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_Logout(t *testing.T) {
 	t.Parallel()
 
@@ -1016,7 +1012,6 @@ func TestAuthHandler_Logout(t *testing.T) {
 // ---------------------------------------------------------------------------
 // TestAuthHandler_LogoutAll
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_LogoutAll(t *testing.T) {
 	t.Parallel()
 
@@ -1125,7 +1120,6 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 // ---------------------------------------------------------------------------
 // TestAuthHandler_GetSessions
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_GetSessions(t *testing.T) {
 	t.Parallel()
 
@@ -1266,7 +1260,6 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 // ---------------------------------------------------------------------------
 // TestAuthHandler_DeleteSession
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_DeleteSession(t *testing.T) {
 	t.Parallel()
 

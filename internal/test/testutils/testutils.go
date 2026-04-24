@@ -11,8 +11,8 @@ import (
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/dtos"
-	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/httpctx"
+	"github.com/fifawcp/api/internal/infrastructure/config"
 )
 
 func NewTestConfig() *config.Config {

@@ -20,9 +20,9 @@ type OAuthServiceInterface interface {
 }
 
 type OAuthService struct {
-	googleOAuth            domain.OAuth2Client
+	googleOAuth2Client     domain.OAuth2Client
 	oauthStorage           domain.OAuthStorage
-	oidcIdentityVerifier   domain.IDTokenVerifier
+	googleIDTokenVerifier  domain.IDTokenVerifier
 	oauthAccountRepository domain.OAuthAccountRepository
 	userRepository         domain.UserRepository
 	authService            AuthServiceInterface
@@ -30,16 +30,16 @@ type OAuthService struct {
 
 func NewOAuthService(
 	oauthStorage domain.OAuthStorage,
-	googleOAuth domain.OAuth2Client,
-	oidcIdentityVerifier domain.IDTokenVerifier,
+	googleOAuth2Client domain.OAuth2Client,
+	googleIDTokenVerifier domain.IDTokenVerifier,
 	oauthAccountRepository domain.OAuthAccountRepository,
 	userRepository domain.UserRepository,
 	authService AuthServiceInterface,
 ) OAuthServiceInterface {
 	return &OAuthService{
-		googleOAuth:            googleOAuth,
+		googleOAuth2Client:     googleOAuth2Client,
 		oauthStorage:           oauthStorage,
-		oidcIdentityVerifier:   oidcIdentityVerifier,
+		googleIDTokenVerifier:  googleIDTokenVerifier,
 		oauthAccountRepository: oauthAccountRepository,
 		userRepository:         userRepository,
 		authService:            authService,
@@ -47,22 +47,20 @@ func NewOAuthService(
 }
 
 func (s *OAuthService) BeginGoogleLogin(ctx context.Context, returnTo string) (string, error) {
-	randomBytes := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, randomBytes); err != nil {
+	state, err := generateRandomOAuthState()
+	if err != nil {
 		return "", err
 	}
-
-	state := base64.StdEncoding.EncodeToString(randomBytes)
 
 	if err := s.oauthStorage.SetOAuthState(ctx, state, returnTo); err != nil {
 		return "", err
 	}
 
-	return s.googleOAuth.BuildAuthCodeURL(state), nil
+	return s.googleOAuth2Client.BuildAuthCodeURL(state), nil
 }
 
 func (s *OAuthService) CompleteGoogleLogin(ctx context.Context, state string, code string, requestInfo dtos.RequestInfo) (*dtos.AuthenticationDto, string, error) {
-	returnTo, err := s.validateAndConsumeOAuthState(ctx, state)
+	returnTo, err := s.oauthStorage.GetAndDeleteOAuthState(ctx, state)
 	if err != nil {
 		return nil, "", err
 	}
@@ -75,17 +73,13 @@ func (s *OAuthService) CompleteGoogleLogin(ctx context.Context, state string, co
 	return s.resolveLoginForIDToken(ctx, idToken, returnTo, requestInfo)
 }
 
-func (s *OAuthService) validateAndConsumeOAuthState(ctx context.Context, state string) (string, error) {
-	return s.oauthStorage.GetAndDeleteOAuthState(ctx, state)
-}
-
 func (s *OAuthService) exchangeCodeForVerifiedIDToken(ctx context.Context, code string) (*domain.IDToken, error) {
-	authToken, err := s.googleOAuth.ExchangeCodeForToken(ctx, code)
+	authToken, err := s.googleOAuth2Client.ExchangeCodeForToken(ctx, code)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.oidcIdentityVerifier.Verify(ctx, authToken.RawIDToken)
+	return s.googleIDTokenVerifier.Verify(ctx, authToken.RawIDToken)
 }
 
 func (s *OAuthService) resolveLoginForIDToken(
@@ -224,4 +218,13 @@ func generateUsernameFromEmail(email string, provider string) string {
 	}
 
 	return provider + "-" + base + "-" + strconv.FormatInt(n.Int64(), 10)
+}
+
+func generateRandomOAuthState() (string, error) {
+	b := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+		return "", err
+	}
+
+	return base64.StdEncoding.EncodeToString(b), nil
 }
