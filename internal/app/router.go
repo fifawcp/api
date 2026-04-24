@@ -11,7 +11,7 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
-func (app *AppContainer) NewRouter() *chi.Mux {
+func (app *Container) NewRouter() *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)               // Add a request ID to the context
