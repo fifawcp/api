@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/fifawcp/api/internal/domain"
-	"github.com/fifawcp/api/internal/infrastructure/logging"
 	httputils "github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/go-chi/chi/v5/middleware"
 )
 

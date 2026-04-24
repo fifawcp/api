@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/fifawcp/api/internal/httputils"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/infrastructure/ratelimit"
-	"github.com/fifawcp/api/internal/httputils"
 )
 
 func RateLimitByIP(

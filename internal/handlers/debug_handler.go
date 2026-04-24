@@ -3,8 +3,8 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/totp"
 	"github.com/go-chi/chi/v5"
 )

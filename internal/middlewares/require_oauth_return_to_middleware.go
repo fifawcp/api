@@ -6,8 +6,8 @@ import (
 	"net/url"
 
 	"github.com/fifawcp/api/internal/httpctx"
-	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/infrastructure/logging"
 )
 
 func RequireOAuthReturnTo(logger logging.Logger, allowlist []string) func(next http.Handler) http.Handler {

@@ -4,10 +4,10 @@ import (
 	"net/http"
 
 	"github.com/fifawcp/api/internal/dtos"
-	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/httpctx"
-	"github.com/fifawcp/api/internal/infrastructure/validator"
 	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/infrastructure/logging"
+	"github.com/fifawcp/api/internal/infrastructure/validator"
 	"github.com/fifawcp/api/internal/services"
 )
 

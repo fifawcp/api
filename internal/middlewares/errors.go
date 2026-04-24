@@ -21,7 +21,7 @@ var (
 	ErrNotBoardMember = errors.New("not a member of this board")
 	ErrInternalServer = errors.New("internal server error")
 
-	ErrOAuthFailed      = errors.New("oauth authorization failed")
+	ErrOAuthFailed       = errors.New("oauth authorization failed")
 	ErrMissingOAuthState = errors.New("missing oauth state")
-	ErrMissingAuthCode  = errors.New("missing authorization code")
+	ErrMissingAuthCode   = errors.New("missing authorization code")
 )

@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/fifawcp/api/internal/httpctx"
-	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/infrastructure/logging"
 )
 
 func ValidateOAuthCallback(logger logging.Logger) func(next http.Handler) http.Handler {
