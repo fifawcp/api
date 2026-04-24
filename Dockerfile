@@ -27,7 +27,7 @@ COPY . .
 # Generate Swagger documentation from handler, DTO, and domain annotations.
 # Must run before go build since the docs package is imported by cmd/api.
 RUN swag init -g main.go \
-    -d ./cmd/api/,./internal/handlers,./internal/dtos,./internal/domain,./internal/packages/httputils \
+    -d ./cmd/api/,./internal/handlers,./internal/dtos,./internal/domain,./internal/httputils \
     -o ./docs
 
 # Build the binary.
