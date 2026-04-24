@@ -8,7 +8,7 @@ import (
 
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/fifawcp/api/internal/domain"
-	"github.com/fifawcp/api/internal/packages/mocks"
+	"github.com/fifawcp/api/internal/test/mocks"
 	"github.com/stretchr/testify/assert"
 )
 

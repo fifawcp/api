@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/fifawcp/api/internal/infrastructure/config"
-	"github.com/fifawcp/api/internal/packages/testutils"
+	"github.com/fifawcp/api/internal/test/testutils"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 )

@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/fifawcp/api/internal/httpctx"
-	"github.com/fifawcp/api/internal/packages/httputils"
+	"github.com/fifawcp/api/internal/httputils"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )

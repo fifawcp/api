@@ -5,7 +5,7 @@ import (
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/httpctx"
-	"github.com/fifawcp/api/internal/packages/httputils"
+	"github.com/fifawcp/api/internal/httputils"
 )
 
 func RequireAdminRole(next http.Handler) http.Handler {

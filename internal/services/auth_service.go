@@ -16,7 +16,7 @@ import (
 	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/infrastructure/mailer"
-	"github.com/fifawcp/api/internal/packages/totp"
+	"github.com/fifawcp/api/internal/infrastructure/totp"
 )
 
 type AuthServiceInterface interface {

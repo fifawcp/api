@@ -8,7 +8,7 @@ import (
 	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
-	"github.com/fifawcp/api/internal/packages/httputils"
+	"github.com/fifawcp/api/internal/httputils"
 	"github.com/fifawcp/api/internal/services"
 	"github.com/go-chi/chi/v5"
 )

@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/fifawcp/api/internal/domain"
-	"github.com/fifawcp/api/internal/packages/mocks"
-	"github.com/fifawcp/api/internal/packages/testutils"
+	"github.com/fifawcp/api/internal/test/mocks"
+	"github.com/fifawcp/api/internal/test/testutils"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -109,7 +109,6 @@ func parseJSONError(err error) error {
 
 	// Unknown field
 	case strings.HasPrefix(err.Error(), "json: unknown field"):
-		// Extract field name from error message
 		fieldName := extractFieldName(err.Error())
 		return errors.New("unknown field '" + fieldName + "' in request body")
 
