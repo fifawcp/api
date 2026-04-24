@@ -18,6 +18,7 @@ import (
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/infrastructure/mailer"
 	"github.com/fifawcp/api/internal/infrastructure/oauth"
+	"github.com/fifawcp/api/internal/infrastructure/ratelimit"
 	"github.com/fifawcp/api/internal/infrastructure/scheduler"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
 	"github.com/fifawcp/api/internal/jobs"
@@ -261,4 +262,22 @@ func (c *Container) ShutdownServer(server *http.Server) error {
 
 	c.Logger.Info("Server stopped gracefully")
 	return nil
+}
+
+type RateLimiters struct {
+	StrictIP   ratelimit.RateLimiter
+	ModerateIP ratelimit.RateLimiter
+	RelaxedIP  ratelimit.RateLimiter
+}
+
+func newRateLimiters(rc *redis.Client, cfg *config.RateLimitConfig) *RateLimiters {
+	if !cfg.Enabled || rc == nil {
+		return &RateLimiters{}
+	}
+
+	return &RateLimiters{
+		StrictIP:   ratelimit.NewRedisRateLimiter(rc, cfg.StrictIP),
+		ModerateIP: ratelimit.NewRedisRateLimiter(rc, cfg.ModerateIP),
+		RelaxedIP:  ratelimit.NewRedisRateLimiter(rc, cfg.RelaxedIP),
+	}
 }

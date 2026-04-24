@@ -15,14 +15,14 @@ import (
 
 const version = "0.0.1"
 
-// @title			FIFA World Cup Pickems API
-// @version		0.0.0
-// @description	Passwordless authentication API with OTP, JWT, and multi-device session management.
+//	@title			FIFA World Cup Pickems API
+//	@version		0.0.0
+//	@description	Passwordless authentication API with OTP, JWT, and multi-device session management.
 
-// @schemes	http https
+//	@schemes	http https
 
-// @host
-// @BasePath	/api
+//	@host
+//	@BasePath	/api
 
 // @securityDefinitions.apikey	BearerAuth
 // @in							header
