@@ -63,7 +63,6 @@ func (r *OTPStorage) GetOTP(
 	}
 
 	var otp domain.OTP
-
 	if err := json.Unmarshal([]byte(data), &otp); err != nil {
 		return nil, err
 	}
@@ -81,13 +80,11 @@ func (r *OTPStorage) IncrementAttempts(
 
 	key := r.createKey(purpose, identifier)
 
-	// Get current data
 	otp, err := r.GetOTP(ctx, identifier, purpose)
 	if err != nil {
 		return err
 	}
 
-	// Increment attempts
 	otp.Attempts++
 
 	// Update in Redis (preserve TTL)
@@ -104,6 +101,7 @@ func (r *OTPStorage) DeleteOTP(
 	defer cancel()
 
 	key := r.createKey(purpose, identifier)
+
 	return r.redis.Del(ctx, key).Err()
 }
 

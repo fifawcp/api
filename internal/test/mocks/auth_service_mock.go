@@ -8,14 +8,15 @@ import (
 )
 
 type MockAuthService struct {
-	RequestOtpFunc    func(ctx context.Context, payload *dtos.RequestOtpDto) error
-	AuthenticateFunc  func(ctx context.Context, payload *dtos.AuthenticationInputDto, requestInfo dtos.RequestInfo) (*dtos.AuthenticationDto, error)
-	RefreshTokenFunc  func(ctx context.Context, refreshToken string) (*dtos.AuthData, error)
-	LogoutFunc        func(ctx context.Context, refreshToken string) error
-	LogoutAllFunc     func(ctx context.Context, refreshToken string) error
-	GetSessionsFunc   func(ctx context.Context, refreshToken string) ([]domain.Session, error)
-	DeleteSessionFunc func(ctx context.Context, sessionID string, userID string) error
-	VerifyOTPFunc     func(ctx context.Context, payload *dtos.VerifyOtpDto) error
+	RequestOtpFunc          func(ctx context.Context, payload *dtos.RequestOtpDto) error
+	AuthenticateFunc        func(ctx context.Context, payload *dtos.AuthenticationInputDto, requestInfo dtos.RequestInfo) (*dtos.AuthenticationDto, error)
+	RefreshTokenFunc        func(ctx context.Context, refreshToken string) (*dtos.AuthData, error)
+	LogoutFunc              func(ctx context.Context, refreshToken string) error
+	LogoutAllFunc           func(ctx context.Context, refreshToken string) error
+	GetSessionsFunc         func(ctx context.Context, refreshToken string) ([]domain.Session, error)
+	DeleteSessionFunc       func(ctx context.Context, sessionID string, userID string) error
+	VerifyOTPFunc           func(ctx context.Context, payload *dtos.VerifyOtpDto) error
+	IssueAuthenticationFunc func(ctx context.Context, user *domain.User, requestInfo dtos.RequestInfo) (*dtos.AuthenticationDto, error)
 }
 
 func (m *MockAuthService) RequestOtp(ctx context.Context, payload *dtos.RequestOtpDto) error {
@@ -36,7 +37,7 @@ func (m *MockAuthService) VerifyOTP(ctx context.Context, payload *dtos.VerifyOtp
 	if m.VerifyOTPFunc != nil {
 		return m.VerifyOTPFunc(ctx, payload)
 	}
-	panic("Authenticate called unexpectedly")
+	panic("VerifyOTP called unexpectedly")
 }
 
 func (m *MockAuthService) RefreshToken(ctx context.Context, refreshToken string) (*dtos.AuthData, error) {
@@ -72,4 +73,11 @@ func (m *MockAuthService) DeleteSession(ctx context.Context, sessionID string, u
 		return m.DeleteSessionFunc(ctx, sessionID, userID)
 	}
 	panic("DeleteSession called unexpectedly")
+}
+
+func (m *MockAuthService) IssueAuthentication(ctx context.Context, user *domain.User, requestInfo dtos.RequestInfo) (*dtos.AuthenticationDto, error) {
+	if m.IssueAuthenticationFunc != nil {
+		return m.IssueAuthenticationFunc(ctx, user, requestInfo)
+	}
+	panic("IssueAuthentication called unexpectedly")
 }

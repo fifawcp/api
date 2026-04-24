@@ -4,10 +4,10 @@ import (
 	"net/http"
 
 	"github.com/fifawcp/api/internal/dtos"
+	"github.com/fifawcp/api/internal/httpctx"
+	"github.com/fifawcp/api/internal/httputils"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
-	"github.com/fifawcp/api/internal/infrastructure/middlewares"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
-	"github.com/fifawcp/api/internal/packages/httputils"
 	"github.com/fifawcp/api/internal/services"
 )
 
@@ -30,7 +30,7 @@ func NewAdminHandler(
 }
 
 func (h *AdminHandler) UpdateMatchResult(w http.ResponseWriter, r *http.Request) {
-	matchID := middlewares.GetMatchID(r.Context())
+	matchID := httpctx.GetMatchID(r.Context())
 
 	var body dtos.UpdateMatchResultDto
 
@@ -51,7 +51,7 @@ func (h *AdminHandler) UpdateMatchResult(w http.ResponseWriter, r *http.Request)
 func (h *AdminHandler) ResetMatchResult(w http.ResponseWriter, r *http.Request) {
 	// TODO: Put in the document that when implementing this in the frontend
 	// TODO: they should trigger a confirmation dialog, because this is a destructive action
-	matchID := middlewares.GetMatchID(r.Context())
+	matchID := httpctx.GetMatchID(r.Context())
 
 	outcome, err := h.matchService.ResetMatchResult(r.Context(), matchID)
 	if err != nil {

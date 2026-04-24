@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/httputils"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
-	"github.com/fifawcp/api/internal/packages/httputils"
 	"github.com/fifawcp/api/internal/services"
 )
 

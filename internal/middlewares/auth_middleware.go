@@ -2,13 +2,13 @@ package middlewares
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 
+	"github.com/fifawcp/api/internal/httpctx"
+	"github.com/fifawcp/api/internal/httputils"
 	"github.com/fifawcp/api/internal/infrastructure/auth"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
-	"github.com/fifawcp/api/internal/packages/httputils"
 	"github.com/fifawcp/api/internal/services"
 )
 
@@ -22,21 +22,20 @@ func Auth(
 			authHeader := r.Header.Get("Authorization")
 
 			if authHeader == "" {
-				httputils.RespondWithError(w, http.StatusUnauthorized, errors.New("missing authorization header"))
+				httputils.RespondWithError(w, http.StatusUnauthorized, ErrMissingAuthHeader)
 				return
 			}
 
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 || parts[0] != "Bearer" {
-				httputils.RespondWithError(w, http.StatusUnauthorized, errors.New("invalid authorization header"))
+				httputils.RespondWithError(w, http.StatusUnauthorized, ErrInvalidAuthHeader)
 				return
 			}
 
 			token := parts[1]
-			// Validate the token and get claims
 			claims, err := authenticator.ValidateToken(token)
 			if err != nil {
-				httputils.RespondWithError(w, http.StatusUnauthorized, errors.New("invalid or expired token"))
+				httputils.RespondWithError(w, http.StatusUnauthorized, ErrInvalidToken)
 				return
 			}
 
@@ -49,11 +48,11 @@ func Auth(
 					"error", err,
 					"userID", userID,
 				)
-				httputils.RespondWithError(w, http.StatusUnauthorized, errors.New("invalid credentials"))
+				httputils.RespondWithError(w, http.StatusUnauthorized, ErrInvalidCredentials)
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), AuthenticatedUserContextKey, user)
+			ctx := context.WithValue(r.Context(), httpctx.AuthenticatedUserContextKey, user)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

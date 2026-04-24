@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/fifawcp/api/internal/domain"
+	httputils "github.com/fifawcp/api/internal/httputils"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
-	httputils "github.com/fifawcp/api/internal/packages/httputils"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
@@ -61,7 +61,8 @@ func handleServiceError(
 
 	// Forbidden
 	case
-		errors.Is(err, domain.ErrForbidden):
+		errors.Is(err, domain.ErrForbidden),
+		errors.Is(err, domain.ErrOAuthAccountNotVerified):
 		httputils.RespondWithError(w, http.StatusForbidden, err)
 
 	// Bad request
@@ -69,8 +70,14 @@ func handleServiceError(
 		errors.Is(err, domain.ErrInvalidWinnerTeam),
 		errors.Is(err, domain.ErrInvalidThirdPlaceTeam),
 		errors.Is(err, domain.ErrThirdPlaceNotInConflict),
-		errors.Is(err, domain.ErrThirdPlaceInvalidSelection):
+		errors.Is(err, domain.ErrThirdPlaceInvalidSelection),
+		errors.Is(err, domain.ErrOAuthStateNotFound):
 		httputils.RespondWithError(w, http.StatusBadRequest, err)
+
+	// Bad gateway
+	case
+		errors.Is(err, domain.ErrMissingIDToken):
+		httputils.RespondWithError(w, http.StatusBadGateway, err)
 
 	// Internal server error
 	default:

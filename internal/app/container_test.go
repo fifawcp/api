@@ -13,24 +13,35 @@ import (
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
-	"github.com/fifawcp/api/internal/packages/mocks"
+	"github.com/fifawcp/api/internal/test/mocks"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 )
 
-func newTestContainer(t *testing.T, cfg *config.Config) *AppContainer {
+func newTestContainer(t *testing.T, cfg *config.Config) *Container {
 	t.Helper()
 	cfg.Server.ShutdownTimeout = 200 * time.Millisecond
-	return NewAppContainer(
-		cfg,
-		&mocks.MockLogger{},
-		&sql.DB{},
-		&redis.Client{},
-		&validator.Validator{},
-		&mocks.MockAuthenticator{},
-		&mocks.MockMailer{},
-		&mocks.MockScheduler{},
-	)
+
+	c := &Container{
+		Config:        cfg,
+		Logger:        &mocks.MockLogger{},
+		Authenticator: &mocks.MockAuthenticator{},
+		Scheduler:     &mocks.MockScheduler{},
+		db:            &sql.DB{},
+		redis:         &redis.Client{},
+		validator:     &validator.Validator{},
+		mailer:        &mocks.MockMailer{},
+	}
+
+	c.initRepositories()
+	c.initStorages()
+	c.initServices()
+	c.initHandlers()
+	c.initJobs()
+	c.RateLimiters = newRateLimiters(c.redis, &cfg.RateLimit)
+	c.shutdownServer = c.ShutdownServer
+
+	return c
 }
 
 func TestAppContainer_NewAppContainer(t *testing.T) {
@@ -68,22 +79,28 @@ func TestAppContainer_NewAppContainer(t *testing.T) {
 	t.Run("creates container even when job registration fails", func(t *testing.T) {
 		t.Parallel()
 
-		container := NewAppContainer(
-			cfg,
-			&mocks.MockLogger{},
-			&sql.DB{},
-			&redis.Client{},
-			&validator.Validator{},
-			&mocks.MockAuthenticator{},
-			&mocks.MockMailer{},
-			&mocks.MockScheduler{
+		c := &Container{
+			Config:        cfg,
+			Logger:        &mocks.MockLogger{},
+			Authenticator: &mocks.MockAuthenticator{},
+			Scheduler: &mocks.MockScheduler{
 				RegisterJobFunc: func(spec string, job domain.Job) error {
 					return errors.New("job registration failed")
 				},
 			},
-		)
+			db:        &sql.DB{},
+			redis:     &redis.Client{},
+			validator: &validator.Validator{},
+			mailer:    &mocks.MockMailer{},
+		}
 
-		assert.NotNil(t, container)
+		c.initRepositories()
+		c.initStorages()
+		c.initServices()
+		c.initHandlers()
+		c.initJobs()
+
+		assert.NotNil(t, c)
 	})
 }
 

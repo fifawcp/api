@@ -6,7 +6,8 @@ import (
 	"net/http"
 
 	"github.com/fifawcp/api/internal/domain"
-	"github.com/fifawcp/api/internal/packages/httputils"
+	"github.com/fifawcp/api/internal/httpctx"
+	"github.com/fifawcp/api/internal/httputils"
 	"github.com/fifawcp/api/internal/services"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -16,10 +17,10 @@ func RequireBoardMembership(boardMemberService services.BoardMemberServiceInterf
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			boardID := chi.URLParam(r, "boardId")
-			user := GetAuthenticatedUser(r.Context())
+			user := httpctx.GetAuthenticatedUser(r.Context())
 
 			if _, err := uuid.Parse(boardID); err != nil {
-				httputils.RespondWithError(w, http.StatusBadRequest, errors.New("invalid board ID"))
+				httputils.RespondWithError(w, http.StatusBadRequest, ErrInvalidBoardID)
 				return
 			}
 
@@ -29,15 +30,15 @@ func RequireBoardMembership(boardMemberService services.BoardMemberServiceInterf
 				case errors.Is(err, domain.ErrBoardNotFound):
 					httputils.RespondWithError(w, http.StatusNotFound, err)
 				case errors.Is(err, domain.ErrBoardMemberNotFound):
-					httputils.RespondWithError(w, http.StatusForbidden, errors.New("not a member of this board"))
+					httputils.RespondWithError(w, http.StatusForbidden, ErrNotBoardMember)
 				default:
-					httputils.RespondWithError(w, http.StatusInternalServerError, errors.New("internal server error"))
+					httputils.RespondWithError(w, http.StatusInternalServerError, ErrInternalServer)
 				}
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), BoardIDContextKey, boardID)
-			ctx = context.WithValue(ctx, BoardMemberRoleContextKey, boardMember.Role)
+			ctx := context.WithValue(r.Context(), httpctx.BoardIDContextKey, boardID)
+			ctx = context.WithValue(ctx, httpctx.BoardMemberRoleContextKey, boardMember.Role)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

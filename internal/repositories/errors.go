@@ -26,6 +26,7 @@ const (
 	resourceBoardRanking  resourceType = "board_ranking"
 	resourceGroupStanding resourceType = "group_standing"
 	resourceMatch         resourceType = "match"
+	resourceOAuthAccount  resourceType = "oauth_account"
 )
 
 func handleDBError(
@@ -67,6 +68,8 @@ func translateSQLNoRowsError(err error, resource resourceType) error {
 		return domain.ErrBoardNotFound
 	case resourceBoardMember:
 		return domain.ErrBoardMemberNotFound
+	case resourceOAuthAccount:
+		return domain.ErrOAuthAccountNotFound
 	default:
 		return err
 	}

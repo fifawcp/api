@@ -4,11 +4,11 @@ import (
 	"net/http"
 
 	"github.com/fifawcp/api/internal/dtos"
+	"github.com/fifawcp/api/internal/httpctx"
+	"github.com/fifawcp/api/internal/httputils"
 	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
-	"github.com/fifawcp/api/internal/infrastructure/middlewares"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
-	"github.com/fifawcp/api/internal/packages/httputils"
 	"github.com/fifawcp/api/internal/services"
 	"github.com/go-chi/chi/v5"
 )
@@ -73,7 +73,7 @@ func (h *AuthHandler) RequestOtp(w http.ResponseWriter, r *http.Request) {
 //	@Tags			auth
 //	@Accept			json
 //	@Produce		json
-//	@Param			body	body		dtos.VerifyOtpDto	true	"Verify OTP payload"
+//	@Param			body	body	dtos.VerifyOtpDto	true	"Verify OTP payload"
 //	@Success		204
 //	@Failure		400	{object}	httputils.ErrorResponse	"Invalid request body or validation error"
 //	@Failure		401	{object}	httputils.ErrorResponse	"OTP invalid or expired"
@@ -120,7 +120,7 @@ func (h *AuthHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requestInfo := middlewares.GetRequestInfo(r.Context())
+	requestInfo := httpctx.GetRequestInfo(r.Context())
 
 	authenticationResponse, err := h.authService.Authenticate(r.Context(), &body, *requestInfo)
 	if err != nil {
@@ -268,7 +268,7 @@ func (h *AuthHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 //	@Router			/auth/sessions/{id} [delete]
 func (h *AuthHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
-	user := middlewares.GetAuthenticatedUser(r.Context())
+	user := httpctx.GetAuthenticatedUser(r.Context())
 
 	if err := h.authService.DeleteSession(
 		r.Context(),

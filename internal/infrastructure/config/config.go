@@ -64,6 +64,16 @@ type AuthConfig struct {
 	OTPTTL         time.Duration
 	MaxOTPAttempts int
 	OTPCooldown    time.Duration
+	GoogleOAuth    OAuthConfig
+}
+
+type OAuthConfig struct {
+	ClientID          string
+	ClientSecret      string
+	RedirectURL       string
+	StateTTL          time.Duration
+	ReturnToAllowlist []string
+	Issuer            string
 }
 
 type MailerConfig struct {
@@ -130,6 +140,14 @@ func NewConfig() *Config {
 			OTPTTL:         env.GetDuration("AUTH_OTP_TTL", 10*time.Minute),
 			MaxOTPAttempts: env.GetInt("AUTH_MAX_OTP_ATTEMPTS", 3),
 			OTPCooldown:    env.GetDuration("AUTH_OTP_COOLDOWN", 30*time.Second),
+			GoogleOAuth: OAuthConfig{
+				ClientID:          env.GetString("GOOGLE_OAUTH_CLIENT_ID", ""),
+				ClientSecret:      env.GetString("GOOGLE_OAUTH_CLIENT_SECRET", ""),
+				RedirectURL:       env.GetString("GOOGLE_OAUTH_REDIRECT_URL", ""),
+				StateTTL:          env.GetDuration("GOOGLE_OAUTH_STATE_TTL", 10*time.Minute),
+				ReturnToAllowlist: strings.Split(env.GetString("GOOGLE_OAUTH_RETURN_TO_ALLOWLIST", "*"), ","),
+				Issuer:            env.GetString("GOOGLE_OAUTH_ISSUER", "https://accounts.google.com"),
+			},
 		},
 		Mailer: MailerConfig{
 			APIKey:      env.GetString("MAILER_API_KEY", ""),
