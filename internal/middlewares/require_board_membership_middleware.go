@@ -7,7 +7,7 @@ import (
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/httpctx"
-	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/httpx"
 	"github.com/fifawcp/api/internal/services"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -20,7 +20,7 @@ func RequireBoardMembership(boardMemberService services.BoardMemberServiceInterf
 			user := httpctx.GetAuthenticatedUser(r.Context())
 
 			if _, err := uuid.Parse(boardID); err != nil {
-				httputils.RespondWithError(w, http.StatusBadRequest, ErrInvalidBoardID)
+				httpx.BadRequest(w, r, codeInvalidBoardID, ErrInvalidBoardID.Error())
 				return
 			}
 
@@ -28,11 +28,11 @@ func RequireBoardMembership(boardMemberService services.BoardMemberServiceInterf
 			if err != nil {
 				switch {
 				case errors.Is(err, domain.ErrBoardNotFound):
-					httputils.RespondWithError(w, http.StatusNotFound, err)
+					httpx.NotFound(w, r, codeBoardNotFound, domain.ErrBoardNotFound.Error())
 				case errors.Is(err, domain.ErrBoardMemberNotFound):
-					httputils.RespondWithError(w, http.StatusForbidden, ErrNotBoardMember)
+					httpx.Forbidden(w, r, codeNotBoardMember, ErrNotBoardMember.Error())
 				default:
-					httputils.RespondWithError(w, http.StatusInternalServerError, ErrInternalServer)
+					httpx.InternalServerError(w, r, codeInternalServer, ErrInternalServer.Error())
 				}
 				return
 			}

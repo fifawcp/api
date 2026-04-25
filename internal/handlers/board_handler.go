@@ -5,7 +5,7 @@ import (
 
 	"github.com/fifawcp/api/internal/dtos"
 	"github.com/fifawcp/api/internal/httpctx"
-	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/httpx"
 	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
@@ -47,10 +47,10 @@ func NewBoardHandler(
 //	@Accept			json
 //	@Produce		json
 //	@Param			board	body		dtos.CreateBoardDto		true	"Board creation data"
-//	@Success		201		{object}	httputils.Response		"Board created successfully"
-//	@Failure		400		{object}	httputils.ErrorResponse	"Invalid request body or validation error"
-//	@Failure		401		{object}	httputils.ErrorResponse	"Unauthorized - missing or invalid authentication"
-//	@Failure		500		{object}	httputils.ErrorResponse	"Internal server error"
+//	@Success		201		{object}	httpx.Response		"Board created successfully"
+//	@Failure		400		{object}	httpx.ErrorResponse	"Invalid request body or validation error"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/boards [post]
 func (h *BoardHandler) CreateBoard(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +58,7 @@ func (h *BoardHandler) CreateBoard(w http.ResponseWriter, r *http.Request) {
 
 	var body dtos.CreateBoardDto
 
-	if err := httputils.ReadAndValidateJSON(w, r, &body, h.validator); err != nil {
+	if err := httpx.ReadAndValidateJSON(w, r, &body, h.validator); err != nil {
 		return
 	}
 
@@ -68,7 +68,7 @@ func (h *BoardHandler) CreateBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusCreated, board)
+	httpx.RespondWithData(w, http.StatusCreated, board)
 }
 
 // GetUserBoards godoc
@@ -77,9 +77,9 @@ func (h *BoardHandler) CreateBoard(w http.ResponseWriter, r *http.Request) {
 //	@Description	Retrieves all boards that the authenticated user is a member of. Requires authentication.
 //	@Tags			boards
 //	@Produce		json
-//	@Success		200	{object}	httputils.Response		"User's boards retrieved successfully"
-//	@Failure		401	{object}	httputils.ErrorResponse	"Unauthorized - missing or invalid authentication"
-//	@Failure		500	{object}	httputils.ErrorResponse	"Internal server error"
+//	@Success		200	{object}	httpx.Response		"User's boards retrieved successfully"
+//	@Failure		401	{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		500	{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/boards [get]
 func (h *BoardHandler) GetUserBoards(w http.ResponseWriter, r *http.Request) {
@@ -91,7 +91,7 @@ func (h *BoardHandler) GetUserBoards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusOK, boards)
+	httpx.RespondWithData(w, http.StatusOK, boards)
 }
 
 // JoinBoard godoc
@@ -103,11 +103,11 @@ func (h *BoardHandler) GetUserBoards(w http.ResponseWriter, r *http.Request) {
 //	@Produce		json
 //	@Param			joinCode	body	dtos.JoinBoardDto	true	"Join code"
 //	@Success		204			"Joined board successfully"
-//	@Failure		400			{object}	httputils.ErrorResponse	"Invalid request body or validation error"
-//	@Failure		401			{object}	httputils.ErrorResponse	"Unauthorized - missing or invalid authentication"
-//	@Failure		401			{object}	httputils.ErrorResponse	"Invalid or expired board join code"
-//	@Failure		409			{object}	httputils.ErrorResponse	"User is already a member of this board"
-//	@Failure		500			{object}	httputils.ErrorResponse	"Internal server error"
+//	@Failure		400			{object}	httpx.ErrorResponse	"Invalid request body or validation error"
+//	@Failure		401			{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		401			{object}	httpx.ErrorResponse	"Invalid or expired board join code"
+//	@Failure		409			{object}	httpx.ErrorResponse	"User is already a member of this board"
+//	@Failure		500			{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/boards/join [post]
 func (h *BoardHandler) JoinBoard(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +115,7 @@ func (h *BoardHandler) JoinBoard(w http.ResponseWriter, r *http.Request) {
 
 	var body dtos.JoinBoardDto
 
-	if err := httputils.ReadAndValidateJSON(w, r, &body, h.validator); err != nil {
+	if err := httpx.ReadAndValidateJSON(w, r, &body, h.validator); err != nil {
 		return
 	}
 
@@ -124,7 +124,7 @@ func (h *BoardHandler) JoinBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusNoContent, nil)
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
 }
 
 // GetBoardByID godoc
@@ -134,11 +134,11 @@ func (h *BoardHandler) JoinBoard(w http.ResponseWriter, r *http.Request) {
 //	@Tags			boards
 //	@Produce		json
 //	@Param			boardId	path		string					true	"Board ID"
-//	@Success		200		{object}	httputils.Response		"Board details retrieved successfully"
-//	@Failure		401		{object}	httputils.ErrorResponse	"Unauthorized - missing or invalid authentication"
-//	@Failure		403		{object}	httputils.ErrorResponse	"Not a member of this board"
-//	@Failure		404		{object}	httputils.ErrorResponse	"Board not found"
-//	@Failure		500		{object}	httputils.ErrorResponse	"Internal server error"
+//	@Success		200		{object}	httpx.Response		"Board details retrieved successfully"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board"
+//	@Failure		404		{object}	httpx.ErrorResponse	"Board not found"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId} [get]
 func (h *BoardHandler) GetBoardByID(w http.ResponseWriter, r *http.Request) {
@@ -150,7 +150,7 @@ func (h *BoardHandler) GetBoardByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusOK, board)
+	httpx.RespondWithData(w, http.StatusOK, board)
 }
 
 // GetBoardMembers godoc
@@ -160,11 +160,11 @@ func (h *BoardHandler) GetBoardByID(w http.ResponseWriter, r *http.Request) {
 //	@Tags			boards
 //	@Produce		json
 //	@Param			boardId	path		string					true	"Board ID"
-//	@Success		200		{object}	httputils.Response		"Board members retrieved successfully"
-//	@Failure		401		{object}	httputils.ErrorResponse	"Unauthorized - missing or invalid authentication"
-//	@Failure		403		{object}	httputils.ErrorResponse	"Not a member of this board"
-//	@Failure		404		{object}	httputils.ErrorResponse	"Board not found"
-//	@Failure		500		{object}	httputils.ErrorResponse	"Internal server error"
+//	@Success		200		{object}	httpx.Response		"Board members retrieved successfully"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board"
+//	@Failure		404		{object}	httpx.ErrorResponse	"Board not found"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId}/members [get]
 func (h *BoardHandler) GetBoardMembers(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +176,7 @@ func (h *BoardHandler) GetBoardMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusOK, members)
+	httpx.RespondWithData(w, http.StatusOK, members)
 }
 
 // GetBoardRanking godoc
@@ -186,11 +186,11 @@ func (h *BoardHandler) GetBoardMembers(w http.ResponseWriter, r *http.Request) {
 //	@Tags			boards
 //	@Produce		json
 //	@Param			boardId	path		string					true	"Board ID"
-//	@Success		200		{object}	httputils.Response		"Board ranking retrieved successfully"
-//	@Failure		401		{object}	httputils.ErrorResponse	"Unauthorized - missing or invalid authentication"
-//	@Failure		403		{object}	httputils.ErrorResponse	"Not a member of this board"
-//	@Failure		404		{object}	httputils.ErrorResponse	"Board not found"
-//	@Failure		500		{object}	httputils.ErrorResponse	"Internal server error"
+//	@Success		200		{object}	httpx.Response		"Board ranking retrieved successfully"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board"
+//	@Failure		404		{object}	httpx.ErrorResponse	"Board not found"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId}/ranking [get]
 func (h *BoardHandler) GetBoardRanking(w http.ResponseWriter, r *http.Request) {
@@ -202,7 +202,7 @@ func (h *BoardHandler) GetBoardRanking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusOK, ranking)
+	httpx.RespondWithData(w, http.StatusOK, ranking)
 }
 
 // RegenerateJoinCode godoc
@@ -212,11 +212,11 @@ func (h *BoardHandler) GetBoardRanking(w http.ResponseWriter, r *http.Request) {
 //	@Tags			boards
 //	@Produce		json
 //	@Param			boardId	path		string					true	"Board ID"
-//	@Success		200		{object}	httputils.Response		"Join code regenerated successfully"
-//	@Failure		401		{object}	httputils.ErrorResponse	"Unauthorized - missing or invalid authentication"
-//	@Failure		403		{object}	httputils.ErrorResponse	"Not a member of this board or insufficient permissions"
-//	@Failure		404		{object}	httputils.ErrorResponse	"Board not found"
-//	@Failure		500		{object}	httputils.ErrorResponse	"Internal server error"
+//	@Success		200		{object}	httpx.Response		"Join code regenerated successfully"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board or insufficient permissions"
+//	@Failure		404		{object}	httpx.ErrorResponse	"Board not found"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId}/regenerate-join-code [post]
 func (h *BoardHandler) RegenerateJoinCode(w http.ResponseWriter, r *http.Request) {
@@ -228,7 +228,7 @@ func (h *BoardHandler) RegenerateJoinCode(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusOK, &dtos.JoinBoardDto{
+	httpx.RespondWithData(w, http.StatusOK, &dtos.JoinBoardDto{
 		JoinCode: joinCode,
 	})
 }
@@ -243,11 +243,11 @@ func (h *BoardHandler) RegenerateJoinCode(w http.ResponseWriter, r *http.Request
 //	@Param			boardId	path	string				true	"Board ID"
 //	@Param			board	body	dtos.UpdateBoardDto	true	"Board update data"
 //	@Success		204		"Board updated successfully"
-//	@Failure		400		{object}	httputils.ErrorResponse	"Invalid request body or validation error"
-//	@Failure		401		{object}	httputils.ErrorResponse	"Unauthorized - missing or invalid authentication"
-//	@Failure		403		{object}	httputils.ErrorResponse	"Not a member of this board or insufficient permissions"
-//	@Failure		404		{object}	httputils.ErrorResponse	"Board not found"
-//	@Failure		500		{object}	httputils.ErrorResponse	"Internal server error"
+//	@Failure		400		{object}	httpx.ErrorResponse	"Invalid request body or validation error"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board or insufficient permissions"
+//	@Failure		404		{object}	httpx.ErrorResponse	"Board not found"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId} [patch]
 func (h *BoardHandler) UpdateBoard(w http.ResponseWriter, r *http.Request) {
@@ -256,7 +256,7 @@ func (h *BoardHandler) UpdateBoard(w http.ResponseWriter, r *http.Request) {
 
 	var body dtos.UpdateBoardDto
 
-	if err := httputils.ReadAndValidateJSON(w, r, &body, h.validator); err != nil {
+	if err := httpx.ReadAndValidateJSON(w, r, &body, h.validator); err != nil {
 		return
 	}
 
@@ -265,7 +265,7 @@ func (h *BoardHandler) UpdateBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusNoContent, nil)
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
 }
 
 // DeleteBoard godoc
@@ -276,10 +276,10 @@ func (h *BoardHandler) UpdateBoard(w http.ResponseWriter, r *http.Request) {
 //	@Produce		json
 //	@Param			boardId	path	string	true	"Board ID"
 //	@Success		204		"Board deleted successfully"
-//	@Failure		401		{object}	httputils.ErrorResponse	"Unauthorized - missing or invalid authentication"
-//	@Failure		403		{object}	httputils.ErrorResponse	"Insufficient permissions (not owner)"
-//	@Failure		404		{object}	httputils.ErrorResponse	"Board not found"
-//	@Failure		500		{object}	httputils.ErrorResponse	"Internal server error"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Insufficient permissions (not owner)"
+//	@Failure		404		{object}	httpx.ErrorResponse	"Board not found"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId} [delete]
 func (h *BoardHandler) DeleteBoard(w http.ResponseWriter, r *http.Request) {
@@ -291,7 +291,7 @@ func (h *BoardHandler) DeleteBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusNoContent, nil)
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
 }
 
 // UpdateBoardMemberRole godoc
@@ -305,12 +305,12 @@ func (h *BoardHandler) DeleteBoard(w http.ResponseWriter, r *http.Request) {
 //	@Param			userId	path	string							true	"User ID"
 //	@Param			role	body	dtos.UpdateBoardMemberRoleDto	true	"Role update data"
 //	@Success		204		"Member role updated successfully"
-//	@Failure		400		{object}	httputils.ErrorResponse	"Invalid request body or validation error"
-//	@Failure		401		{object}	httputils.ErrorResponse	"Unauthorized - missing or invalid authentication"
-//	@Failure		403		{object}	httputils.ErrorResponse	"Not a member of this board or insufficient permissions"
-//	@Failure		403		{object}	httputils.ErrorResponse	"Cannot modify owner's role"
-//	@Failure		404		{object}	httputils.ErrorResponse	"Board member not found"
-//	@Failure		500		{object}	httputils.ErrorResponse	"Internal server error"
+//	@Failure		400		{object}	httpx.ErrorResponse	"Invalid request body or validation error"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board or insufficient permissions"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Cannot modify owner's role"
+//	@Failure		404		{object}	httpx.ErrorResponse	"Board member not found"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId}/members/{userId}/role [patch]
 func (h *BoardHandler) UpdateBoardMemberRole(w http.ResponseWriter, r *http.Request) {
@@ -320,7 +320,7 @@ func (h *BoardHandler) UpdateBoardMemberRole(w http.ResponseWriter, r *http.Requ
 
 	var body dtos.UpdateBoardMemberRoleDto
 
-	if err := httputils.ReadAndValidateJSON(w, r, &body, h.validator); err != nil {
+	if err := httpx.ReadAndValidateJSON(w, r, &body, h.validator); err != nil {
 		return
 	}
 
@@ -329,7 +329,7 @@ func (h *BoardHandler) UpdateBoardMemberRole(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusNoContent, nil)
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
 }
 
 // RemoveBoardMember godoc
@@ -341,11 +341,11 @@ func (h *BoardHandler) UpdateBoardMemberRole(w http.ResponseWriter, r *http.Requ
 //	@Param			boardId	path	string	true	"Board ID"
 //	@Param			userId	path	string	true	"User ID"
 //	@Success		204		"Member removed successfully"
-//	@Failure		401		{object}	httputils.ErrorResponse	"Unauthorized - missing or invalid authentication"
-//	@Failure		403		{object}	httputils.ErrorResponse	"Not a member of this board or insufficient permissions"
-//	@Failure		403		{object}	httputils.ErrorResponse	"Cannot remove board owner"
-//	@Failure		404		{object}	httputils.ErrorResponse	"Board member not found"
-//	@Failure		500		{object}	httputils.ErrorResponse	"Internal server error"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board or insufficient permissions"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Cannot remove board owner"
+//	@Failure		404		{object}	httpx.ErrorResponse	"Board member not found"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId}/members/{userId} [delete]
 func (h *BoardHandler) RemoveBoardMember(w http.ResponseWriter, r *http.Request) {
@@ -358,5 +358,5 @@ func (h *BoardHandler) RemoveBoardMember(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusNoContent, nil)
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
 }

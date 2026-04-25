@@ -5,7 +5,7 @@ import (
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/httpctx"
-	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/httpx"
 )
 
 func RequireAdminRole(next http.Handler) http.Handler {
@@ -13,7 +13,7 @@ func RequireAdminRole(next http.Handler) http.Handler {
 		user := httpctx.GetAuthenticatedUser(r.Context())
 
 		if user.Role != domain.RoleAdmin {
-			httputils.RespondWithError(w, http.StatusForbidden, domain.ErrForbidden)
+			httpx.Forbidden(w, r, codeForbidden, domain.ErrForbidden.Error())
 			return
 		}
 

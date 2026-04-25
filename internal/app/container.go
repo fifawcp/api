@@ -196,7 +196,7 @@ func (c *Container) initHandlers() {
 	c.BoardHandler = handlers.NewBoardHandler(c.boardService, c.BoardMemberService, c.boardRankingService, c.Config, c.validator, c.Logger)
 	c.GroupHandler = handlers.NewGroupStandingHandler(c.groupStandingService, c.Logger)
 	c.MatchHandler = handlers.NewMatchHandler(c.matchService, c.Logger)
-	c.AdminHandler = handlers.NewAdminHandler(c.matchService, c.groupStandingService, c.Logger)
+	c.AdminHandler = handlers.NewAdminHandler(c.matchService, c.groupStandingService, c.Logger, c.validator)
 	c.OAuthHandler = handlers.NewOAuthHandler(c.oauthService, c.Logger, c.Config)
 }
 

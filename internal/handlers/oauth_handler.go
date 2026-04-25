@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/fifawcp/api/internal/httpctx"
-	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/httpx"
 	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/services"
@@ -36,8 +36,8 @@ func NewOAuthHandler(
 //	@Produce		json
 //	@Param			return_to	query	string	true	"Absolute URL to redirect after successful callback (allowlisted origin)"
 //	@Success		307			"Redirect to Google (Temporary Redirect)"
-//	@Failure		400			{object}	httputils.ErrorResponse	"Missing, invalid, or non-allowlisted return_to (middleware)"
-//	@Failure		500			{object}	httputils.ErrorResponse	"Internal server error"
+//	@Failure		400			{object}	httpx.ErrorResponse	"Missing, invalid, or non-allowlisted return_to (middleware)"
+//	@Failure		500			{object}	httpx.ErrorResponse	"Internal server error"
 //	@Router			/oauth/google [get]
 func (h *OAuthHandler) GoogleOAuth(w http.ResponseWriter, r *http.Request) {
 	returnTo := httpctx.GetReturnTo(r.Context())
@@ -61,10 +61,10 @@ func (h *OAuthHandler) GoogleOAuth(w http.ResponseWriter, r *http.Request) {
 //	@Param			state	query	string	true	"OAuth state from the login start redirect"
 //	@Param			code	query	string	true	"Authorization code from Google"
 //	@Success		302		"Refresh cookie set; redirect to return_to"
-//	@Failure		400		{object}	httputils.ErrorResponse	"Invalid callback (middleware) or unknown/expired OAuth state"
-//	@Failure		403		{object}	httputils.ErrorResponse	"Google email not verified"
-//	@Failure		502		{object}	httputils.ErrorResponse	"Token exchange missing id_token"
-//	@Failure		500		{object}	httputils.ErrorResponse	"Internal server error"
+//	@Failure		400		{object}	httpx.ErrorResponse	"Invalid callback (middleware) or unknown/expired OAuth state"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Google email not verified"
+//	@Failure		502		{object}	httpx.ErrorResponse	"Token exchange missing identity token"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
 //	@Router			/oauth/google/callback [get]
 func (h *OAuthHandler) GoogleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	state := httpctx.GetOAuthState(r.Context())
@@ -77,7 +77,7 @@ func (h *OAuthHandler) GoogleOAuthCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	httputils.SetRefreshTokenCookie(
+	httpx.SetRefreshTokenCookie(
 		w,
 		authentication.Auth.RefreshToken,
 		authentication.Auth.ExpiresAt,

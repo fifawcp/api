@@ -71,7 +71,7 @@ Returns matches with home and away team rows joined from `teams`, **`ORDER BY m.
 | `from_date` | string | No | Return matches on or after this kickoff date-time. |
 | `to_date` | string | No | Return matches on or before this kickoff date-time. |
 
-**List encoding:** Same repeat-or-comma rules as `group_codes` for all list parameters (`httputils.ParseStringSliceParam`).
+**List encoding:** Same repeat-or-comma rules as `group_codes` for all list parameters (`httpx.ParseStringSliceParam`).
 
 **Date format:** Both dates are parsed with **`time.RFC3339`** (e.g. `2026-06-15T00:00:00Z`). Omit the parameter entirely if you do not want that bound. Malformed values → **400** (`invalid 'from_date' date format, expected RFC3339` or the same for `to_date`).
 

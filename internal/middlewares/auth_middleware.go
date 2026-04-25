@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/fifawcp/api/internal/httpctx"
-	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/httpx"
 	"github.com/fifawcp/api/internal/infrastructure/auth"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/services"
@@ -22,20 +22,20 @@ func Auth(
 			authHeader := r.Header.Get("Authorization")
 
 			if authHeader == "" {
-				httputils.RespondWithError(w, http.StatusUnauthorized, ErrMissingAuthHeader)
+				httpx.Unauthorized(w, r, codeMissingAuthHeader, ErrMissingAuthHeader.Error())
 				return
 			}
 
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 || parts[0] != "Bearer" {
-				httputils.RespondWithError(w, http.StatusUnauthorized, ErrInvalidAuthHeader)
+				httpx.Unauthorized(w, r, codeInvalidAuthHeader, ErrInvalidAuthHeader.Error())
 				return
 			}
 
 			token := parts[1]
 			claims, err := authenticator.ValidateToken(token)
 			if err != nil {
-				httputils.RespondWithError(w, http.StatusUnauthorized, ErrInvalidToken)
+				httpx.Unauthorized(w, r, codeInvalidToken, ErrInvalidToken.Error())
 				return
 			}
 
@@ -48,7 +48,7 @@ func Auth(
 					"error", err,
 					"userID", userID,
 				)
-				httputils.RespondWithError(w, http.StatusUnauthorized, ErrInvalidCredentials)
+				httpx.Unauthorized(w, r, codeInvalidCredentials, ErrInvalidCredentials.Error())
 				return
 			}
 

@@ -1,7 +1,7 @@
 package dtos
 
 type BulkUpdateMatchesResultDto struct {
-	Matches []BulkUpdateMatchResultDto `json:"matches" validate:"required,min=1,dive"`
+	Matches []BulkUpdateMatchResultDto `json:"matches" validate:"required,min_array_len=1,dive"`
 }
 
 type UpdateMatchResultDto struct {

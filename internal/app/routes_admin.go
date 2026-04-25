@@ -14,7 +14,7 @@ func adminRoutes(c *Container) chi.Router {
 		r.Post("/results", c.AdminHandler.BulkUpdateMatchResults)
 
 		r.Route("/{id}", func(r chi.Router) {
-			r.Use(middlewares.RequireValidMatchID(c.Logger))
+			r.Use(middlewares.RequireValidMatchID)
 			r.Post("/result", c.AdminHandler.UpdateMatchResult)
 			r.Delete("/result", c.AdminHandler.ResetMatchResult)
 		})

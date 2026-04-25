@@ -6,18 +6,63 @@ import (
 	"net/http"
 
 	"github.com/fifawcp/api/internal/domain"
-	httputils "github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/httpx"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
-	"github.com/go-chi/chi/v5/middleware"
 )
 
-func handleServiceError(
-	w http.ResponseWriter,
-	r *http.Request,
-	err error,
-	logger logging.Logger,
-) {
-	// Check if the request was cancelled
+const (
+	// 404 Not Found
+	codeUserNotFound        = "USER_NOT_FOUND"
+	codeSessionNotFound     = "SESSION_NOT_FOUND"
+	codeBoardNotFound       = "BOARD_NOT_FOUND"
+	codeBoardMemberNotFound = "BOARD_MEMBER_NOT_FOUND"
+	codeMatchNotFound       = "MATCH_NOT_FOUND"
+	codeOAuthAccountNotFound = "OAUTH_ACCOUNT_NOT_FOUND"
+	codeMatchesNotFound     = "MATCHES_NOT_FOUND"
+
+	// 409 Conflict
+	codeUserAlreadyExists         = "USER_ALREADY_EXISTS"
+	codeUsernameAlreadyExists     = "USERNAME_ALREADY_EXISTS"
+	codeBoardMemberAlreadyInBoard = "BOARD_MEMBER_ALREADY_IN_BOARD"
+	codeBoardAlreadyExists        = "BOARD_ALREADY_EXISTS"
+	codeBoardUserAlreadyInBoard   = "BOARD_USER_ALREADY_IN_BOARD"
+	codeMaxBoardMembersExceeded   = "MAX_BOARD_MEMBERS_EXCEEDED"
+
+	// 401 Unauthorized
+	codeOTPInvalidOrExpired          = "OTP_INVALID_OR_EXPIRED"
+	codeInvalidCredentials           = "INVALID_CREDENTIALS"
+	codeRefreshTokenInvalidOrExpired = "REFRESH_TOKEN_INVALID_OR_EXPIRED"
+	codeRefreshTokenNotFound         = "REFRESH_TOKEN_NOT_FOUND"
+	codeBoardInvalidJoinCode         = "BOARD_INVALID_JOIN_CODE"
+
+	// 429 Too Many Requests
+	codeOTPTooManyAttempts = "OTP_TOO_MANY_ATTEMPTS"
+	codeOTPCooldown        = "OTP_COOLDOWN"
+
+	// 403 Forbidden
+	codeForbidden             = "FORBIDDEN"
+	codeOAuthAccountNotVerified = "OAUTH_ACCOUNT_NOT_VERIFIED"
+
+	// 400 Bad Request
+	codeInvalidWinnerTeam          = "INVALID_WINNER_TEAM"
+	codeInvalidThirdPlaceTeam      = "INVALID_THIRD_PLACE_TEAM"
+	codeThirdPlaceNotInConflict    = "THIRD_PLACE_NOT_IN_CONFLICT"
+	codeThirdPlaceInvalidSelection = "THIRD_PLACE_INVALID_SELECTION"
+	codeOAuthStateNotFound         = "OAUTH_STATE_NOT_FOUND"
+	codeInvalidGroupCode           = "INVALID_GROUP_CODE"
+	codeInvalidStageCode           = "INVALID_STAGE_CODE"
+	codeInvalidStatus              = "INVALID_STATUS"
+	codeInvalidFifaCode            = "INVALID_FIFA_CODE"
+	codeInvalidDateRange           = "INVALID_DATE_RANGE"
+
+	// 502 Bad Gateway
+	codeMissingIDToken = "MISSING_ID_TOKEN"
+
+	// 500 Internal Server Error
+	codeInternalServerError = "INTERNAL_SERVER_ERROR"
+)
+
+func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logger logging.Logger) {
 	if errors.Is(err, context.Canceled) {
 		return
 	}
@@ -25,78 +70,95 @@ func handleServiceError(
 	var cooldownErr domain.OtpCooldownError
 	var matchesNotFoundErr domain.MatchesNotFoundError
 
-	// Map domain errors to HTTP responses
 	switch {
 
-	// Not found
-	case
-		errors.Is(err, domain.ErrUserNotFound),
-		errors.Is(err, domain.ErrSessionNotFound),
-		errors.Is(err, domain.ErrBoardNotFound),
-		errors.Is(err, domain.ErrBoardMemberNotFound),
-		errors.Is(err, domain.ErrMatchNotFound),
-		errors.As(err, &matchesNotFoundErr):
-		httputils.RespondWithError(w, http.StatusNotFound, err)
+	// 404 Not Found
+	case errors.Is(err, domain.ErrUserNotFound):
+		httpx.NotFound(w, r, codeUserNotFound, domain.ErrUserNotFound.Error())
+	case errors.Is(err, domain.ErrSessionNotFound):
+		httpx.NotFound(w, r, codeSessionNotFound, domain.ErrSessionNotFound.Error())
+	case errors.Is(err, domain.ErrBoardNotFound):
+		httpx.NotFound(w, r, codeBoardNotFound, domain.ErrBoardNotFound.Error())
+	case errors.Is(err, domain.ErrBoardMemberNotFound):
+		httpx.NotFound(w, r, codeBoardMemberNotFound, domain.ErrBoardMemberNotFound.Error())
+	case errors.Is(err, domain.ErrMatchNotFound):
+		httpx.NotFound(w, r, codeMatchNotFound, domain.ErrMatchNotFound.Error())
+	case errors.Is(err, domain.ErrOAuthAccountNotFound):
+		httpx.NotFound(w, r, codeOAuthAccountNotFound, domain.ErrOAuthAccountNotFound.Error())
+	case errors.As(err, &matchesNotFoundErr):
+		httpx.NotFound(w, r, codeMatchesNotFound, matchesNotFoundErr.Error())
 
-	// Conflict
-	case
-		errors.Is(err, domain.ErrUserAlreadyExists),
-		errors.Is(err, domain.ErrUsernameAlreadyExists),
-		errors.Is(err, domain.ErrBoardMemberAlreadyInBoard):
-		httputils.RespondWithError(w, http.StatusConflict, err)
+	// 409 Conflict
+	case errors.Is(err, domain.ErrUserAlreadyExists):
+		httpx.Conflict(w, r, codeUserAlreadyExists, domain.ErrUserAlreadyExists.Error())
+	case errors.Is(err, domain.ErrUsernameAlreadyExists):
+		httpx.Conflict(w, r, codeUsernameAlreadyExists, domain.ErrUsernameAlreadyExists.Error())
+	case errors.Is(err, domain.ErrBoardMemberAlreadyInBoard):
+		httpx.Conflict(w, r, codeBoardMemberAlreadyInBoard, domain.ErrBoardMemberAlreadyInBoard.Error())
+	case errors.Is(err, domain.ErrBoardAlreadyExists):
+		httpx.Conflict(w, r, codeBoardAlreadyExists, domain.ErrBoardAlreadyExists.Error())
+	case errors.Is(err, domain.ErrBoardUserAlreadyInBoard):
+		httpx.Conflict(w, r, codeBoardUserAlreadyInBoard, domain.ErrBoardUserAlreadyInBoard.Error())
+	case errors.Is(err, domain.ErrMaxBoardMembersExceeded):
+		httpx.Conflict(w, r, codeMaxBoardMembersExceeded, domain.ErrMaxBoardMembersExceeded.Error())
 
-	// Unauthorized
-	case
-		errors.Is(err, domain.ErrOTPInvalidOrExpired),
-		errors.Is(err, domain.ErrInvalidCredentials),
-		errors.Is(err, domain.ErrRefreshTokenInvalidOrExpired),
-		errors.Is(err, domain.ErrBoardInvalidJoinCode):
-		httputils.RespondWithError(w, http.StatusUnauthorized, err)
+	// 401 Unauthorized
+	case errors.Is(err, domain.ErrOTPInvalidOrExpired):
+		httpx.Unauthorized(w, r, codeOTPInvalidOrExpired, domain.ErrOTPInvalidOrExpired.Error())
+	case errors.Is(err, domain.ErrInvalidCredentials):
+		httpx.Unauthorized(w, r, codeInvalidCredentials, domain.ErrInvalidCredentials.Error())
+	case errors.Is(err, domain.ErrRefreshTokenInvalidOrExpired):
+		httpx.Unauthorized(w, r, codeRefreshTokenInvalidOrExpired, domain.ErrRefreshTokenInvalidOrExpired.Error())
+	case errors.Is(err, domain.ErrRefreshTokenNotFound):
+		httpx.Unauthorized(w, r, codeRefreshTokenNotFound, domain.ErrRefreshTokenNotFound.Error())
+	case errors.Is(err, domain.ErrBoardInvalidJoinCode):
+		httpx.Unauthorized(w, r, codeBoardInvalidJoinCode, domain.ErrBoardInvalidJoinCode.Error())
 
-	// Rate limit
-	case
-		errors.Is(err, domain.ErrOTPTooManyAttempts),
-		errors.As(err, &cooldownErr):
-		httputils.RespondWithError(w, http.StatusTooManyRequests, err)
+	// 429 Too Many Requests
+	case errors.Is(err, domain.ErrOTPTooManyAttempts):
+		httpx.TooManyRequests(w, r, codeOTPTooManyAttempts, domain.ErrOTPTooManyAttempts.Error())
+	case errors.As(err, &cooldownErr):
+		httpx.TooManyRequests(w, r, codeOTPCooldown, cooldownErr.Error())
 
-	// Forbidden
-	case
-		errors.Is(err, domain.ErrForbidden),
-		errors.Is(err, domain.ErrOAuthAccountNotVerified):
-		httputils.RespondWithError(w, http.StatusForbidden, err)
+	// 403 Forbidden
+	case errors.Is(err, domain.ErrForbidden):
+		httpx.Forbidden(w, r, codeForbidden, domain.ErrForbidden.Error())
+	case errors.Is(err, domain.ErrOAuthAccountNotVerified):
+		httpx.Forbidden(w, r, codeOAuthAccountNotVerified, domain.ErrOAuthAccountNotVerified.Error())
 
-	// Bad request
-	case
-		errors.Is(err, domain.ErrInvalidWinnerTeam),
-		errors.Is(err, domain.ErrInvalidThirdPlaceTeam),
-		errors.Is(err, domain.ErrThirdPlaceNotInConflict),
-		errors.Is(err, domain.ErrThirdPlaceInvalidSelection),
-		errors.Is(err, domain.ErrOAuthStateNotFound):
-		httputils.RespondWithError(w, http.StatusBadRequest, err)
+	// 400 Bad Request
+	case errors.Is(err, domain.ErrInvalidWinnerTeam):
+		httpx.BadRequest(w, r, codeInvalidWinnerTeam, domain.ErrInvalidWinnerTeam.Error())
+	case errors.Is(err, domain.ErrInvalidThirdPlaceTeam):
+		httpx.BadRequest(w, r, codeInvalidThirdPlaceTeam, domain.ErrInvalidThirdPlaceTeam.Error())
+	case errors.Is(err, domain.ErrThirdPlaceNotInConflict):
+		httpx.BadRequest(w, r, codeThirdPlaceNotInConflict, domain.ErrThirdPlaceNotInConflict.Error())
+	case errors.Is(err, domain.ErrThirdPlaceInvalidSelection):
+		httpx.BadRequest(w, r, codeThirdPlaceInvalidSelection, domain.ErrThirdPlaceInvalidSelection.Error())
+	case errors.Is(err, domain.ErrOAuthStateNotFound):
+		httpx.BadRequest(w, r, codeOAuthStateNotFound, domain.ErrOAuthStateNotFound.Error())
+	case errors.Is(err, domain.ErrInvalidGroupCode):
+		httpx.BadRequest(w, r, codeInvalidGroupCode, domain.ErrInvalidGroupCode.Error())
+	case errors.Is(err, domain.ErrInvalidStageCode):
+		httpx.BadRequest(w, r, codeInvalidStageCode, domain.ErrInvalidStageCode.Error())
+	case errors.Is(err, domain.ErrInvalidStatus):
+		httpx.BadRequest(w, r, codeInvalidStatus, domain.ErrInvalidStatus.Error())
+	case errors.Is(err, domain.ErrInvalidFifaCode):
+		httpx.BadRequest(w, r, codeInvalidFifaCode, domain.ErrInvalidFifaCode.Error())
+	case errors.Is(err, domain.ErrInvalidDateRange):
+		httpx.BadRequest(w, r, codeInvalidDateRange, domain.ErrInvalidDateRange.Error())
 
-	// Bad gateway
-	case
-		errors.Is(err, domain.ErrMissingIDToken):
-		httputils.RespondWithError(w, http.StatusBadGateway, err)
+	// 502 Bad Gateway
+	case errors.Is(err, domain.ErrMissingIDToken):
+		httpx.BadGateway(w, r, codeMissingIDToken, domain.ErrMissingIDToken.Error())
 
-	// Internal server error
+	// 500 Internal Server Error
 	default:
-		// Log the error with request context
 		logFields := []any{"error", err}
 		if r != nil {
-			logFields = append(logFields,
-				"method", r.Method,
-				"path", r.URL.Path,
-				"request_id", r.Context().Value(middleware.RequestIDKey),
-			)
+			logFields = append(logFields, "method", r.Method, "path", r.URL.Path)
 		}
 		logger.Error("internal server error", logFields...)
-
-		// Always return generic error to client
-		httputils.RespondWithError(
-			w,
-			http.StatusInternalServerError,
-			errors.New("internal server error"),
-		)
+		httpx.InternalServerError(w, r, codeInternalServerError, "internal server error")
 	}
 }

@@ -13,15 +13,15 @@ var ErrRegistrationFailed = errors.New("registration failed")
 var ErrForbidden = errors.New("insufficient permissions")
 
 // OTP
-var ErrOTPInvalidOrExpired = errors.New("otp is invalid or expired, try again")
-var ErrOTPTooManyAttempts = errors.New("too many attempts, try again later")
+var ErrOTPInvalidOrExpired = errors.New("OTP is invalid or expired")
+var ErrOTPTooManyAttempts = errors.New("too many OTP attempts")
 
 type OtpCooldownError struct {
 	Cooldown time.Duration
 }
 
 func (e OtpCooldownError) Error() string {
-	return "please wait " + e.Cooldown.String() + " before requesting a new code"
+	return fmt.Sprintf("please wait %d seconds before requesting a new code", int(e.Cooldown.Seconds()))
 }
 
 func ErrOtpCooldown(cooldown time.Duration) error {
@@ -70,6 +70,8 @@ type MatchesNotFoundError struct {
 	MatchIDs []int64
 }
 
+// TODO: this error shouldn't leak dynamic data to the client
+// TODO: instead we can log and return something more generic like "one or more matches not found"
 func (e MatchesNotFoundError) Error() string {
 	idsStr := fmt.Sprintf("%v", e.MatchIDs)
 	idsStr = strings.ReplaceAll(idsStr, " ", ", ")
@@ -83,11 +85,11 @@ func ErrMatchesNotFound(matchIDs []int64) error {
 
 // Admin
 var ErrInvalidThirdPlaceTeam = errors.New("team is not a valid third-place team")
-var ErrThirdPlaceNotInConflict = errors.New("third-place promotion is not in conflict, nothing to resolve")
-var ErrThirdPlaceInvalidSelection = errors.New("third-place conflict resolution requires exactly 8 distinct teams from the candidate set")
+var ErrThirdPlaceNotInConflict = errors.New("third-place promotion is not in conflict")
+var ErrThirdPlaceInvalidSelection = errors.New("invalid third-place team selection")
 
 // OAuth
 var ErrOAuthStateNotFound = errors.New("oauth state not found")
-var ErrMissingIDToken = errors.New("missing id_token")
+var ErrMissingIDToken = errors.New("missing identity token")
 var ErrOAuthAccountNotFound = errors.New("oauth account not found")
 var ErrOAuthAccountNotVerified = errors.New("oauth account not verified")

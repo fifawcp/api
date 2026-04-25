@@ -11,13 +11,18 @@ var validGroupCodes = map[string]bool{
 }
 
 var validStageCodes = map[string]bool{
-	"group_stage": true, "round_of_16": true,
-	"quarter_finals": true, "semi_finals": true,
-	"third_place": true, "final": true,
+	"group_stage":   true,
+	"round_of_32":   true,
+	"round_of_16":   true,
+	"quarterfinals": true,
+	"semifinals":    true,
+	"third_place":   true,
+	"final":         true,
 }
 
 var validStatuses = map[string]bool{
-	"scheduled": true, "finished": true,
+	"scheduled": true,
+	"finished":  true,
 }
 
 var validFifaCodes = map[string]bool{

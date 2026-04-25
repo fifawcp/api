@@ -248,7 +248,7 @@ Response shape is the same **`SyncGroupStageOutcomes`** as match update endpoint
 
 ## HTTP response shape (`SyncGroupStageOutcomes`)
 
-Returned as JSON **`data`** (`httputils.Response`), type **`domain.SyncGroupStageOutcomes`** (`internal/domain/group_standing.go`):
+Returned as JSON **`data`** (`httpx.Response`), type **`domain.SyncGroupStageOutcomes`** (`internal/domain/group_standing.go`):
 
 | Field | Meaning |
 | ----- | ------- |
