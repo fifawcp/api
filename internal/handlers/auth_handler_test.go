@@ -102,34 +102,34 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		testCases := []struct {
-			name        string
-			payload     map[string]any
-			expectedKey string
-			expectedMsg string
+			name         string
+			payload      map[string]any
+			expectedKey  string
+			expectedCode string
 		}{
 			{
-				name:        "missing identifier",
-				payload:     map[string]any{"purpose": "login"},
-				expectedKey: "identifier",
-				expectedMsg: "identifier is required",
+				name:         "missing identifier",
+				payload:      map[string]any{"purpose": "login"},
+				expectedKey:  "identifier",
+				expectedCode: "REQUIRED",
 			},
 			{
-				name:        "missing purpose",
-				payload:     map[string]any{"identifier": "john@example.com"},
-				expectedKey: "purpose",
-				expectedMsg: "purpose is required",
+				name:         "missing purpose",
+				payload:      map[string]any{"identifier": "john@example.com"},
+				expectedKey:  "purpose",
+				expectedCode: "REQUIRED",
 			},
 			{
-				name:        "invalid purpose value",
-				payload:     map[string]any{"identifier": "john@example.com", "purpose": "unknown"},
-				expectedKey: "purpose",
-				expectedMsg: "purpose is invalid",
+				name:         "invalid purpose value",
+				payload:      map[string]any{"identifier": "john@example.com", "purpose": "unknown"},
+				expectedKey:  "purpose",
+				expectedCode: "INVALID_OPTION",
 			},
 			{
-				name:        "identifier too long",
-				payload:     map[string]any{"identifier": strings.Repeat("a", 256), "purpose": "login"},
-				expectedKey: "identifier",
-				expectedMsg: "identifier must be at most 255 characters",
+				name:         "identifier too long",
+				payload:      map[string]any{"identifier": strings.Repeat("a", 256), "purpose": "login"},
+				expectedKey:  "identifier",
+				expectedCode: "MAX_LENGTH",
 			},
 		}
 
@@ -144,13 +144,17 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 				assert.Equal(t, http.StatusBadRequest, w.Code)
 
 				var resp struct {
-					Error   string            `json:"error"`
-					Details map[string]string `json:"details"`
+					Error struct {
+						Code   string `json:"code"`
+						Fields map[string]struct {
+							Code string `json:"code"`
+						} `json:"fields"`
+					} `json:"error"`
 				}
 
 				testutils.ParseJSONResponse(t, w, &resp)
-				assert.Equal(t, "validation failed", resp.Error)
-				assert.Equal(t, tc.expectedMsg, resp.Details[tc.expectedKey])
+				assert.Equal(t, "VALIDATION_FAILED", resp.Error.Code)
+				assert.Equal(t, tc.expectedCode, resp.Error.Fields[tc.expectedKey].Code)
 			})
 		}
 	})
@@ -175,11 +179,13 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		assert.Equal(t, http.StatusConflict, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrUserAlreadyExists.Error(), resp.Error)
+		assert.Equal(t, "USER_ALREADY_EXISTS", resp.Error.Code)
 	})
 
 	t.Run("returns 401 when user already exists (login)", func(t *testing.T) {
@@ -202,11 +208,13 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrInvalidCredentials.Error(), resp.Error)
+		assert.Equal(t, "INVALID_CREDENTIALS", resp.Error.Code)
 	})
 
 	t.Run("returns 429 when OTP cooldown is active", func(t *testing.T) {
@@ -229,11 +237,13 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		assert.Equal(t, http.StatusTooManyRequests, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrOtpCooldown(30*time.Second).Error(), resp.Error)
+		assert.Equal(t, "OTP_COOLDOWN", resp.Error.Code)
 	})
 
 	t.Run("does not write a response when request context is cancelled", func(t *testing.T) {
@@ -278,34 +288,15 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "internal server error", resp.Error)
+		assert.Equal(t, "INTERNAL_SERVER_ERROR", resp.Error.Code)
 	})
 
-	t.Run("does not write a response when request context is cancelled", func(t *testing.T) {
-		t.Parallel()
-
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-
-		s := &mocks.MockAuthService{
-			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error {
-				return context.Canceled
-			},
-		}
-		h := newTestAuthHandler(s)
-
-		req := makeRequestOtpReq(t, map[string]any{"identifier": "john@example.com", "purpose": "login"})
-		req = req.WithContext(ctx)
-		w := httptest.NewRecorder()
-
-		h.RequestOtp(w, req)
-
-		assert.Empty(t, w.Body.String())
-	})
 }
 
 // ---------------------------------------------------------------------------
@@ -463,46 +454,46 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		testCases := []struct {
-			name        string
-			payload     map[string]any
-			expectedKey string
-			expectedMsg string
+			name         string
+			payload      map[string]any
+			expectedKey  string
+			expectedCode string
 		}{
 			{
-				name:        "missing identifier",
-				payload:     map[string]any{"purpose": "login", "otp": "123456"},
-				expectedKey: "identifier",
-				expectedMsg: "identifier is required",
+				name:         "missing identifier",
+				payload:      map[string]any{"purpose": "login", "otp": "123456"},
+				expectedKey:  "identifier",
+				expectedCode: "REQUIRED",
 			},
 			{
-				name:        "identifier too long",
-				payload:     map[string]any{"identifier": strings.Repeat("a", 256), "purpose": "login"},
-				expectedKey: "identifier",
-				expectedMsg: "identifier must be at most 255 characters",
+				name:         "identifier too long",
+				payload:      map[string]any{"identifier": strings.Repeat("a", 256), "purpose": "login"},
+				expectedKey:  "identifier",
+				expectedCode: "MAX_LENGTH",
 			},
 			{
-				name:        "missing otp",
-				payload:     map[string]any{"identifier": "john@example.com", "purpose": "login"},
-				expectedKey: "otp",
-				expectedMsg: "otp is required",
+				name:         "missing otp",
+				payload:      map[string]any{"identifier": "john@example.com", "purpose": "login"},
+				expectedKey:  "otp",
+				expectedCode: "REQUIRED",
 			},
 			{
-				name:        "otp too short",
-				payload:     map[string]any{"identifier": "john@example.com", "purpose": "login", "otp": "12345"},
-				expectedKey: "otp",
-				expectedMsg: "otp must be at least 6 characters",
+				name:         "otp too short",
+				payload:      map[string]any{"identifier": "john@example.com", "purpose": "login", "otp": "12345"},
+				expectedKey:  "otp",
+				expectedCode: "MIN_LENGTH",
 			},
 			{
-				name:        "otp too long",
-				payload:     map[string]any{"identifier": "john@example.com", "purpose": "login", "otp": "1234567"},
-				expectedKey: "otp",
-				expectedMsg: "otp must be at most 6 characters",
+				name:         "otp too long",
+				payload:      map[string]any{"identifier": "john@example.com", "purpose": "login", "otp": "1234567"},
+				expectedKey:  "otp",
+				expectedCode: "MAX_LENGTH",
 			},
 			{
-				name:        "invalid purpose",
-				payload:     map[string]any{"identifier": "john@example.com", "purpose": "unknown", "otp": "123456"},
-				expectedKey: "purpose",
-				expectedMsg: "purpose is invalid",
+				name:         "invalid purpose",
+				payload:      map[string]any{"identifier": "john@example.com", "purpose": "unknown", "otp": "123456"},
+				expectedKey:  "purpose",
+				expectedCode: "INVALID_OPTION",
 			},
 
 			{
@@ -512,8 +503,8 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 					"purpose":    "registration",
 					"otp":        "123456",
 				},
-				expectedKey: "User",
-				expectedMsg: "User is required",
+				expectedKey:  "user",
+				expectedCode: "REQUIRED",
 			},
 		}
 
@@ -529,13 +520,17 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 				assert.Equal(t, http.StatusBadRequest, w.Code)
 
 				var resp struct {
-					Error   string            `json:"error"`
-					Details map[string]string `json:"details"`
+					Error struct {
+						Code   string `json:"code"`
+						Fields map[string]struct {
+							Code string `json:"code"`
+						} `json:"fields"`
+					} `json:"error"`
 				}
 
 				testutils.ParseJSONResponse(t, w, &resp)
-				assert.Equal(t, "validation failed", resp.Error)
-				assert.Equal(t, tc.expectedMsg, resp.Details[tc.expectedKey])
+				assert.Equal(t, "VALIDATION_FAILED", resp.Error.Code)
+				assert.Equal(t, tc.expectedCode, resp.Error.Fields[tc.expectedKey].Code)
 			})
 		}
 	})
@@ -566,11 +561,13 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrOTPInvalidOrExpired.Error(), resp.Error)
+		assert.Equal(t, "OTP_INVALID_OR_EXPIRED", resp.Error.Code)
 	})
 
 	t.Run("returns 401 when invalid credentials", func(t *testing.T) {
@@ -599,11 +596,13 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrInvalidCredentials.Error(), resp.Error)
+		assert.Equal(t, "INVALID_CREDENTIALS", resp.Error.Code)
 	})
 
 	t.Run("returns 409 when user already exists (registration)", func(t *testing.T) {
@@ -638,11 +637,13 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusConflict, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrUserAlreadyExists.Error(), resp.Error)
+		assert.Equal(t, "USER_ALREADY_EXISTS", resp.Error.Code)
 	})
 
 	t.Run("returns 409 when username already taken (registration)", func(t *testing.T) {
@@ -677,11 +678,13 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusConflict, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrUsernameAlreadyExists.Error(), resp.Error)
+		assert.Equal(t, "USERNAME_ALREADY_EXISTS", resp.Error.Code)
 	})
 
 	t.Run("returns 429 when too many OTP attempts (login)", func(t *testing.T) {
@@ -710,11 +713,13 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusTooManyRequests, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrOTPTooManyAttempts.Error(), resp.Error)
+		assert.Equal(t, "OTP_TOO_MANY_ATTEMPTS", resp.Error.Code)
 	})
 
 	t.Run("returns 429 when too many OTP attempts (registration)", func(t *testing.T) {
@@ -749,11 +754,13 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusTooManyRequests, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrOTPTooManyAttempts.Error(), resp.Error)
+		assert.Equal(t, "OTP_TOO_MANY_ATTEMPTS", resp.Error.Code)
 	})
 
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
@@ -782,11 +789,13 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "internal server error", resp.Error)
+		assert.Equal(t, "INTERNAL_SERVER_ERROR", resp.Error.Code)
 	})
 }
 
@@ -857,11 +866,13 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "missing refresh token", resp.Error)
+		assert.Equal(t, "MISSING_REFRESH_TOKEN", resp.Error.Code)
 	})
 
 	t.Run("returns 401 when refresh token is invalid or expired", func(t *testing.T) {
@@ -882,11 +893,13 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrRefreshTokenInvalidOrExpired.Error(), resp.Error)
+		assert.Equal(t, "REFRESH_TOKEN_INVALID_OR_EXPIRED", resp.Error.Code)
 	})
 
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
@@ -958,11 +971,13 @@ func TestAuthHandler_Logout(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "missing refresh token", resp.Error)
+		assert.Equal(t, "MISSING_REFRESH_TOKEN", resp.Error.Code)
 	})
 
 	t.Run("returns 401 when refresh token is invalid or expired", func(t *testing.T) {
@@ -983,11 +998,13 @@ func TestAuthHandler_Logout(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrRefreshTokenInvalidOrExpired.Error(), resp.Error)
+		assert.Equal(t, "REFRESH_TOKEN_INVALID_OR_EXPIRED", resp.Error.Code)
 	})
 
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
@@ -1059,11 +1076,13 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "missing refresh token", resp.Error)
+		assert.Equal(t, "MISSING_REFRESH_TOKEN", resp.Error.Code)
 	})
 
 	t.Run("returns 401 when refresh token is invalid or expired", func(t *testing.T) {
@@ -1084,11 +1103,13 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrRefreshTokenInvalidOrExpired.Error(), resp.Error)
+		assert.Equal(t, "REFRESH_TOKEN_INVALID_OR_EXPIRED", resp.Error.Code)
 	})
 
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
@@ -1109,11 +1130,13 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "internal server error", resp.Error)
+		assert.Equal(t, "INTERNAL_SERVER_ERROR", resp.Error.Code)
 	})
 }
 
@@ -1200,10 +1223,12 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "missing refresh token", resp.Error)
+		assert.Equal(t, "MISSING_REFRESH_TOKEN", resp.Error.Code)
 	})
 
 	t.Run("returns 401 when refresh token is invalid or expired", func(t *testing.T) {
@@ -1224,11 +1249,13 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrRefreshTokenInvalidOrExpired.Error(), resp.Error)
+		assert.Equal(t, "REFRESH_TOKEN_INVALID_OR_EXPIRED", resp.Error.Code)
 	})
 
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
@@ -1249,11 +1276,13 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "internal server error", resp.Error)
+		assert.Equal(t, "INTERNAL_SERVER_ERROR", resp.Error.Code)
 	})
 }
 
@@ -1334,11 +1363,13 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrSessionNotFound.Error(), resp.Error)
+		assert.Equal(t, "SESSION_NOT_FOUND", resp.Error.Code)
 	})
 
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
@@ -1363,10 +1394,12 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "internal server error", resp.Error)
+		assert.Equal(t, "INTERNAL_SERVER_ERROR", resp.Error.Code)
 	})
 }

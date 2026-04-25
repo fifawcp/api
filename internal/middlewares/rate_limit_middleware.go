@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/httpx"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/infrastructure/ratelimit"
 )
@@ -53,7 +53,7 @@ func RateLimitByIP(
 					"reset", info.Reset,
 				)
 
-				httputils.RespondWithError(w, http.StatusTooManyRequests, ErrRateLimitExceeded)
+				httpx.TooManyRequests(w, r, codeRateLimitExceeded, ErrRateLimitExceeded.Error())
 				return
 			}
 

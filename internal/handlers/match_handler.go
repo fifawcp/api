@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/fifawcp/api/internal/domain"
-	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/httpx"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
 	"github.com/fifawcp/api/internal/services"
@@ -37,25 +37,27 @@ func NewMatchHandler(matchService services.MatchServiceInterface, logger logging
 //	@Param			team_fifa_codes	query		[]string								false	"Team FIFA codes"
 //	@Param			from_date		query		string									false	"Inclusive start date-time (RFC3339)"
 //	@Param			to_date			query		string									false	"Inclusive end date-time (RFC3339)"
-//	@Success		200				{object}	httputils.Response{data=[]domain.Match}	"List of matches"
-//	@Failure		400				{object}	httputils.ErrorResponse					"Invalid query parameters"
-//	@Failure		500				{object}	httputils.ErrorResponse					"Internal server error"
+//	@Success		200				{object}	httpx.Response{data=[]domain.Match}	"List of matches"
+//	@Failure		400				{object}	httpx.ErrorResponse					"Invalid query parameters"
+//	@Failure		500				{object}	httpx.ErrorResponse					"Internal server error"
 //	@Router			/matches [get]
 func (h *MatchHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
-	groupCodes := httputils.ParseStringSliceParam(r, "group_codes")
+	groupCodes := httpx.ParseStringSliceParam(r, "group_codes")
 	for i, code := range groupCodes {
 		upperCode := strings.ToUpper(code)
 		if !validator.IsValidGroupCode(upperCode) {
-			httputils.RespondWithError(w, http.StatusBadRequest, domain.ErrInvalidGroupCode)
+			// TODO: move code somewhere, and use domain error
+			httpx.RespondWithError(w, r, http.StatusBadRequest, "INVALID_GROUP_CODE", "invalid group code")
 			return
 		}
 		groupCodes[i] = upperCode
 	}
 
-	stageCodes := httputils.ParseStringSliceParam(r, "stage_code")
+	stageCodes := httpx.ParseStringSliceParam(r, "stage_code")
 	for _, code := range stageCodes {
 		if !validator.IsValidStageCode(code) {
-			httputils.RespondWithError(w, http.StatusBadRequest, domain.ErrInvalidStageCode)
+			// TODO: move code somewhere, and use domain error
+			httpx.RespondWithError(w, r, http.StatusBadRequest, "INVALID_STAGE_CODE", "invalid stage code")
 			return
 		}
 	}
@@ -67,34 +69,39 @@ func (h *MatchHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 
 	status := r.URL.Query().Get("status")
 	if status != "" && !validator.IsValidStatus(status) {
-		httputils.RespondWithError(w, http.StatusBadRequest, domain.ErrInvalidStatus)
+		// TODO: move code somewhere, and use domain error
+		httpx.RespondWithError(w, r, http.StatusBadRequest, "INVALID_STATUS", "invalid status")
 		return
 	}
 
-	teamFifaCodes := httputils.ParseStringSliceParam(r, "team_fifa_codes")
+	teamFifaCodes := httpx.ParseStringSliceParam(r, "team_fifa_codes")
 	for i, code := range teamFifaCodes {
 		upperCode := strings.ToUpper(code)
 		if !validator.IsValidFifaCode(upperCode) {
-			httputils.RespondWithError(w, http.StatusBadRequest, domain.ErrInvalidFifaCode)
+			// TODO: move code somewhere, and use domain error
+			httpx.RespondWithError(w, r, http.StatusBadRequest, "INVALID_FIFA_CODE", "invalid fifa code")
 			return
 		}
 		teamFifaCodes[i] = upperCode
 	}
 
-	fromDate, err := httputils.ParseDateParam(r, "from_date")
+	fromDate, err := httpx.ParseDateParam(r, "from_date")
 	if err != nil {
-		httputils.RespondWithError(w, http.StatusBadRequest, err)
+		// TODO: move code somewhere, and use domain error
+		httpx.RespondWithError(w, r, http.StatusBadRequest, "INVALID_QUERY_PARAM", err.Error())
 		return
 	}
 
-	toDate, err := httputils.ParseDateParam(r, "to_date")
+	toDate, err := httpx.ParseDateParam(r, "to_date")
 	if err != nil {
-		httputils.RespondWithError(w, http.StatusBadRequest, err)
+		// TODO: move code somewhere, and use domain error
+		httpx.RespondWithError(w, r, http.StatusBadRequest, "INVALID_QUERY_PARAM", err.Error())
 		return
 	}
 
 	if fromDate != nil && toDate != nil && !validator.IsValidDateRange(fromDate, toDate) {
-		httputils.RespondWithError(w, http.StatusBadRequest, domain.ErrInvalidDateRange)
+		// TODO: move code somewhere, and use domain error
+		httpx.RespondWithError(w, r, http.StatusBadRequest, "INVALID_DATE_RANGE", "from_date must be before or equal to to_date")
 		return
 	}
 
@@ -113,5 +120,5 @@ func (h *MatchHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusOK, matches)
+	httpx.RespondWithData(w, http.StatusOK, matches)
 }

@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/fifawcp/api/internal/httpctx"
-	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/httpx"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 )
 
@@ -15,19 +15,19 @@ func ValidateOAuthCallback(logger logging.Logger) func(next http.Handler) http.H
 			err := r.URL.Query().Get("error")
 			if err != "" {
 				logger.Error("oauth authorization failed", "error", err)
-				httputils.RespondWithError(w, http.StatusBadRequest, ErrOAuthFailed)
+				httpx.BadRequest(w, r, codeOAuthFailed, ErrOAuthFailed.Error())
 				return
 			}
 
 			state := r.URL.Query().Get("state")
 			if state == "" {
-				httputils.RespondWithError(w, http.StatusBadRequest, ErrMissingOAuthState)
+				httpx.BadRequest(w, r, codeMissingOAuthState, ErrMissingOAuthState.Error())
 				return
 			}
 
 			code := r.URL.Query().Get("code")
 			if code == "" {
-				httputils.RespondWithError(w, http.StatusBadRequest, ErrMissingAuthCode)
+				httpx.BadRequest(w, r, codeMissingAuthCode, ErrMissingAuthCode.Error())
 				return
 			}
 

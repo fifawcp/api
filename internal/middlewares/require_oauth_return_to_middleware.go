@@ -6,7 +6,7 @@ import (
 	"net/url"
 
 	"github.com/fifawcp/api/internal/httpctx"
-	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/httpx"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 )
 
@@ -15,26 +15,26 @@ func RequireOAuthReturnTo(logger logging.Logger, allowlist []string) func(next h
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			returnTo := r.URL.Query().Get("return_to")
 			if returnTo == "" {
-				httputils.RespondWithError(w, http.StatusBadRequest, ErrReturnToRequired)
+				httpx.BadRequest(w, r, codeReturnToRequired, ErrReturnToRequired.Error())
 				return
 			}
 
 			returnToURL, err := url.Parse(returnTo)
 			if err != nil {
-				httputils.RespondWithError(w, http.StatusBadRequest, ErrReturnToInvalidURL)
+				httpx.BadRequest(w, r, codeReturnToInvalidURL, ErrReturnToInvalidURL.Error())
 				return
 			}
 
 			for _, allow := range allowlist {
-				url := returnToURL.Scheme + "://" + returnToURL.Host
-				if url == allow {
+				origin := returnToURL.Scheme + "://" + returnToURL.Host
+				if origin == allow {
 					ctx := context.WithValue(r.Context(), httpctx.ReturnToContextKey, returnTo)
 					next.ServeHTTP(w, r.WithContext(ctx))
 					return
 				}
 			}
 
-			httputils.RespondWithError(w, http.StatusBadRequest, ErrReturnToNotAllowed)
+			httpx.BadRequest(w, r, codeReturnToNotAllowed, ErrReturnToNotAllowed.Error())
 		})
 	}
 }

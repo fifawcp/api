@@ -103,27 +103,28 @@ func TestBoardHandler_CreateBoard(t *testing.T) {
 		h := newTestBoardHandler(nil, nil, nil)
 
 		testCases := []struct {
-			name        string
-			payload     dtos.CreateBoardDto
-			expectedKey string
-			expectedMsg string
+			name         string
+			payload      dtos.CreateBoardDto
+			expectedKey  string
+			expectedCode string
 		}{
 			{
-				name:        "missing name",
-				payload:     dtos.CreateBoardDto{},
-				expectedKey: "name",
-				expectedMsg: "name is required",
+				name:         "missing name",
+				payload:      dtos.CreateBoardDto{},
+				expectedKey:  "name",
+				expectedCode: "REQUIRED",
 			},
 			{
-				name:        "name too long",
-				payload:     dtos.CreateBoardDto{Name: strings.Repeat("a", 121)},
-				expectedKey: "name",
-				expectedMsg: "name must be at most 120 characters",
+				name:         "name too long",
+				payload:      dtos.CreateBoardDto{Name: strings.Repeat("a", 121)},
+				expectedKey:  "name",
+				expectedCode: "MAX_LENGTH",
 			},
 		}
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
 				req := makeCreateBoardReq(t, tc.payload)
 				w := httptest.NewRecorder()
 
@@ -132,13 +133,17 @@ func TestBoardHandler_CreateBoard(t *testing.T) {
 				assert.Equal(t, http.StatusBadRequest, w.Code)
 
 				var resp struct {
-					Error   string            `json:"error"`
-					Details map[string]string `json:"details"`
+					Error struct {
+						Code   string `json:"code"`
+						Fields map[string]struct {
+							Code string `json:"code"`
+						} `json:"fields"`
+					} `json:"error"`
 				}
 
 				testutils.ParseJSONResponse(t, w, &resp)
-				assert.Equal(t, "validation failed", resp.Error)
-				assert.Equal(t, tc.expectedMsg, resp.Details[tc.expectedKey])
+				assert.Equal(t, "VALIDATION_FAILED", resp.Error.Code)
+				assert.Equal(t, tc.expectedCode, resp.Error.Fields[tc.expectedKey].Code)
 			})
 		}
 	})
@@ -291,33 +296,34 @@ func TestBoardHandler_JoinBoard(t *testing.T) {
 		h := newTestBoardHandler(nil, nil, nil)
 
 		testCases := []struct {
-			name        string
-			payload     dtos.JoinBoardDto
-			expectedKey string
-			expectedMsg string
+			name         string
+			payload      dtos.JoinBoardDto
+			expectedKey  string
+			expectedCode string
 		}{
 			{
-				name:        "missing join code",
-				payload:     dtos.JoinBoardDto{},
-				expectedKey: "join_code",
-				expectedMsg: "join_code is required",
+				name:         "missing join code",
+				payload:      dtos.JoinBoardDto{},
+				expectedKey:  "join_code",
+				expectedCode: "REQUIRED",
 			},
 			{
-				name:        "join code too long",
-				payload:     dtos.JoinBoardDto{JoinCode: strings.Repeat("A", 9)},
-				expectedKey: "join_code",
-				expectedMsg: "join_code must be at most 8 characters",
+				name:         "join code too long",
+				payload:      dtos.JoinBoardDto{JoinCode: strings.Repeat("A", 9)},
+				expectedKey:  "join_code",
+				expectedCode: "MAX_LENGTH",
 			},
 			{
-				name:        "join code too short",
-				payload:     dtos.JoinBoardDto{JoinCode: "ABCD123"},
-				expectedKey: "join_code",
-				expectedMsg: "join_code must be at least 8 characters",
+				name:         "join code too short",
+				payload:      dtos.JoinBoardDto{JoinCode: "ABCD123"},
+				expectedKey:  "join_code",
+				expectedCode: "MIN_LENGTH",
 			},
 		}
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
 				req := makeJoinBoardReq(t, tc.payload)
 				w := httptest.NewRecorder()
 
@@ -326,13 +332,17 @@ func TestBoardHandler_JoinBoard(t *testing.T) {
 				assert.Equal(t, http.StatusBadRequest, w.Code)
 
 				var resp struct {
-					Error   string            `json:"error"`
-					Details map[string]string `json:"details"`
+					Error struct {
+						Code   string `json:"code"`
+						Fields map[string]struct {
+							Code string `json:"code"`
+						} `json:"fields"`
+					} `json:"error"`
 				}
 
 				testutils.ParseJSONResponse(t, w, &resp)
-				assert.Equal(t, "validation failed", resp.Error)
-				assert.Equal(t, tc.expectedMsg, resp.Details[tc.expectedKey])
+				assert.Equal(t, "VALIDATION_FAILED", resp.Error.Code)
+				assert.Equal(t, tc.expectedCode, resp.Error.Fields[tc.expectedKey].Code)
 			})
 		}
 	})
@@ -619,27 +629,28 @@ func TestBoardHandler_UpdateBoard(t *testing.T) {
 		h := newTestBoardHandler(nil, nil, nil)
 
 		testCases := []struct {
-			name        string
-			payload     dtos.UpdateBoardDto
-			expectedKey string
-			expectedMsg string
+			name         string
+			payload      dtos.UpdateBoardDto
+			expectedKey  string
+			expectedCode string
 		}{
 			{
-				name:        "missing name",
-				payload:     dtos.UpdateBoardDto{},
-				expectedKey: "name",
-				expectedMsg: "name is required",
+				name:         "missing name",
+				payload:      dtos.UpdateBoardDto{},
+				expectedKey:  "name",
+				expectedCode: "REQUIRED",
 			},
 			{
-				name:        "name too long",
-				payload:     dtos.UpdateBoardDto{Name: strings.Repeat("a", 121)},
-				expectedKey: "name",
-				expectedMsg: "name must be at most 120 characters",
+				name:         "name too long",
+				payload:      dtos.UpdateBoardDto{Name: strings.Repeat("a", 121)},
+				expectedKey:  "name",
+				expectedCode: "MAX_LENGTH",
 			},
 		}
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
 				req := makeUpdateBoardReq(t, tc.payload)
 				w := httptest.NewRecorder()
 
@@ -648,13 +659,17 @@ func TestBoardHandler_UpdateBoard(t *testing.T) {
 				assert.Equal(t, http.StatusBadRequest, w.Code)
 
 				var resp struct {
-					Error   string            `json:"error"`
-					Details map[string]string `json:"details"`
+					Error struct {
+						Code   string `json:"code"`
+						Fields map[string]struct {
+							Code string `json:"code"`
+						} `json:"fields"`
+					} `json:"error"`
 				}
 
 				testutils.ParseJSONResponse(t, w, &resp)
-				assert.Equal(t, "validation failed", resp.Error)
-				assert.Equal(t, tc.expectedMsg, resp.Details[tc.expectedKey])
+				assert.Equal(t, "VALIDATION_FAILED", resp.Error.Code)
+				assert.Equal(t, tc.expectedCode, resp.Error.Fields[tc.expectedKey].Code)
 			})
 		}
 	})
@@ -803,27 +818,28 @@ func TestBoardHandler_UpdateBoardMemberRole(t *testing.T) {
 		h := newTestBoardHandler(nil, nil, nil)
 
 		testCases := []struct {
-			name        string
-			payload     dtos.UpdateBoardMemberRoleDto
-			expectedKey string
-			expectedMsg string
+			name         string
+			payload      dtos.UpdateBoardMemberRoleDto
+			expectedKey  string
+			expectedCode string
 		}{
 			{
-				name:        "missing role",
-				payload:     dtos.UpdateBoardMemberRoleDto{},
-				expectedKey: "role",
-				expectedMsg: "role is required",
+				name:         "missing role",
+				payload:      dtos.UpdateBoardMemberRoleDto{},
+				expectedKey:  "role",
+				expectedCode: "REQUIRED",
 			},
 			{
-				name:        "invalid role",
-				payload:     dtos.UpdateBoardMemberRoleDto{Role: "invalid"},
-				expectedKey: "role",
-				expectedMsg: "role is invalid",
+				name:         "invalid role",
+				payload:      dtos.UpdateBoardMemberRoleDto{Role: "invalid"},
+				expectedKey:  "role",
+				expectedCode: "INVALID_OPTION",
 			},
 		}
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
 				req := makeUpdateBoardMemberRoleReq(t, tc.payload)
 				w := httptest.NewRecorder()
 
@@ -832,13 +848,17 @@ func TestBoardHandler_UpdateBoardMemberRole(t *testing.T) {
 				assert.Equal(t, http.StatusBadRequest, w.Code)
 
 				var resp struct {
-					Error   string            `json:"error"`
-					Details map[string]string `json:"details"`
+					Error struct {
+						Code   string `json:"code"`
+						Fields map[string]struct {
+							Code string `json:"code"`
+						} `json:"fields"`
+					} `json:"error"`
 				}
 
 				testutils.ParseJSONResponse(t, w, &resp)
-				assert.Equal(t, "validation failed", resp.Error)
-				assert.Equal(t, tc.expectedMsg, resp.Details[tc.expectedKey])
+				assert.Equal(t, "VALIDATION_FAILED", resp.Error.Code)
+				assert.Equal(t, tc.expectedCode, resp.Error.Fields[tc.expectedKey].Code)
 			})
 		}
 	})

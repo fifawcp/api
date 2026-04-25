@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/fifawcp/api/internal/httputils"
+	"github.com/fifawcp/api/internal/httpx"
 	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/totp"
 	"github.com/go-chi/chi/v5"
@@ -28,12 +28,12 @@ func NewDebugHandler(cfg *config.Config) *DebugHandler {
 //	@Tags			debug
 //	@Produce		json
 //	@Param			identifier	path		string					true	"User identifier"
-//	@Success		200			{object}	httputils.Response{}	"OTP and seconds until rotation"
+//	@Success		200			{object}	httpx.Response{}	"OTP and seconds until rotation"
 //	@Router			/debug/totp/{identifier} [get]
 func (h *DebugHandler) RequestTotp(w http.ResponseWriter, r *http.Request) {
 	identifier := chi.URLParam(r, "identifier")
 
-	httputils.RespondWithData(w, http.StatusOK, map[string]any{
+	httpx.RespondWithData(w, http.StatusOK, map[string]any{
 		"otp":       totp.Generate(identifier, h.cfg.JWT.Secret),
 		"expiresIn": totp.WindowExpiresIn(),
 	})

@@ -125,7 +125,7 @@ swagger:
 swagger-inner:
 	@echo "Generating Swagger documentation..."
 	@swag init -g main.go \
-		-d ./cmd/api/,./internal/handlers,./internal/dtos,./internal/domain,./internal/httputils \
+		-d ./cmd/api/,./internal/handlers,./internal/dtos,./internal/domain,./internal/httpx,./internal/infrastructure/validator \
 		-o ./docs \
 		&& swag fmt
 	@echo "Swagger documentation generated successfully"
