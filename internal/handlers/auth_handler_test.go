@@ -503,7 +503,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 					"purpose":    "registration",
 					"otp":        "123456",
 				},
-				expectedKey:  "User",
+				expectedKey:  "user",
 				expectedCode: "REQUIRED",
 			},
 		}
