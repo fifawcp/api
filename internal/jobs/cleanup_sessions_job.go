@@ -26,10 +26,16 @@ func (j *CleanupSessionsJob) Name() string {
 func (j *CleanupSessionsJob) Run(ctx context.Context) error {
 	count, err := j.sessionRepository.DeleteExpiredSessions(ctx)
 	if err != nil {
-		j.logger.Error("failed to delete expired sessions", "error", err)
+		j.logger.Error(
+			"failed to delete expired sessions",
+			logging.Error, err.Error(),
+		)
 		return err
 	}
 
-	j.logger.Info("deleted expired sessions", "count", count)
+	j.logger.Info(
+		"deleted expired sessions",
+		"count", count,
+	)
 	return nil
 }

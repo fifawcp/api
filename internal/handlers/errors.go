@@ -12,13 +12,13 @@ import (
 
 const (
 	// 404 Not Found
-	codeUserNotFound        = "USER_NOT_FOUND"
-	codeSessionNotFound     = "SESSION_NOT_FOUND"
-	codeBoardNotFound       = "BOARD_NOT_FOUND"
-	codeBoardMemberNotFound = "BOARD_MEMBER_NOT_FOUND"
-	codeMatchNotFound       = "MATCH_NOT_FOUND"
+	codeUserNotFound         = "USER_NOT_FOUND"
+	codeSessionNotFound      = "SESSION_NOT_FOUND"
+	codeBoardNotFound        = "BOARD_NOT_FOUND"
+	codeBoardMemberNotFound  = "BOARD_MEMBER_NOT_FOUND"
+	codeMatchNotFound        = "MATCH_NOT_FOUND"
 	codeOAuthAccountNotFound = "OAUTH_ACCOUNT_NOT_FOUND"
-	codeMatchesNotFound     = "MATCHES_NOT_FOUND"
+	codeMatchesNotFound      = "MATCHES_NOT_FOUND"
 
 	// 409 Conflict
 	codeUserAlreadyExists         = "USER_ALREADY_EXISTS"
@@ -40,7 +40,7 @@ const (
 	codeOTPCooldown        = "OTP_COOLDOWN"
 
 	// 403 Forbidden
-	codeForbidden             = "FORBIDDEN"
+	codeForbidden               = "FORBIDDEN"
 	codeOAuthAccountNotVerified = "OAUTH_ACCOUNT_NOT_VERIFIED"
 
 	// 400 Bad Request
@@ -154,11 +154,12 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 
 	// 500 Internal Server Error
 	default:
-		logFields := []any{"error", err}
+		fields := []any{logging.Error, err.Error()}
 		if r != nil {
-			logFields = append(logFields, "method", r.Method, "path", r.URL.Path)
+			fields = append(fields, logging.Method, r.Method, logging.Path, r.URL.Path)
 		}
-		logger.Error("internal server error", logFields...)
+
+		logger.Error("internal server error", fields...)
 		httpx.InternalServerError(w, r, codeInternalServerError, "internal server error")
 	}
 }

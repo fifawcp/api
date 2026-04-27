@@ -33,10 +33,11 @@ type Container struct {
 	shutdownServer func(*http.Server) error
 
 	// infrastructure
-	db     *sql.DB
-	redis  *redis.Client
-	Config *config.Config
-	Logger logging.Logger
+	db          *sql.DB
+	redis       *redis.Client
+	Config      *config.Config
+	Logger      logging.Logger
+	AuditLogger logging.AuditLogger
 
 	// core deps
 	validator            *validator.Validator
@@ -107,6 +108,7 @@ func NewContainer(cfg *config.Config) (*Container, error) {
 
 func (c *Container) initInfrastructure(cfg *config.Config) error {
 	c.Logger = logging.NewSlogLogger(cfg)
+	c.AuditLogger = logging.NewAuditLogger(c.Logger)
 
 	pgDB, err := db.NewPostgresDB(
 		cfg.DB.Address,
@@ -115,7 +117,10 @@ func (c *Container) initInfrastructure(cfg *config.Config) error {
 		cfg.DB.MaxLifetime,
 	)
 	if err != nil {
-		c.Logger.Error("Error connecting to database", "error", err)
+		c.Logger.Error(
+			"Error connecting to database",
+			logging.Error, err.Error(),
+		)
 		return fmt.Errorf("connecting to postgres: %w", err)
 	}
 	c.db = pgDB
@@ -123,7 +128,10 @@ func (c *Container) initInfrastructure(cfg *config.Config) error {
 
 	redisClient, err := cache.NewRedisClient(cfg)
 	if err != nil {
-		c.Logger.Error("Error connecting to Redis", "error", err)
+		c.Logger.Error(
+			"Error connecting to Redis",
+			logging.Error, err.Error(),
+		)
 		return fmt.Errorf("connecting to Redis: %w", err)
 	}
 	c.redis = redisClient
@@ -146,7 +154,10 @@ func (c *Container) initCoreDeps(cfg *config.Config) error {
 
 	googleOIDCProvider, err := oauth.NewOIDCProvider(cfg.Auth.GoogleOAuth.Issuer)
 	if err != nil {
-		c.Logger.Error("Error creating Google OIDC provider", "error", err)
+		c.Logger.Error(
+			"Error creating Google OIDC provider",
+			logging.Error, err.Error(),
+		)
 		return fmt.Errorf("creating OIDC provider: %w", err)
 	}
 	c.GoogleOauthConfig = oauth.NewGoogleOAuth2Client(googleOIDCProvider, cfg.Auth.GoogleOAuth)
@@ -196,16 +207,24 @@ func (c *Container) initHandlers() {
 	c.BoardHandler = handlers.NewBoardHandler(c.boardService, c.BoardMemberService, c.boardRankingService, c.Config, c.validator, c.Logger)
 	c.GroupHandler = handlers.NewGroupStandingHandler(c.groupStandingService, c.Logger)
 	c.MatchHandler = handlers.NewMatchHandler(c.matchService, c.Logger)
-	c.AdminHandler = handlers.NewAdminHandler(c.matchService, c.groupStandingService, c.Logger, c.validator)
+	c.AdminHandler = handlers.NewAdminHandler(c.matchService, c.groupStandingService, c.Logger, c.AuditLogger, c.validator)
 	c.OAuthHandler = handlers.NewOAuthHandler(c.oauthService, c.Logger, c.Config)
 }
 
 func (c *Container) initJobs() {
 	if err := c.Scheduler.RegisterJob(c.Config.Cron.CleanupSessionsSchedule, jobs.NewCleanupSessionsJob(c.sessionRepository, c.Logger)); err != nil {
-		c.Logger.Error("failed to register job", "job", "cleanup:expired-sessions", "error", err)
+		c.Logger.Error(
+			"failed to register job",
+			"job", "cleanup:expired-sessions",
+			logging.Error, err.Error(),
+		)
 	}
 	if err := c.Scheduler.RegisterJob(c.Config.Cron.SyncMatchResultsSchedule, jobs.NewSyncMatchResultsJob(c.matchService, c.Logger)); err != nil {
-		c.Logger.Error("failed to register job", "job", "sync:match_results", "error", err)
+		c.Logger.Error(
+			"failed to register job",
+			"job", "sync:match_results",
+			logging.Error, err.Error(),
+		)
 	}
 }
 

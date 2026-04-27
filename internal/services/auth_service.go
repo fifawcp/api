@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -170,9 +171,8 @@ func (s *AuthService) Authenticate(
 		// Send welcome email (non-blocking failure — don't fail registration if email fails)
 		if err := s.mailer.SendWelcomeEmail(ctx, user.Email, user.FirstName); err != nil {
 			s.logger.Error(
-				"failed to send welcome email",
-				"error", err,
-				"email", user.Email,
+				fmt.Sprintf("failed to send welcome email to %s", user.Email),
+				logging.Error, err.Error(),
 			)
 		}
 	}
@@ -353,10 +353,8 @@ func (s *AuthService) generateAndStoreOTP(
 	// Log OTP in development for debugging
 	if !s.cfg.IsProd() {
 		s.logger.Info(
-			"[DEBUG] OTP",
-			"purpose", purpose,
-			"identifier", identifier,
-			"otp", plainOtp,
+			fmt.Sprintf("TOTP issued to identifier: %s for purpose: %s", identifier, string(purpose)),
+			"TOTP", plainOtp,
 		)
 	}
 

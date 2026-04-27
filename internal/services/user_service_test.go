@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/brianvoe/gofakeit/v6"
@@ -149,9 +150,9 @@ func TestUserService_GetUser(t *testing.T) {
 
 		logger := &mocks.MockLogger{
 			ErrorFunc: func(msg string, keysAndValues ...any) {
-				if msg == "failed to get user from storage" {
-					storageErrorLogged = true
-				}
+				expectedMsg := fmt.Sprintf("failed to get user with ID: %s from storage", userID)
+				assert.Equal(t, expectedMsg, msg)
+				storageErrorLogged = true
 			},
 		}
 
@@ -194,9 +195,9 @@ func TestUserService_GetUser(t *testing.T) {
 
 		logger := &mocks.MockLogger{
 			ErrorFunc: func(msg string, keysAndValues ...any) {
-				if msg == "failed to cache user" {
-					cacheErrorLogged = true
-				}
+				expectedMsg := fmt.Sprintf("failed to set user with ID: %s in cache", userID)
+				assert.Equal(t, expectedMsg, msg)
+				cacheErrorLogged = true
 			},
 		}
 

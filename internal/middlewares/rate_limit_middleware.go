@@ -27,13 +27,6 @@ func RateLimitByIP(
 
 			allowed, info, err := rl.Allow(r.Context(), key)
 			if err != nil {
-				logger.Error(
-					"rate limiter error",
-					"scope", scope,
-					"ip", ip,
-					"error", err,
-				)
-
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -45,13 +38,6 @@ func RateLimitByIP(
 			if !allowed {
 				retryAfter := max(int64(time.Until(info.Reset).Seconds()), 0)
 				w.Header().Set("Retry-After", strconv.FormatInt(retryAfter, 10))
-
-				logger.Warn(
-					"rate limit exceeded",
-					"scope", scope,
-					"ip", ip,
-					"reset", info.Reset,
-				)
 
 				httpx.TooManyRequests(w, r, codeRateLimitExceeded, ErrRateLimitExceeded.Error())
 				return
