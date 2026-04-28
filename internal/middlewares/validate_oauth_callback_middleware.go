@@ -14,7 +14,10 @@ func ValidateOAuthCallback(logger logging.Logger) func(next http.Handler) http.H
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			err := r.URL.Query().Get("error")
 			if err != "" {
-				logger.Error("oauth authorization failed", "error", err)
+				logger.Error(
+					"oauth authorization failed",
+					logging.Error, err,
+				)
 				httpx.BadRequest(w, r, codeOAuthFailed, ErrOAuthFailed.Error())
 				return
 			}

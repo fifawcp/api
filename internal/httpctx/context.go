@@ -19,7 +19,22 @@ const (
 	ReturnToContextKey          ContextKey = "return_to"
 	OAuthStateContextKey        ContextKey = "oauth_state"
 	OAuthCodeContextKey         ContextKey = "oauth_code"
+	ResponseErrorContextKey     ContextKey = "response_error"
 )
+
+type ResponseError struct {
+	Code    string
+	Message string
+}
+
+func GetResponseError(ctx context.Context) *ResponseError {
+	responseError, ok := ctx.Value(ResponseErrorContextKey).(*ResponseError)
+	if !ok {
+		return nil
+	}
+
+	return responseError
+}
 
 func GetRequestInfo(ctx context.Context) *dtos.RequestInfo {
 	requestInfo, ok := ctx.Value(RequestInfoContextKey).(*dtos.RequestInfo)

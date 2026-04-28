@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
@@ -34,9 +35,8 @@ func (s *UserService) GetUser(ctx context.Context, userID string) (*domain.User,
 	user, err := s.userStorage.GetUser(ctx, userID)
 	if err != nil {
 		s.logger.Error(
-			"failed to get user from storage",
-			"error", err,
-			"userID", userID,
+			fmt.Sprintf("failed to get user with ID: %s from storage", userID),
+			logging.Error, err.Error(),
 		)
 	}
 
@@ -54,9 +54,8 @@ func (s *UserService) GetUser(ctx context.Context, userID string) (*domain.User,
 	err = s.userStorage.SetUser(ctx, user)
 	if err != nil {
 		s.logger.Error(
-			"failed to cache user",
-			"error", err,
-			"userID", userID,
+			fmt.Sprintf("failed to set user with ID: %s in cache", userID),
+			logging.Error, err.Error(),
 		)
 	}
 

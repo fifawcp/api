@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fifawcp/api/internal/httpctx"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -48,6 +49,10 @@ func RespondWithError(w http.ResponseWriter, r *http.Request, status int, code, 
 
 	if r != nil {
 		apiErr.RequestID = middleware.GetReqID(r.Context())
+		if re := httpctx.GetResponseError(r.Context()); re != nil {
+			re.Code = code
+			re.Message = message
+		}
 	}
 
 	writeJSON(w, status, ErrorResponse{Error: apiErr})
@@ -141,6 +146,10 @@ func respondWithValidationError(w http.ResponseWriter, r *http.Request, fields m
 
 	if r != nil {
 		apiErr.RequestID = middleware.GetReqID(r.Context())
+		if re := httpctx.GetResponseError(r.Context()); re != nil {
+			re.Code = codeValidationFailed
+			re.Message = errValidationFailed.Error()
+		}
 	}
 
 	writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: apiErr})

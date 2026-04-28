@@ -25,7 +25,10 @@ func main() {
 		cfg.DB.MaxLifetime,
 	)
 	if err != nil {
-		logger.Error("Error connecting to database", "error", err)
+		logger.Error(
+			"Error connecting to database",
+			logging.Error, err.Error(),
+		)
 		os.Exit(1)
 	}
 

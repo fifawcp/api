@@ -45,8 +45,8 @@ func Auth(
 			if err != nil {
 				logger.Error(
 					"failed to get user",
-					"error", err,
-					"userID", userID,
+					logging.Error, err.Error(),
+					logging.UserID, userID,
 				)
 				httpx.Unauthorized(w, r, codeInvalidCredentials, ErrInvalidCredentials.Error())
 				return

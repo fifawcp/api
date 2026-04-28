@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/fifawcp/api/internal/dtos"
@@ -15,6 +16,7 @@ type AdminHandler struct {
 	matchService         services.MatchServiceInterface
 	groupStandingService services.GroupStandingServiceInterface
 	logger               logging.Logger
+	auditLogger          logging.AuditLogger
 	validator            *validator.Validator
 }
 
@@ -22,12 +24,14 @@ func NewAdminHandler(
 	matchService services.MatchServiceInterface,
 	groupStandingService services.GroupStandingServiceInterface,
 	logger logging.Logger,
+	auditLogger logging.AuditLogger,
 	validator *validator.Validator,
 ) *AdminHandler {
 	return &AdminHandler{
 		matchService:         matchService,
 		groupStandingService: groupStandingService,
 		logger:               logger,
+		auditLogger:          auditLogger,
 		validator:            validator,
 	}
 }
@@ -60,11 +64,28 @@ func (h *AdminHandler) UpdateMatchResult(w http.ResponseWriter, r *http.Request)
 
 	outcome, err := h.matchService.UpdateMatchResult(r.Context(), matchID, body)
 	if err != nil {
+		h.auditLogger.LogEvent(r.Context(), logging.Event{
+			Action:     logging.ActionUpdateMatchResult,
+			Resource:   logging.ResourceMatch,
+			ResourceID: fmt.Sprintf("%d", matchID),
+			Outcome:    logging.OutcomeFailure,
+			Metadata:   map[string]any{logging.Error: err.Error()},
+		})
 		handleServiceError(w, r, err, h.logger)
 		return
 	}
 
-	// TODO: add audit log in success and error (who)
+	h.auditLogger.LogEvent(r.Context(), logging.Event{
+		Action:     logging.ActionUpdateMatchResult,
+		Resource:   logging.ResourceMatch,
+		ResourceID: fmt.Sprintf("%d", matchID),
+		Outcome:    logging.OutcomeSuccess,
+		Metadata: map[string]any{
+			"home_score": body.HomeScore,
+			"away_score": body.AwayScore,
+		},
+	})
+
 	httpx.RespondWithData(w, http.StatusOK, outcome)
 }
 
@@ -84,17 +105,28 @@ func (h *AdminHandler) UpdateMatchResult(w http.ResponseWriter, r *http.Request)
 //	@Security		BearerAuth
 //	@Router			/admin/matches/{id}/result [delete]
 func (h *AdminHandler) ResetMatchResult(w http.ResponseWriter, r *http.Request) {
-	// TODO: Put in the document that when implementing this in the frontend
-	// TODO: they should trigger a confirmation dialog, because this is a destructive action
 	matchID := httpctx.GetMatchID(r.Context())
 
 	outcome, err := h.matchService.ResetMatchResult(r.Context(), matchID)
 	if err != nil {
+		h.auditLogger.LogEvent(r.Context(), logging.Event{
+			Action:     logging.ActionResetMatchResult,
+			Resource:   logging.ResourceMatch,
+			ResourceID: fmt.Sprintf("%d", matchID),
+			Outcome:    logging.OutcomeFailure,
+			Metadata:   map[string]any{logging.Error: err.Error()},
+		})
 		handleServiceError(w, r, err, h.logger)
 		return
 	}
 
-	// TODO: add audit log in success and error (who)
+	h.auditLogger.LogEvent(r.Context(), logging.Event{
+		Action:     logging.ActionResetMatchResult,
+		Resource:   logging.ResourceMatch,
+		ResourceID: fmt.Sprintf("%d", matchID),
+		Outcome:    logging.OutcomeSuccess,
+	})
+
 	httpx.RespondWithData(w, http.StatusOK, outcome)
 }
 
@@ -122,11 +154,28 @@ func (h *AdminHandler) BulkUpdateMatchResults(w http.ResponseWriter, r *http.Req
 
 	outcome, err := h.matchService.UpdateMatchResultsBulk(r.Context(), body)
 	if err != nil {
+		h.auditLogger.LogEvent(r.Context(), logging.Event{
+			Action:   logging.ActionBulkUpdateMatches,
+			Resource: logging.ResourceMatch,
+			Outcome:  logging.OutcomeFailure,
+			Metadata: map[string]any{
+				logging.Error: err.Error(),
+				"count":       len(body.Matches),
+			},
+		})
 		handleServiceError(w, r, err, h.logger)
 		return
 	}
 
-	// TODO: add audit log in success and error (who)
+	h.auditLogger.LogEvent(r.Context(), logging.Event{
+		Action:   logging.ActionBulkUpdateMatches,
+		Resource: logging.ResourceMatch,
+		Outcome:  logging.OutcomeSuccess,
+		Metadata: map[string]any{
+			"count": len(body.Matches),
+		},
+	})
+
 	httpx.RespondWithData(w, http.StatusOK, outcome)
 }
 
@@ -145,9 +194,21 @@ func (h *AdminHandler) BulkUpdateMatchResults(w http.ResponseWriter, r *http.Req
 func (h *AdminHandler) RecalculateStandings(w http.ResponseWriter, r *http.Request) {
 	outcome, err := h.matchService.SyncGroupStageOutcomes(r.Context())
 	if err != nil {
+		h.auditLogger.LogEvent(r.Context(), logging.Event{
+			Action:   logging.ActionRecalculateStandings,
+			Resource: logging.ResourceStanding,
+			Outcome:  logging.OutcomeFailure,
+			Metadata: map[string]any{logging.Error: err.Error()},
+		})
 		handleServiceError(w, r, err, h.logger)
 		return
 	}
+
+	h.auditLogger.LogEvent(r.Context(), logging.Event{
+		Action:   logging.ActionRecalculateStandings,
+		Resource: logging.ResourceStanding,
+		Outcome:  logging.OutcomeSuccess,
+	})
 
 	httpx.RespondWithData(w, http.StatusOK, outcome)
 }
@@ -176,9 +237,27 @@ func (h *AdminHandler) ResolveThirdPlaceConflict(w http.ResponseWriter, r *http.
 
 	outcome, err := h.matchService.ResolveThirdPlaceConflict(r.Context(), body)
 	if err != nil {
+		h.auditLogger.LogEvent(r.Context(), logging.Event{
+			Action:   logging.ActionResolveThirdPlace,
+			Resource: logging.ResourceMatch,
+			Outcome:  logging.OutcomeFailure,
+			Metadata: map[string]any{
+				"team_fifa_codes": body.TeamFifaCodes,
+				logging.Error:     err.Error(),
+			},
+		})
 		handleServiceError(w, r, err, h.logger)
 		return
 	}
+
+	h.auditLogger.LogEvent(r.Context(), logging.Event{
+		Action:   logging.ActionResolveThirdPlace,
+		Resource: logging.ResourceMatch,
+		Outcome:  logging.OutcomeSuccess,
+		Metadata: map[string]any{
+			"team_fifa_codes": body.TeamFifaCodes,
+		},
+	})
 
 	httpx.RespondWithData(w, http.StatusOK, outcome)
 }

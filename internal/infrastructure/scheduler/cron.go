@@ -41,11 +41,20 @@ func (c *CronScheduler) RegisterJob(spec string, job domain.Job) error {
 		// Run the actual job logic. context.Background() is used because cron
 		// jobs have no incoming request context — they originate from the scheduler.
 		if err := job.Run(context.Background()); err != nil {
-			c.logger.Error("job failed", "job", job.Name(), "error", err, "duration", time.Since(start))
+			c.logger.Error(
+				"job failed",
+				"job", job.Name(),
+				logging.Error, err.Error(),
+				"duration", time.Since(start).String(),
+			)
 			return
 		}
 
-		c.logger.Info("job completed", "job", job.Name(), "duration", time.Since(start))
+		c.logger.Info(
+			"job completed",
+			"job", job.Name(),
+			"duration", time.Since(start).String(),
+		)
 	})
 
 	// Returns non-nil if the cron expression is invalid (e.g. "not a valid spec").

@@ -42,7 +42,7 @@ func (s *Seeder) Flush() {
 		if err != nil {
 			s.logger.Error(
 				"Error flushing db",
-				"error", err,
+				logging.Error, err.Error(),
 			)
 		}
 	}
@@ -58,7 +58,7 @@ func (s *Seeder) Seed() {
 		if err != nil {
 			s.logger.Error(
 				"Error seeding users",
-				"error", err,
+				logging.Error, err.Error(),
 			)
 		}
 	}
