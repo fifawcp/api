@@ -191,10 +191,6 @@ func extractFieldName(errMsg string) string {
 func SetRefreshTokenCookie(w http.ResponseWriter, token string, expiry time.Time, secure bool) {
 	sameSite := http.SameSiteLaxMode
 
-	if secure {
-		sameSite = http.SameSiteNoneMode
-	}
-
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshTokenCookieName,
 		Value:    token,
@@ -209,10 +205,6 @@ func SetRefreshTokenCookie(w http.ResponseWriter, token string, expiry time.Time
 
 func ClearRefreshTokenCookie(w http.ResponseWriter, secure bool) {
 	sameSite := http.SameSiteLaxMode
-
-	if secure {
-		sameSite = http.SameSiteNoneMode
-	}
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshTokenCookieName,

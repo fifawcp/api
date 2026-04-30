@@ -14,7 +14,7 @@ func (c *Container) NewRouter() *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	r.Use(middlewares.TrustedProxyRealIP(c.Config.Server.TrustedProxyCIDRs))
 	r.Use(middleware.Recoverer)
 	r.Use(middlewares.LogRequest(c.Logger))
 	r.Use(middleware.Timeout(c.Config.Server.ContextTimeout))
@@ -23,7 +23,7 @@ func (c *Container) NewRouter() *chi.Mux {
 		AllowedOrigins:   c.Config.Server.CORS.AllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 		MaxAge:           300,
 	}))
 

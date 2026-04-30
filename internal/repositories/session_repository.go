@@ -121,20 +121,19 @@ func (r *SessionRepository) UpdateLastUsedAt(
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
 
-	query := `UPDATE sessions SET last_used_at = NOW() WHERE id = $1`
+	query := `UPDATE sessions SET last_used_at = NOW() WHERE id = $1 AND expires_at > NOW()`
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		return handleDBError(err, resourceSession)
 	}
 
-	// Check if session exists
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return handleDBError(err, resourceSession)
 	}
 
 	if rowsAffected == 0 {
-		return domain.ErrSessionNotFound
+		return domain.ErrRefreshTokenInvalidOrExpired
 	}
 
 	return nil
