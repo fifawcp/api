@@ -6,12 +6,13 @@ import (
 )
 
 type RefreshToken struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"user_id"`
-	SessionID string    `json:"session_id"`
-	TokenHash string    `json:"token_hash"`
-	ExpiresAt time.Time `json:"expires_at"`
-	CreatedAt time.Time `json:"created_at"`
+	ID               string    `json:"id"`
+	UserID           string    `json:"user_id"`
+	SessionID        string    `json:"session_id"`
+	TokenHash        string    `json:"token_hash"`
+	ExpiresAt        time.Time `json:"expires_at"`
+	CreatedAt        time.Time `json:"created_at"`
+	SessionExpiresAt time.Time `json:"session_expires_at"`
 }
 
 type RefreshTokenRepository interface {
