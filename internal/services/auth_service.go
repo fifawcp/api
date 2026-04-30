@@ -215,12 +215,17 @@ func (s *AuthService) RefreshToken(
 		return nil, err
 	}
 
+	refreshTokenExpiresAt := refreshTokenResult.ExpiresAt
+	if refreshTokenExpiresAt.After(refreshToken.SessionExpiresAt) {
+		refreshTokenExpiresAt = refreshToken.SessionExpiresAt
+	}
+
 	// Rotate refresh token
 	if err := s.refreshTokenRepository.RotateRefreshToken(ctx, refreshToken.TokenHash, &domain.RefreshToken{
 		UserID:    refreshToken.UserID,
 		SessionID: refreshToken.SessionID,
 		TokenHash: s.hashToken(refreshTokenResult.Token),
-		ExpiresAt: refreshTokenResult.ExpiresAt,
+		ExpiresAt: refreshTokenExpiresAt,
 	}); err != nil {
 		return nil, err
 	}

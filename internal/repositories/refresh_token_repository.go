@@ -60,15 +60,21 @@ func (r *RefreshTokenRepository) GetRefreshTokenByTokenHash(
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
 
+	// Join sessions so we can enforce session expiry at lookup time and carry
+	// session.expires_at to the service for capping the rotated token's TTL
 	query := `SELECT
-		id,
-		user_id,
-		session_id,
-		token_hash,
-		expires_at,
-		created_at
-	FROM refresh_tokens
-	WHERE token_hash = $1 AND expires_at > NOW()`
+		rt.id,
+		rt.user_id,
+		rt.session_id,
+		rt.token_hash,
+		rt.expires_at,
+		rt.created_at,
+		s.expires_at AS session_expires_at
+	FROM refresh_tokens rt
+	JOIN sessions s ON s.id = rt.session_id
+	WHERE rt.token_hash = $1
+	  AND rt.expires_at > NOW()
+	  AND s.expires_at > NOW()`
 
 	var refreshToken domain.RefreshToken
 
@@ -79,6 +85,7 @@ func (r *RefreshTokenRepository) GetRefreshTokenByTokenHash(
 		&refreshToken.TokenHash,
 		&refreshToken.ExpiresAt,
 		&refreshToken.CreatedAt,
+		&refreshToken.SessionExpiresAt,
 	)
 
 	if err != nil {
