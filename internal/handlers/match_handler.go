@@ -31,12 +31,12 @@ func NewMatchHandler(matchService services.MatchServiceInterface, logger logging
 //	@Description	List query params can be repeated (`?group_codes=A&group_codes=B`) or comma-separated (`?group_codes=A,B`).
 //	@Tags			matches
 //	@Produce		json
-//	@Param			group_codes		query		[]string								false	"Group codes (A-L)"
-//	@Param			stage_code		query		[]string								false	"Stage codes (group_stage, round_of_16, quarter_finals, semi_finals, third_place, final)"
-//	@Param			status			query		string									false	"Match status (scheduled, finished)"
-//	@Param			team_fifa_codes	query		[]string								false	"Team FIFA codes"
-//	@Param			from_date		query		string									false	"Inclusive start date-time (RFC3339)"
-//	@Param			to_date			query		string									false	"Inclusive end date-time (RFC3339)"
+//	@Param			group_codes		query		[]string							false	"Group codes (A-L)"
+//	@Param			stage_code		query		[]string							false	"Stage codes (group_stage, round_of_16, quarter_finals, semi_finals, third_place, final)"
+//	@Param			status			query		string								false	"Match status (scheduled, finished)"
+//	@Param			team_fifa_codes	query		[]string							false	"Team FIFA codes"
+//	@Param			from_date		query		string								false	"Inclusive start date-time (RFC3339)"
+//	@Param			to_date			query		string								false	"Inclusive end date-time (RFC3339)"
 //	@Success		200				{object}	httpx.Response{data=[]domain.Match}	"List of matches"
 //	@Failure		400				{object}	httpx.ErrorResponse					"Invalid query parameters"
 //	@Failure		500				{object}	httpx.ErrorResponse					"Internal server error"

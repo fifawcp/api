@@ -12,8 +12,8 @@ import (
 
 type BoardServiceInterface interface {
 	CreateBoard(ctx context.Context, payload dtos.CreateBoardDto, userID string) (*domain.Board, error)
-	GetUserBoards(ctx context.Context, userID string) ([]*domain.Board, error)
-	GetBoardByID(ctx context.Context, boardID string) (*domain.Board, error)
+	GetUserBoards(ctx context.Context, userID string) ([]*domain.BoardSummary, error)
+	GetBoardByID(ctx context.Context, boardID string) (*domain.BoardDetails, error)
 	RegenerateJoinCode(ctx context.Context, boardID string) (string, error)
 	UpdateBoard(ctx context.Context, boardID string, role domain.BoardMemberRole, payload dtos.UpdateBoardDto) error
 	DeleteBoard(ctx context.Context, boardID string, userID string) error
@@ -66,12 +66,12 @@ func (s *BoardService) CreateBoard(
 	return nil, domain.ErrBoardAlreadyExists
 }
 
-func (s *BoardService) GetUserBoards(ctx context.Context, userID string) ([]*domain.Board, error) {
+func (s *BoardService) GetUserBoards(ctx context.Context, userID string) ([]*domain.BoardSummary, error) {
 	return s.boardRepository.GetUserBoards(ctx, userID)
 }
 
-func (s *BoardService) GetBoardByID(ctx context.Context, boardID string) (*domain.Board, error) {
-	return s.boardRepository.GetBoardByID(ctx, boardID)
+func (s *BoardService) GetBoardByID(ctx context.Context, boardID string) (*domain.BoardDetails, error) {
+	return s.boardRepository.GetBoardDetails(ctx, boardID)
 }
 
 func (s *BoardService) RegenerateJoinCode(ctx context.Context, boardID string) (string, error) {

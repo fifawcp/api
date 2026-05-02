@@ -97,54 +97,6 @@ func (r *BoardMemberRepository) GetBoardMember(
 	return &boardMember, nil
 }
 
-func (r *BoardMemberRepository) GetBoardMembers(
-	ctx context.Context,
-	boardID string,
-) ([]*domain.BoardMember, error) {
-	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
-	defer cancel()
-
-	query := `SELECT
-		bm.board_id,
-		bm.user_id,
-		bm.role,
-		bm.created_at,
-		u.username
-	FROM board_members bm
-	JOIN users u ON bm.user_id = u.id
-	WHERE bm.board_id = $1
-	ORDER BY bm.created_at DESC
-	`
-
-	var boardMembers []*domain.BoardMember
-
-	rows, err := r.db.QueryContext(ctx, query, boardID)
-	if err != nil {
-		return nil, handleDBError(err, resourceBoardMember)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var boardMember domain.BoardMember
-		if err := rows.Scan(
-			&boardMember.BoardID,
-			&boardMember.UserID,
-			&boardMember.Role,
-			&boardMember.CreatedAt,
-			&boardMember.UserName,
-		); err != nil {
-			return nil, handleDBError(err, resourceBoardMember)
-		}
-		boardMembers = append(boardMembers, &boardMember)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, handleDBError(err, resourceBoardMember)
-	}
-
-	return boardMembers, nil
-}
-
 func (r *BoardMemberRepository) UpdateBoardMemberRole(
 	ctx context.Context,
 	boardID string,
@@ -234,4 +186,71 @@ func (r *BoardMemberRepository) RemoveBoardMember(
 	}
 
 	return nil
+}
+
+func (r *BoardMemberRepository) LeaveBoard(
+	ctx context.Context,
+	boardID string,
+	userID string,
+) error {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return handleDBError(err, resourceBoardMember)
+	}
+	defer tx.Rollback()
+
+	// Validate if the user is the owner and if there are other members
+	query := `
+		SELECT
+			b.owner_user_id,
+			COUNT(all_bm.user_id) AS members_count
+		FROM boards b
+		LEFT JOIN board_members all_bm
+			ON all_bm.board_id = b.id
+		WHERE b.id = $1
+		GROUP BY b.owner_user_id
+	`
+
+	var ownerUserID string
+	var membersCount int
+
+	if err := tx.QueryRowContext(ctx, query, boardID).Scan(
+		&ownerUserID,
+		&membersCount,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.ErrBoardNotFound
+		}
+		return handleDBError(err, resourceBoardMember)
+	}
+
+	// If the user is the owner, check if there are other members
+	if ownerUserID == userID {
+		// If there are other members, do not allow the owner to leave
+		if membersCount > 1 {
+			return domain.ErrBoardOwnerCannotLeaveWithMembers
+		}
+
+		// If there are no other members, delete the board
+		if _, err := tx.ExecContext(ctx, `DELETE FROM boards WHERE id = $1`, boardID); err != nil {
+			return handleDBError(err, resourceBoard)
+		}
+
+		return tx.Commit()
+	}
+
+	// If the user is not the owner, delete the member from the board
+	if _, err := tx.ExecContext(
+		ctx,
+		`DELETE FROM board_members WHERE board_id = $1 AND user_id = $2`,
+		boardID,
+		userID,
+	); err != nil {
+		return handleDBError(err, resourceBoardMember)
+	}
+
+	return tx.Commit()
 }

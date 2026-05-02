@@ -8,8 +8,9 @@ import (
 
 type MockBoardRepository struct {
 	CreateBoardWithOwnerFunc func(ctx context.Context, board *domain.Board) error
-	GetUserBoardsFunc        func(ctx context.Context, userID string) ([]*domain.Board, error)
+	GetUserBoardsFunc        func(ctx context.Context, userID string) ([]*domain.BoardSummary, error)
 	GetBoardByIDFunc         func(ctx context.Context, boardID string) (*domain.Board, error)
+	GetBoardDetailsFunc      func(ctx context.Context, boardID string) (*domain.BoardDetails, error)
 	UpdateJoinCodeFunc       func(ctx context.Context, boardID string, joinCode string) error
 	UpdateBoardFunc          func(ctx context.Context, boardID string, board *domain.Board) error
 	DeleteBoardFunc          func(ctx context.Context, boardID string, userID string) error
@@ -22,7 +23,7 @@ func (m *MockBoardRepository) CreateBoardWithOwner(ctx context.Context, board *d
 	panic("CreateBoardWithOwner called unexpectedly")
 }
 
-func (m *MockBoardRepository) GetUserBoards(ctx context.Context, userID string) ([]*domain.Board, error) {
+func (m *MockBoardRepository) GetUserBoards(ctx context.Context, userID string) ([]*domain.BoardSummary, error) {
 	if m.GetUserBoardsFunc != nil {
 		return m.GetUserBoardsFunc(ctx, userID)
 	}
@@ -34,6 +35,13 @@ func (m *MockBoardRepository) GetBoardByID(ctx context.Context, boardID string) 
 		return m.GetBoardByIDFunc(ctx, boardID)
 	}
 	panic("GetBoardByID called unexpectedly")
+}
+
+func (m *MockBoardRepository) GetBoardDetails(ctx context.Context, boardID string) (*domain.BoardDetails, error) {
+	if m.GetBoardDetailsFunc != nil {
+		return m.GetBoardDetailsFunc(ctx, boardID)
+	}
+	panic("GetBoardDetails called unexpectedly")
 }
 
 func (m *MockBoardRepository) UpdateJoinCode(ctx context.Context, boardID string, joinCode string) error {
