@@ -6,11 +6,11 @@ import (
 )
 
 type BoardMember struct {
-	BoardID   string
-	UserID    string
-	Role      BoardMemberRole
-	CreatedAt time.Time
-	UserName  string // optional, populated when joining user
+	BoardID   string          `json:"board_id" example:"123e4567-e89b-12d3-a456-426614174000"`
+	UserID    string          `json:"user_id" example:"123e4567-e89b-12d3-a456-426614174000"`
+	Role      BoardMemberRole `json:"role" example:"member"`
+	CreatedAt time.Time       `json:"created_at" example:"2026-01-15T10:30:00Z"`
+	UserName  string          `json:"username" example:"johndoe"` // optional, populated when joining user
 }
 
 type BoardMemberRole string
