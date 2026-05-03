@@ -107,13 +107,13 @@ func TestBoardService_GetUserBoards(t *testing.T) {
 		t.Parallel()
 
 		userID := gofakeit.UUID()
-		expectedBoards := []*domain.BoardSummary{
+		expectedBoards := []*domain.Board{
 			{ID: gofakeit.UUID(), Name: "Board 1", OwnerUserID: userID},
 			{ID: gofakeit.UUID(), Name: "Board 2", OwnerUserID: userID},
 		}
 
 		br := &mocks.MockBoardRepository{
-			GetUserBoardsFunc: func(ctx context.Context, uid string) ([]*domain.BoardSummary, error) {
+			GetUserBoardsFunc: func(ctx context.Context, uid string) ([]*domain.Board, error) {
 				assert.Equal(t, userID, uid)
 				return expectedBoards, nil
 			},
@@ -133,7 +133,7 @@ func TestBoardService_GetUserBoards(t *testing.T) {
 		userID := gofakeit.UUID()
 
 		br := &mocks.MockBoardRepository{
-			GetUserBoardsFunc: func(ctx context.Context, uid string) ([]*domain.BoardSummary, error) {
+			GetUserBoardsFunc: func(ctx context.Context, uid string) ([]*domain.Board, error) {
 				return nil, errors.New("database error")
 			},
 		}
@@ -154,34 +154,44 @@ func TestBoardService_GetUserBoards(t *testing.T) {
 func TestBoardService_GetBoardByID(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns board on success", func(t *testing.T) {
+	t.Run("returns board with privacy + requesting user's rank/joined_at on success", func(t *testing.T) {
 		t.Parallel()
 
 		boardID := gofakeit.UUID()
-		expectedBoard := &domain.BoardDetails{
+		userID := gofakeit.UUID()
+		joinedAt := gofakeit.Date()
+
+		repoBoard := &domain.BoardDetails{
 			ID:   boardID,
 			Name: "Test Board",
+			Members: []*domain.BoardDetailsMember{
+				{UserID: gofakeit.UUID(), Rank: 1},
+				{UserID: userID, Rank: 3, JoinedAt: joinedAt},
+			},
 		}
 
 		br := &mocks.MockBoardRepository{
 			GetBoardDetailsFunc: func(ctx context.Context, bid string) (*domain.BoardDetails, error) {
 				assert.Equal(t, boardID, bid)
-				return expectedBoard, nil
+				return repoBoard, nil
 			},
 		}
 
 		service := newTestBoardService(br)
 
-		result, err := service.GetBoardByID(context.Background(), boardID)
+		result, err := service.GetBoardByID(context.Background(), boardID, userID)
 
 		assert.NoError(t, err)
-		assert.Equal(t, expectedBoard, result)
+		assert.Equal(t, "private", result.Privacy)
+		assert.Equal(t, 3, result.UserRank)
+		assert.Equal(t, joinedAt, result.JoinedAt)
 	})
 
 	t.Run("propagates board repository error", func(t *testing.T) {
 		t.Parallel()
 
 		boardID := gofakeit.UUID()
+		userID := gofakeit.UUID()
 
 		br := &mocks.MockBoardRepository{
 			GetBoardDetailsFunc: func(ctx context.Context, bid string) (*domain.BoardDetails, error) {
@@ -191,7 +201,7 @@ func TestBoardService_GetBoardByID(t *testing.T) {
 
 		service := newTestBoardService(br)
 
-		result, err := service.GetBoardByID(context.Background(), boardID)
+		result, err := service.GetBoardByID(context.Background(), boardID, userID)
 
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, domain.ErrBoardNotFound)

@@ -140,8 +140,9 @@ func (h *BoardHandler) JoinBoard(w http.ResponseWriter, r *http.Request) {
 //	@Router			/boards/{boardId} [get]
 func (h *BoardHandler) GetBoardByID(w http.ResponseWriter, r *http.Request) {
 	boardID := httpctx.GetBoardID(r.Context())
+	user := httpctx.GetAuthenticatedUser(r.Context())
 
-	board, err := h.boardService.GetBoardByID(r.Context(), boardID)
+	board, err := h.boardService.GetBoardByID(r.Context(), boardID, user.ID)
 	if err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return

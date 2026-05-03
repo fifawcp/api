@@ -12,8 +12,8 @@ import (
 
 type BoardServiceInterface interface {
 	CreateBoard(ctx context.Context, payload dtos.CreateBoardDto, userID string) (*domain.Board, error)
-	GetUserBoards(ctx context.Context, userID string) ([]*domain.BoardSummary, error)
-	GetBoardByID(ctx context.Context, boardID string) (*domain.BoardDetails, error)
+	GetUserBoards(ctx context.Context, userID string) ([]*domain.Board, error)
+	GetBoardByID(ctx context.Context, boardID string, userID string) (*domain.BoardDetails, error)
 	RegenerateJoinCode(ctx context.Context, boardID string) (string, error)
 	UpdateBoard(ctx context.Context, boardID string, role domain.BoardMemberRole, payload dtos.UpdateBoardDto) error
 	DeleteBoard(ctx context.Context, boardID string, userID string) error
@@ -66,23 +66,28 @@ func (s *BoardService) CreateBoard(
 	return nil, domain.ErrBoardAlreadyExists
 }
 
-func (s *BoardService) GetUserBoards(ctx context.Context, userID string) ([]*domain.BoardSummary, error) {
+func (s *BoardService) GetUserBoards(ctx context.Context, userID string) ([]*domain.Board, error) {
 	return s.boardRepository.GetUserBoards(ctx, userID)
 }
 
-func (s *BoardService) GetBoardByID(ctx context.Context, boardID string) (*domain.BoardDetails, error) {
-	details, err := s.boardRepository.GetBoardDetails(ctx, boardID)
+func (s *BoardService) GetBoardByID(ctx context.Context, boardID string, userID string) (*domain.BoardDetails, error) {
+	boardDetails, err := s.boardRepository.GetBoardDetails(ctx, boardID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Privacy is hardcoded for now — all boards are private. When public boards
-	// land, this becomes a column on `boards` and the assignment moves into the
-	// repository SELECT.
-	details.Privacy = "private"
-	details.MembersCount = len(details.Members)
+	boardDetails.Privacy = "private"
 
-	return details, nil
+	// Surface the requesting user's `joined_at` and `rank` at the top level
+	for _, member := range boardDetails.Members {
+		if member.UserID == userID {
+			boardDetails.JoinedAt = member.JoinedAt
+			boardDetails.UserRank = member.Rank
+			break
+		}
+	}
+
+	return boardDetails, nil
 }
 
 func (s *BoardService) RegenerateJoinCode(ctx context.Context, boardID string) (string, error) {

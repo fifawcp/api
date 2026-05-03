@@ -194,16 +194,16 @@ func TestBoardHandler_GetUserBoards(t *testing.T) {
 	t.Run("returns 200 with user boards", func(t *testing.T) {
 		t.Parallel()
 
-		boards := []*domain.BoardSummary{
-			{ID: "board-1", Name: "Test Board 1", UserRank: 1, MembersCount: 2},
-			{ID: "board-2", Name: "Test Board 2", UserRank: 2, MembersCount: 3},
+		boards := []*domain.Board{
+			{ID: "board-1", Name: "Test Board 1"},
+			{ID: "board-2", Name: "Test Board 2"},
 		}
 
 		bs := &mocks.MockBoardService{
 			GetUserBoardsFunc: func(
 				ctx context.Context,
 				userID string,
-			) ([]*domain.BoardSummary, error) {
+			) ([]*domain.Board, error) {
 				return boards, nil
 			},
 		}
@@ -218,13 +218,13 @@ func TestBoardHandler_GetUserBoards(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var resp struct {
-			Data []domain.BoardSummary `json:"data"`
+			Data []domain.Board `json:"data"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
 		assert.Len(t, resp.Data, 2)
-		assert.Equal(t, 2, resp.Data[0].MembersCount)
-		assert.Equal(t, 1, resp.Data[0].UserRank)
+		assert.Equal(t, "board-1", resp.Data[0].ID)
+		assert.Equal(t, "Test Board 1", resp.Data[0].Name)
 	})
 
 	t.Run("propagates service error", func(t *testing.T) {
@@ -234,7 +234,7 @@ func TestBoardHandler_GetUserBoards(t *testing.T) {
 			GetUserBoardsFunc: func(
 				ctx context.Context,
 				userID string,
-			) ([]*domain.BoardSummary, error) {
+			) ([]*domain.Board, error) {
 				return nil, errors.New("db error")
 			},
 		}
@@ -382,9 +382,11 @@ func TestBoardHandler_GetBoardByID(t *testing.T) {
 		t.Helper()
 
 		boardID := gofakeit.UUID()
+		user := testutils.CreateTestUser()
 		req := testutils.MakeJSONRequest(
 			t, http.MethodGet, "/boards/"+boardID, nil,
 			testutils.WithBoardID(boardID),
+			testutils.WithAuthUser(user),
 		)
 
 		return req
@@ -394,7 +396,7 @@ func TestBoardHandler_GetBoardByID(t *testing.T) {
 		t.Parallel()
 
 		bs := &mocks.MockBoardService{
-			GetBoardByIDFunc: func(ctx context.Context, boardID string) (*domain.BoardDetails, error) {
+			GetBoardByIDFunc: func(ctx context.Context, boardID string, userID string) (*domain.BoardDetails, error) {
 				return &domain.BoardDetails{
 					ID:       boardID,
 					Name:     "Test Board",
@@ -436,7 +438,7 @@ func TestBoardHandler_GetBoardByID(t *testing.T) {
 		t.Parallel()
 
 		bs := &mocks.MockBoardService{
-			GetBoardByIDFunc: func(ctx context.Context, boardID string) (*domain.BoardDetails, error) {
+			GetBoardByIDFunc: func(ctx context.Context, boardID string, userID string) (*domain.BoardDetails, error) {
 				return nil, errors.New("db error")
 			},
 		}
