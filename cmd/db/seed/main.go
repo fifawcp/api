@@ -38,8 +38,16 @@ func main() {
 	userRepository := repositories.NewUserRepository(db, cfg)
 	boardRepository := repositories.NewBoardRepository(db, cfg)
 	boardMemberRepository := repositories.NewBoardMemberRepository(db, cfg)
+	pickemRepository := repositories.NewPickemRepository(db, cfg)
 
-	seeder := NewSeeder(db, logger, userRepository, boardRepository, boardMemberRepository)
+	seeder := NewSeeder(
+		db,
+		logger,
+		userRepository,
+		boardRepository,
+		boardMemberRepository,
+		pickemRepository,
+	)
 
 	flush := flag.Bool("flush", false, "Flush the database without seeding")
 	flag.Parse()
