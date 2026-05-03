@@ -64,7 +64,7 @@ func (r *UserRepository) CreateUser(
 
 	joinGlobalBoardQuery := `
 		INSERT INTO board_members (board_id, user_id, role)
-		SELECT id, $1, 'member' FROM boards WHERE privacy = 'public' AND name = 'Global Leaderboard'
+		SELECT id, $1, 'member' FROM boards WHERE privacy = 'public' AND name = 'Global'
 		ON CONFLICT (board_id, user_id) DO NOTHING`
 
 	if _, err := tx.ExecContext(ctx, joinGlobalBoardQuery, user.ID); err != nil {

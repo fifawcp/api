@@ -15,4 +15,4 @@ ALTER TABLE boards ADD CONSTRAINT chk_boards_privacy_shape CHECK (
 );
 
 INSERT INTO boards (name, privacy, owner_user_id, join_code)
-VALUES ('Global Leaderboard', 'public', NULL, NULL);
+VALUES ('Global', 'public', NULL, NULL);

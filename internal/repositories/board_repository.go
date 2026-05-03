@@ -107,7 +107,8 @@ func (r *BoardRepository) GetBoardDetails(
 				bm.created_at AS joined_at,
 				RANK() OVER (
 					ORDER BY us.total_points DESC, us.updated_at ASC, bm.user_id ASC
-				) AS rank
+				) AS rank,
+				COALESCE(us.total_points, 0) AS total_points
 			FROM board_members bm
 			LEFT JOIN user_scores us ON us.user_id = bm.user_id
 			WHERE bm.board_id = $1
@@ -120,7 +121,8 @@ func (r *BoardRepository) GetBoardDetails(
 			b.privacy,
 			b.created_at,
 			r.joined_at,
-			r.rank
+			r.rank,
+			r.total_points
 		FROM boards b
 		LEFT JOIN ranked r ON r.user_id = $2
 		WHERE b.id = $1
@@ -129,7 +131,7 @@ func (r *BoardRepository) GetBoardDetails(
 	var details domain.BoardDetails
 	var ownerUserID, joinCode sql.NullString
 	var joinedAt sql.NullTime
-	var userRank sql.NullInt64
+	var userRank, totalPoints sql.NullInt64
 
 	err := r.db.QueryRowContext(ctx, query, boardID, userID).Scan(
 		&details.ID,
@@ -140,6 +142,7 @@ func (r *BoardRepository) GetBoardDetails(
 		&details.CreatedAt,
 		&joinedAt,
 		&userRank,
+		&totalPoints,
 	)
 	if err != nil {
 		return nil, handleDBError(err, resourceBoard)
@@ -159,6 +162,10 @@ func (r *BoardRepository) GetBoardDetails(
 
 	if userRank.Valid {
 		details.UserRank = int(userRank.Int64)
+	}
+
+	if totalPoints.Valid {
+		details.UserTotalPoints = int(totalPoints.Int64)
 	}
 
 	return &details, nil

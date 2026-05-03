@@ -12,6 +12,7 @@ bin/
 *.dll
 *.so
 *.dylib
+seed
 
 docs/
 web/
