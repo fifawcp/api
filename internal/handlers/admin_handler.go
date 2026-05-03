@@ -221,11 +221,11 @@ func (h *AdminHandler) RecalculateStandings(w http.ResponseWriter, r *http.Reque
 //	@Accept			json
 //	@Produce		json
 //	@Param			body	body		dtos.ResolveThirdPlaceConflictDto	true	"Third-place conflict resolution data"
-//	@Success		200		{object}	httpx.Response					"Third-place conflict resolved successfully"
-//	@Failure		400		{object}	httpx.ErrorResponse				"Invalid request body or validation error"
-//	@Failure		401		{object}	httpx.ErrorResponse				"Unauthorized - missing or invalid authentication"
-//	@Failure		403		{object}	httpx.ErrorResponse				"Forbidden - admin role required"
-//	@Failure		500		{object}	httpx.ErrorResponse				"Internal server error"
+//	@Success		200		{object}	httpx.Response						"Third-place conflict resolved successfully"
+//	@Failure		400		{object}	httpx.ErrorResponse					"Invalid request body or validation error"
+//	@Failure		401		{object}	httpx.ErrorResponse					"Unauthorized - missing or invalid authentication"
+//	@Failure		403		{object}	httpx.ErrorResponse					"Forbidden - admin role required"
+//	@Failure		500		{object}	httpx.ErrorResponse					"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/admin/standings/third-place/resolve [post]
 func (h *AdminHandler) ResolveThirdPlaceConflict(w http.ResponseWriter, r *http.Request) {

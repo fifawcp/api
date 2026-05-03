@@ -53,7 +53,6 @@ type Container struct {
 	refreshTokenRepository  *repositories.RefreshTokenRepository
 	boardRepository         *repositories.BoardRepository
 	boardMemberRepository   *repositories.BoardMemberRepository
-	boardRankingRepository  *repositories.BoardRankingRepository
 	groupStandingRepository *repositories.GroupStandingRepository
 	matchRepository         *repositories.MatchRepository
 	oauthAccountRepository  *repositories.OAuthAccountRepository
@@ -66,7 +65,6 @@ type Container struct {
 	// services
 	authService          services.AuthServiceInterface
 	boardService         services.BoardServiceInterface
-	boardRankingService  services.BoardRankingServiceInterface
 	groupStandingService services.GroupStandingServiceInterface
 	matchService         services.MatchServiceInterface
 	oauthService         services.OAuthServiceInterface
@@ -172,7 +170,6 @@ func (c *Container) initRepositories() {
 	c.refreshTokenRepository = repositories.NewRefreshTokenRepository(c.db, c.Config)
 	c.boardRepository = repositories.NewBoardRepository(c.db, c.Config)
 	c.boardMemberRepository = repositories.NewBoardMemberRepository(c.db, c.Config)
-	c.boardRankingRepository = repositories.NewBoardRankingRepository(c.db, c.Config)
 	c.groupStandingRepository = repositories.NewGroupStandingRepository(c.db, c.Config)
 	c.matchRepository = repositories.NewMatchRepository(c.db, c.Config)
 	c.oauthAccountRepository = repositories.NewOAuthAccountRepository(c.db, c.Config)
@@ -192,7 +189,6 @@ func (c *Container) initServices() {
 	c.UserService = services.NewUserService(c.userRepository, c.userStorage, c.Logger)
 	c.boardService = services.NewBoardService(c.boardRepository)
 	c.BoardMemberService = services.NewBoardMemberService(c.boardRepository, c.boardMemberRepository)
-	c.boardRankingService = services.NewBoardRankingService(c.boardRankingRepository)
 	c.groupStandingService = services.NewGroupStandingService(c.groupStandingRepository, c.matchRepository, c.Logger)
 	c.matchService = services.NewMatchService(c.matchRepository, c.groupStandingRepository, c.groupStandingService, c.Logger)
 	c.oauthService = services.NewOAuthService(
@@ -204,7 +200,7 @@ func (c *Container) initServices() {
 func (c *Container) initHandlers() {
 	c.AuthHandler = handlers.NewAuthHandler(c.authService, c.Logger, c.validator, c.Config)
 	c.UserHandler = handlers.NewUserHandler(c.UserService, c.Logger)
-	c.BoardHandler = handlers.NewBoardHandler(c.boardService, c.BoardMemberService, c.boardRankingService, c.Config, c.validator, c.Logger)
+	c.BoardHandler = handlers.NewBoardHandler(c.boardService, c.BoardMemberService, c.Config, c.validator, c.Logger)
 	c.GroupHandler = handlers.NewGroupStandingHandler(c.groupStandingService, c.Logger)
 	c.MatchHandler = handlers.NewMatchHandler(c.matchService, c.Logger)
 	c.AdminHandler = handlers.NewAdminHandler(c.matchService, c.groupStandingService, c.Logger, c.AuditLogger, c.validator)

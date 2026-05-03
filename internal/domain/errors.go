@@ -49,6 +49,7 @@ var ErrBoardAlreadyExists = errors.New("board already exists")
 var ErrBoardInvalidJoinCode = errors.New("invalid or expired board join code")
 var ErrBoardUserAlreadyInBoard = errors.New("user is already in this board")
 var ErrMaxBoardMembersExceeded = errors.New("maximum board members exceeded")
+var ErrBoardOwnerCannotLeaveWithMembers = errors.New("board owner cannot leave while other members remain")
 
 // Board Member
 var ErrBoardMemberNotFound = errors.New("board member not found")

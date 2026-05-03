@@ -10,9 +10,9 @@ import (
 type BoardMemberServiceInterface interface {
 	JoinBoard(ctx context.Context, joinCode string, userID string) error
 	GetBoardMember(ctx context.Context, boardID string, userID string) (*domain.BoardMember, error)
-	GetBoardMembers(ctx context.Context, boardID string) ([]*domain.BoardMember, error)
 	UpdateBoardMemberRole(ctx context.Context, boardID string, userID string, role domain.BoardMemberRole, payload dtos.UpdateBoardMemberRoleDto) error
 	RemoveBoardMember(ctx context.Context, boardID string, userID string, role domain.BoardMemberRole) error
+	LeaveBoard(ctx context.Context, boardID string, userID string) error
 }
 
 type BoardMemberService struct {
@@ -50,15 +50,6 @@ func (s *BoardMemberService) GetBoardMember(
 	return s.boardMemberRepository.GetBoardMember(ctx, boardID, userID)
 }
 
-func (s *BoardMemberService) GetBoardMembers(
-	ctx context.Context,
-	boardID string,
-) ([]*domain.BoardMember, error) {
-	// We don't need to check if the board exists here
-	// As the board middleware calls GetBoardMember which will check
-	return s.boardMemberRepository.GetBoardMembers(ctx, boardID)
-}
-
 func (s *BoardMemberService) UpdateBoardMemberRole(
 	ctx context.Context,
 	boardID string,
@@ -84,6 +75,14 @@ func (s *BoardMemberService) RemoveBoardMember(
 	}
 
 	return s.boardMemberRepository.RemoveBoardMember(ctx, boardID, userID)
+}
+
+func (s *BoardMemberService) LeaveBoard(
+	ctx context.Context,
+	boardID string,
+	userID string,
+) error {
+	return s.boardMemberRepository.LeaveBoard(ctx, boardID, userID)
 }
 
 func (s *BoardMemberService) isAdminMember(role domain.BoardMemberRole) bool {

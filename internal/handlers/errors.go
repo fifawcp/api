@@ -27,6 +27,7 @@ const (
 	codeBoardAlreadyExists        = "BOARD_ALREADY_EXISTS"
 	codeBoardUserAlreadyInBoard   = "BOARD_USER_ALREADY_IN_BOARD"
 	codeMaxBoardMembersExceeded   = "MAX_BOARD_MEMBERS_EXCEEDED"
+	codeBoardOwnerCannotLeave     = "BOARD_OWNER_CANNOT_LEAVE"
 
 	// 401 Unauthorized
 	codeOTPInvalidOrExpired          = "OTP_INVALID_OR_EXPIRED"
@@ -101,6 +102,8 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.Conflict(w, r, codeBoardUserAlreadyInBoard, domain.ErrBoardUserAlreadyInBoard.Error())
 	case errors.Is(err, domain.ErrMaxBoardMembersExceeded):
 		httpx.Conflict(w, r, codeMaxBoardMembersExceeded, domain.ErrMaxBoardMembersExceeded.Error())
+	case errors.Is(err, domain.ErrBoardOwnerCannotLeaveWithMembers):
+		httpx.Conflict(w, r, codeBoardOwnerCannotLeave, domain.ErrBoardOwnerCannotLeaveWithMembers.Error())
 
 	// 401 Unauthorized
 	case errors.Is(err, domain.ErrOTPInvalidOrExpired):

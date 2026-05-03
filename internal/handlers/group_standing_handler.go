@@ -33,8 +33,8 @@ func NewGroupStandingHandler(
 //	@Description	List query params can be repeated (`?group_codes=A&group_codes=B`) or comma-separated (`?group_codes=A,B`).
 //	@Tags			standings
 //	@Produce		json
-//	@Param			group_codes	query		[]string										false	"Group codes (A-L)"
-//	@Param			position	query		int64											false	"Standing position to filter by"
+//	@Param			group_codes	query		[]string									false	"Group codes (A-L)"
+//	@Param			position	query		int64										false	"Standing position to filter by"
 //	@Success		200			{object}	httpx.Response{data=[]domain.GroupStanding}	"List of group standings"
 //	@Failure		400			{object}	httpx.ErrorResponse							"Invalid query parameters"
 //	@Failure		500			{object}	httpx.ErrorResponse							"Internal server error"

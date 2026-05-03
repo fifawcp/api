@@ -27,7 +27,7 @@ func NewDebugHandler(cfg *config.Config) *DebugHandler {
 //	@Description	Intended for non-production environments only.
 //	@Tags			debug
 //	@Produce		json
-//	@Param			identifier	path		string					true	"User identifier"
+//	@Param			identifier	path		string				true	"User identifier"
 //	@Success		200			{object}	httpx.Response{}	"OTP and seconds until rotation"
 //	@Router			/debug/totp/{identifier} [get]
 func (h *DebugHandler) RequestTotp(w http.ResponseWriter, r *http.Request) {

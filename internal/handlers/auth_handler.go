@@ -105,7 +105,7 @@ func (h *AuthHandler) VerifyOtp(w http.ResponseWriter, r *http.Request) {
 //	@Tags			auth
 //	@Accept			json
 //	@Produce		json
-//	@Param			body	body		dtos.AuthenticationInputDto						true	"Authentication payload"
+//	@Param			body	body		dtos.AuthenticationInputDto					true	"Authentication payload"
 //	@Success		200		{object}	httpx.Response{data=dtos.AuthenticationDto}	"Access token and user info. Refresh token set as HttpOnly cookie."
 //	@Failure		400		{object}	httpx.ErrorResponse							"Invalid request body or validation error"
 //	@Failure		401		{object}	httpx.ErrorResponse							"OTP invalid or expired, or invalid credentials"

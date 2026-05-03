@@ -107,13 +107,13 @@ func TestBoardService_GetUserBoards(t *testing.T) {
 		t.Parallel()
 
 		userID := gofakeit.UUID()
-		expectedBoards := []*domain.Board{
+		expectedBoards := []*domain.BoardSummary{
 			{ID: gofakeit.UUID(), Name: "Board 1", OwnerUserID: userID},
 			{ID: gofakeit.UUID(), Name: "Board 2", OwnerUserID: userID},
 		}
 
 		br := &mocks.MockBoardRepository{
-			GetUserBoardsFunc: func(ctx context.Context, uid string) ([]*domain.Board, error) {
+			GetUserBoardsFunc: func(ctx context.Context, uid string) ([]*domain.BoardSummary, error) {
 				assert.Equal(t, userID, uid)
 				return expectedBoards, nil
 			},
@@ -133,7 +133,7 @@ func TestBoardService_GetUserBoards(t *testing.T) {
 		userID := gofakeit.UUID()
 
 		br := &mocks.MockBoardRepository{
-			GetUserBoardsFunc: func(ctx context.Context, uid string) ([]*domain.Board, error) {
+			GetUserBoardsFunc: func(ctx context.Context, uid string) ([]*domain.BoardSummary, error) {
 				return nil, errors.New("database error")
 			},
 		}
@@ -158,13 +158,13 @@ func TestBoardService_GetBoardByID(t *testing.T) {
 		t.Parallel()
 
 		boardID := gofakeit.UUID()
-		expectedBoard := &domain.Board{
+		expectedBoard := &domain.BoardDetails{
 			ID:   boardID,
 			Name: "Test Board",
 		}
 
 		br := &mocks.MockBoardRepository{
-			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
+			GetBoardDetailsFunc: func(ctx context.Context, bid string) (*domain.BoardDetails, error) {
 				assert.Equal(t, boardID, bid)
 				return expectedBoard, nil
 			},
@@ -184,7 +184,7 @@ func TestBoardService_GetBoardByID(t *testing.T) {
 		boardID := gofakeit.UUID()
 
 		br := &mocks.MockBoardRepository{
-			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
+			GetBoardDetailsFunc: func(ctx context.Context, bid string) (*domain.BoardDetails, error) {
 				return nil, domain.ErrBoardNotFound
 			},
 		}

@@ -13,29 +13,26 @@ import (
 )
 
 type BoardHandler struct {
-	cfg                 *config.Config
-	validator           *validator.Validator
-	logger              logging.Logger
-	boardService        services.BoardServiceInterface
-	boardMemberService  services.BoardMemberServiceInterface
-	boardRankingService services.BoardRankingServiceInterface
+	cfg                *config.Config
+	validator          *validator.Validator
+	logger             logging.Logger
+	boardService       services.BoardServiceInterface
+	boardMemberService services.BoardMemberServiceInterface
 }
 
 func NewBoardHandler(
 	boardService services.BoardServiceInterface,
 	boardMemberService services.BoardMemberServiceInterface,
-	boardRankingService services.BoardRankingServiceInterface,
 	cfg *config.Config,
 	validator *validator.Validator,
 	logger logging.Logger,
 ) *BoardHandler {
 	return &BoardHandler{
-		boardService:        boardService,
-		boardMemberService:  boardMemberService,
-		boardRankingService: boardRankingService,
-		cfg:                 cfg,
-		validator:           validator,
-		logger:              logger,
+		boardService:       boardService,
+		boardMemberService: boardMemberService,
+		cfg:                cfg,
+		validator:          validator,
+		logger:             logger,
 	}
 }
 
@@ -46,7 +43,7 @@ func NewBoardHandler(
 //	@Tags			boards
 //	@Accept			json
 //	@Produce		json
-//	@Param			board	body		dtos.CreateBoardDto		true	"Board creation data"
+//	@Param			board	body		dtos.CreateBoardDto	true	"Board creation data"
 //	@Success		201		{object}	httpx.Response		"Board created successfully"
 //	@Failure		400		{object}	httpx.ErrorResponse	"Invalid request body or validation error"
 //	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
@@ -130,11 +127,11 @@ func (h *BoardHandler) JoinBoard(w http.ResponseWriter, r *http.Request) {
 // GetBoardByID godoc
 //
 //	@Summary		Get board details
-//	@Description	Retrieves details of a specific board. Requires authentication and board membership.
+//	@Description	Retrieves board details with member ranking data. Requires authentication and board membership
 //	@Tags			boards
 //	@Produce		json
-//	@Param			boardId	path		string					true	"Board ID"
-//	@Success		200		{object}	httpx.Response		"Board details retrieved successfully"
+//	@Param			boardId	path		string				true	"Board ID"
+//	@Success		200		{object}	httpx.Response		"Board details with members retrieved successfully"
 //	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
 //	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board"
 //	@Failure		404		{object}	httpx.ErrorResponse	"Board not found"
@@ -153,56 +150,30 @@ func (h *BoardHandler) GetBoardByID(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondWithData(w, http.StatusOK, board)
 }
 
-// GetBoardMembers godoc
+// LeaveBoard godoc
 //
-//	@Summary		Get board members
-//	@Description	Retrieves all members of a specific board. Requires authentication and board membership.
+//	@Summary		Leave board
+//	@Description	Removes the authenticated user from a board. If the user is the owner, leaving is only allowed when they are the only member and deletes the board.
 //	@Tags			boards
 //	@Produce		json
-//	@Param			boardId	path		string					true	"Board ID"
-//	@Success		200		{object}	httpx.Response		"Board members retrieved successfully"
+//	@Param			boardId	path	string	true	"Board ID"
+//	@Success		204		"Left board successfully"
 //	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
-//	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board"
-//	@Failure		404		{object}	httpx.ErrorResponse	"Board not found"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Owner cannot leave while other members remain"
+//	@Failure		404		{object}	httpx.ErrorResponse	"Board or membership not found"
 //	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
-//	@Router			/boards/{boardId}/members [get]
-func (h *BoardHandler) GetBoardMembers(w http.ResponseWriter, r *http.Request) {
+//	@Router			/boards/{boardId}/leave [delete]
+func (h *BoardHandler) LeaveBoard(w http.ResponseWriter, r *http.Request) {
+	user := httpctx.GetAuthenticatedUser(r.Context())
 	boardID := httpctx.GetBoardID(r.Context())
 
-	members, err := h.boardMemberService.GetBoardMembers(r.Context(), boardID)
-	if err != nil {
+	if err := h.boardMemberService.LeaveBoard(r.Context(), boardID, user.ID); err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return
 	}
 
-	httpx.RespondWithData(w, http.StatusOK, members)
-}
-
-// GetBoardRanking godoc
-//
-//	@Summary		Get board ranking
-//	@Description	Retrieves the internal ranking for a specific board. Requires authentication and board membership.
-//	@Tags			boards
-//	@Produce		json
-//	@Param			boardId	path		string					true	"Board ID"
-//	@Success		200		{object}	httpx.Response		"Board ranking retrieved successfully"
-//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
-//	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board"
-//	@Failure		404		{object}	httpx.ErrorResponse	"Board not found"
-//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
-//	@Security		BearerAuth
-//	@Router			/boards/{boardId}/ranking [get]
-func (h *BoardHandler) GetBoardRanking(w http.ResponseWriter, r *http.Request) {
-	boardID := httpctx.GetBoardID(r.Context())
-
-	ranking, err := h.boardRankingService.GetBoardRanking(r.Context(), boardID)
-	if err != nil {
-		handleServiceError(w, r, err, h.logger)
-		return
-	}
-
-	httpx.RespondWithData(w, http.StatusOK, ranking)
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
 }
 
 // RegenerateJoinCode godoc
@@ -211,7 +182,7 @@ func (h *BoardHandler) GetBoardRanking(w http.ResponseWriter, r *http.Request) {
 //	@Description	Regenerates the join code for a specific board. Requires authentication, board membership, and admin role.
 //	@Tags			boards
 //	@Produce		json
-//	@Param			boardId	path		string					true	"Board ID"
+//	@Param			boardId	path		string				true	"Board ID"
 //	@Success		200		{object}	httpx.Response		"Join code regenerated successfully"
 //	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
 //	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board or insufficient permissions"
