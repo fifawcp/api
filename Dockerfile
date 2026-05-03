@@ -30,13 +30,18 @@ RUN swag init -g main.go \
     -d ./cmd/api/,./internal/handlers,./internal/dtos,./internal/domain,./internal/httpx,./internal/infrastructure/validator \
     -o ./docs
 
-# Build the binary.
+# Build the binaries.
 # CGO_ENABLED=0 produces a fully static binary compatible with scratch.
 # -ldflags="-s -w" strips debug symbols and DWARF info, reducing binary size.
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w" \
     -o api \
     ./cmd/api/
+
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w" \
+    -o seed \
+    ./cmd/db/seed/
 
 # ---- Run Stage ----
 # Alpine is minimal but includes a shell, required for pre-deploy command.
@@ -52,6 +57,10 @@ COPY --from=builder /app/api .
 # Copy the migrate binary and migrations for pre-deploy migrations.
 COPY --from=builder /go/bin/migrate /migrate
 COPY --from=builder /app/cmd/db/migrations /migrations
+
+# Copy the seed binary and pre-deploy script.
+COPY --from=builder /app/seed /seed
+COPY --from=builder /app/scripts /app/scripts
 
 # Cloud Run injects the PORT env var and routes traffic to it.
 # 8080 is the default expected port.
