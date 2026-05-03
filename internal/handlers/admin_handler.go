@@ -271,7 +271,7 @@ func (h *AdminHandler) ResolveThirdPlaceConflict(w http.ResponseWriter, r *http.
 //	@Description	Re-runs match-score, group-standing (if the group is finished), and bracket scoring for a single match. Idempotent — safe to call any number of times. Requires authentication and admin role.
 //	@Tags			admin-pickems
 //	@Produce		json
-//	@Param			id	path		string				true	"Match ID"
+//	@Param			id	path	string	true	"Match ID"
 //	@Success		204	"Scoring re-run successfully"
 //	@Failure		400	{object}	httpx.ErrorResponse	"Invalid match ID"
 //	@Failure		401	{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"

@@ -37,7 +37,7 @@ func NewPickemHandler(
 //	@Tags			pickems
 //	@Produce		json
 //	@Success		200	{object}	domain.UserPickem	"User's pickem state"
-//	@Failure		401	{object}	httpx.ErrorResponse "Missing or invalid Bearer token"
+//	@Failure		401	{object}	httpx.ErrorResponse	"Missing or invalid Bearer token"
 //	@Security		BearerAuth
 //	@Router			/pickems [get]
 func (h *PickemHandler) GetUserPickem(w http.ResponseWriter, r *http.Request) {
@@ -59,9 +59,9 @@ func (h *PickemHandler) GetUserPickem(w http.ResponseWriter, r *http.Request) {
 //	@Accept		json
 //	@Produce	json
 //	@Param		body	body		dtos.SaveGroupPicksDto	true	"Group picks"
-//	@Success	200		{object}	domain.UserPickem	"User's pickem state"
-//	@Failure	400		{object}	httpx.ErrorResponse	"Invalid request body"
-//	@Failure	401		{object}	httpx.ErrorResponse	"Missing or invalid Bearer token"
+//	@Success	200		{object}	domain.UserPickem		"User's pickem state"
+//	@Failure	400		{object}	httpx.ErrorResponse		"Invalid request body"
+//	@Failure	401		{object}	httpx.ErrorResponse		"Missing or invalid Bearer token"
 //	@Security	BearerAuth
 //	@Router		/pickems/groups [put]
 func (h *PickemHandler) SaveGroupPicks(w http.ResponseWriter, r *http.Request) {
@@ -105,9 +105,9 @@ func (h *PickemHandler) SaveGroupPicks(w http.ResponseWriter, r *http.Request) {
 //	@Accept		json
 //	@Produce	json
 //	@Param		body	body		dtos.SaveBestThirdsDto	true	"8 best-third team codes"
-//	@Success	200		{object}	domain.UserPickem	"User's pickem state"
-//	@Failure	400		{object}	httpx.ErrorResponse	"Invalid request body"
-//	@Failure	401		{object}	httpx.ErrorResponse	"Missing or invalid Bearer token"
+//	@Success	200		{object}	domain.UserPickem		"User's pickem state"
+//	@Failure	400		{object}	httpx.ErrorResponse		"Invalid request body"
+//	@Failure	401		{object}	httpx.ErrorResponse		"Missing or invalid Bearer token"
 //	@Security	BearerAuth
 //	@Router		/pickems/best-thirds [put]
 func (h *PickemHandler) SaveBestThirds(w http.ResponseWriter, r *http.Request) {
@@ -140,9 +140,9 @@ func (h *PickemHandler) SaveBestThirds(w http.ResponseWriter, r *http.Request) {
 //	@Accept		json
 //	@Produce	json
 //	@Param		body	body		dtos.SaveBracketPicksDto	true	"32 bracket picks"
-//	@Success	200		{object}	domain.UserPickem	"User's pickem state"
-//	@Failure	400		{object}	httpx.ErrorResponse	"Invalid request body"
-//	@Failure	401		{object}	httpx.ErrorResponse	"Missing or invalid Bearer token"
+//	@Success	200		{object}	domain.UserPickem			"User's pickem state"
+//	@Failure	400		{object}	httpx.ErrorResponse			"Invalid request body"
+//	@Failure	401		{object}	httpx.ErrorResponse			"Missing or invalid Bearer token"
 //	@Security	BearerAuth
 //	@Router		/pickems/bracket [put]
 func (h *PickemHandler) SaveBracketPicks(w http.ResponseWriter, r *http.Request) {
@@ -175,4 +175,3 @@ func (h *PickemHandler) SaveBracketPicks(w http.ResponseWriter, r *http.Request)
 
 	httpx.RespondWithData(w, http.StatusOK, pickem)
 }
-

@@ -61,6 +61,6 @@ func tryAuthenticate(
 		)
 		return nil
 	}
-	
+
 	return user
 }
