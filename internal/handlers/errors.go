@@ -28,6 +28,7 @@ const (
 	codeBoardUserAlreadyInBoard   = "BOARD_USER_ALREADY_IN_BOARD"
 	codeMaxBoardMembersExceeded   = "MAX_BOARD_MEMBERS_EXCEEDED"
 	codeBoardOwnerCannotLeave     = "BOARD_OWNER_CANNOT_LEAVE"
+	codeBoardIsPublic             = "BOARD_IS_PUBLIC"
 
 	// 401 Unauthorized
 	codeOTPInvalidOrExpired          = "OTP_INVALID_OR_EXPIRED"
@@ -142,6 +143,8 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.Forbidden(w, r, codeForbidden, domain.ErrForbidden.Error())
 	case errors.Is(err, domain.ErrOAuthAccountNotVerified):
 		httpx.Forbidden(w, r, codeOAuthAccountNotVerified, domain.ErrOAuthAccountNotVerified.Error())
+	case errors.Is(err, domain.ErrBoardIsPublic):
+		httpx.Forbidden(w, r, codeBoardIsPublic, domain.ErrBoardIsPublic.Error())
 
 	// 400 Bad Request
 	case errors.Is(err, domain.ErrInvalidWinnerTeam):

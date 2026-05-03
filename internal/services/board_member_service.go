@@ -10,6 +10,7 @@ import (
 type BoardMemberServiceInterface interface {
 	JoinBoard(ctx context.Context, joinCode string, userID string) error
 	GetBoardMember(ctx context.Context, boardID string, userID string) (*domain.BoardMember, error)
+	GetBoardMembers(ctx context.Context, boardID string, page, limit int) (*domain.BoardMembersPage, error)
 	UpdateBoardMemberRole(ctx context.Context, boardID string, userID string, role domain.BoardMemberRole, payload dtos.UpdateBoardMemberRoleDto) error
 	RemoveBoardMember(ctx context.Context, boardID string, userID string, role domain.BoardMemberRole) error
 	LeaveBoard(ctx context.Context, boardID string, userID string) error
@@ -50,6 +51,14 @@ func (s *BoardMemberService) GetBoardMember(
 	return s.boardMemberRepository.GetBoardMember(ctx, boardID, userID)
 }
 
+func (s *BoardMemberService) GetBoardMembers(
+	ctx context.Context,
+	boardID string,
+	page, limit int,
+) (*domain.BoardMembersPage, error) {
+	return s.boardRepository.GetBoardMembers(ctx, boardID, page, limit)
+}
+
 func (s *BoardMemberService) UpdateBoardMemberRole(
 	ctx context.Context,
 	boardID string,
@@ -59,6 +68,10 @@ func (s *BoardMemberService) UpdateBoardMemberRole(
 ) error {
 	if !s.isAdminMember(role) {
 		return domain.ErrForbidden
+	}
+
+	if err := assertPrivateBoard(ctx, s.boardRepository, boardID); err != nil {
+		return err
 	}
 
 	return s.boardMemberRepository.UpdateBoardMemberRole(ctx, boardID, userID, payload.Role)
@@ -74,6 +87,10 @@ func (s *BoardMemberService) RemoveBoardMember(
 		return domain.ErrForbidden
 	}
 
+	if err := assertPrivateBoard(ctx, s.boardRepository, boardID); err != nil {
+		return err
+	}
+
 	return s.boardMemberRepository.RemoveBoardMember(ctx, boardID, userID)
 }
 
@@ -82,6 +99,10 @@ func (s *BoardMemberService) LeaveBoard(
 	boardID string,
 	userID string,
 ) error {
+	if err := assertPrivateBoard(ctx, s.boardRepository, boardID); err != nil {
+		return err
+	}
+
 	return s.boardMemberRepository.LeaveBoard(ctx, boardID, userID)
 }
 

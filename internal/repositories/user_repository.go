@@ -62,6 +62,15 @@ func (r *UserRepository) CreateUser(
 		return handleDBError(err, resourceUserScore)
 	}
 
+	joinGlobalBoardQuery := `
+		INSERT INTO board_members (board_id, user_id, role)
+		SELECT id, $1, 'member' FROM boards WHERE privacy = 'public' AND name = 'Global Leaderboard'
+		ON CONFLICT (board_id, user_id) DO NOTHING`
+
+	if _, err := tx.ExecContext(ctx, joinGlobalBoardQuery, user.ID); err != nil {
+		return handleDBError(err, resourceBoardMember)
+	}
+
 	return tx.Commit()
 }
 
