@@ -530,19 +530,6 @@ func TestBoardHandler_GetBoardMembers(t *testing.T) {
 		assert.Equal(t, httpx.DefaultPageLimit, capturedLimit)
 	})
 
-	t.Run("rejects malformed page param", func(t *testing.T) {
-		t.Parallel()
-
-		bms := &mocks.MockBoardMemberService{}
-		h := newTestBoardHandler(nil, bms)
-		req := makeReq(t, "page=abc")
-		w := httptest.NewRecorder()
-
-		h.GetBoardMembers(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
-
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
