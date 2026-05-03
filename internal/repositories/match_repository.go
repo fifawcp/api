@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/infrastructure/config"
@@ -38,17 +39,24 @@ func (r *MatchRepository) GetMatches(ctx context.Context, filters domain.MatchFi
     m.status,
     m.home_score,
     m.away_score,
+    m.home_penalty_score,
+    m.away_penalty_score,
     m.winner_team_fifa_code,
     m.updated_at,
     ht.fifa_code,
-    ht.name,
+    ht.name_translations,
     ht.flag_url,
     at.fifa_code,
-    at.name,
+    at.name_translations,
     at.flag_url
   FROM matches m
-  LEFT JOIN teams ht ON m.home_team_fifa_code = ht.fifa_code
-  LEFT JOIN teams at ON m.away_team_fifa_code = at.fifa_code`
+  LEFT JOIN team_localized ht ON m.home_team_fifa_code = ht.fifa_code
+  LEFT JOIN team_localized at ON m.away_team_fifa_code = at.fifa_code`
+
+	if len(filters.MatchIDs) > 0 {
+		conditions = append(conditions, "m.id = ANY($"+strconv.Itoa(len(args)+1)+")")
+		args = append(args, pq.Array(filters.MatchIDs))
+	}
 
 	if len(filters.GroupCodes) > 0 {
 		placeholders := make([]string, len(filters.GroupCodes))
@@ -113,6 +121,8 @@ func (r *MatchRepository) GetMatches(ctx context.Context, filters domain.MatchFi
 
 	for rows.Next() {
 		var match domain.Match
+		var homeFifa, homeFlagURL, awayFifa, awayFlagURL sql.NullString
+		var homeNames, awayNames domain.TeamNames
 		err := rows.Scan(
 			&match.ID,
 			&match.StageCode,
@@ -121,23 +131,59 @@ func (r *MatchRepository) GetMatches(ctx context.Context, filters domain.MatchFi
 			&match.Status,
 			&match.HomeScore,
 			&match.AwayScore,
+			&match.HomePenaltyScore,
+			&match.AwayPenaltyScore,
 			&match.WinnerTeamFifaCode,
 			&match.UpdatedAt,
-			&match.HomeTeam.FifaCode,
-			&match.HomeTeam.Name,
-			&match.HomeTeam.FlagURL,
-			&match.AwayTeam.FifaCode,
-			&match.AwayTeam.Name,
-			&match.AwayTeam.FlagURL,
+			&homeFifa, &homeNames, &homeFlagURL,
+			&awayFifa, &awayNames, &awayFlagURL,
 		)
 		if err != nil {
 			return nil, handleDBError(err, resourceMatch)
 		}
 
+		match.HomeTeam = buildMatchTeam(homeFifa, homeNames, homeFlagURL)
+		match.AwayTeam = buildMatchTeam(awayFifa, awayNames, awayFlagURL)
 		matches = append(matches, &match)
 	}
 
 	return matches, nil
+}
+
+func (r *MatchRepository) GetFirstGroupStageMatchKickoff(ctx context.Context) (time.Time, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	var kickoffAt time.Time
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT kickoff_at FROM matches WHERE stage_code = 'group_stage' ORDER BY kickoff_at ASC LIMIT 1`,
+	).Scan(&kickoffAt); err != nil {
+		return time.Time{}, handleDBError(err, resourceMatch)
+	}
+
+	return kickoffAt, nil
+}
+
+func nullableInt(value *int) any {
+	if value == nil {
+		return nil
+	}
+
+	return *value
+}
+
+func buildMatchTeam(fifaCode sql.NullString, names domain.TeamNames, flagURL sql.NullString) *domain.Team {
+	// Match has no assigned team yet (TBD)
+	if !fifaCode.Valid {
+		return nil
+	}
+
+	// Match has defined team
+	return &domain.Team{
+		FifaCode: fifaCode.String,
+		Name:     names,
+		FlagURL:  flagURL.String,
+	}
 }
 
 func (r *MatchRepository) UpdateMatchesResult(ctx context.Context, updates []domain.MatchResultUpdate) error {
@@ -173,14 +219,18 @@ func (r *MatchRepository) UpdateMatchesResult(ctx context.Context, updates []dom
 	query := `UPDATE matches SET
 		home_score = $1,
 		away_score = $2,
-		status = $3,
+		home_penalty_score = $3,
+		away_penalty_score = $4,
+		status = $5,
 		winner_team_fifa_code = CASE
-			WHEN $5 > $6 THEN home_team_fifa_code
-			WHEN $6 > $5 THEN away_team_fifa_code
+			WHEN $7 > $8  THEN home_team_fifa_code
+			WHEN $8 > $7  THEN away_team_fifa_code
+			WHEN $9 > $10 THEN home_team_fifa_code
+			WHEN $10 > $9 THEN away_team_fifa_code
 			ELSE NULL
 		END,
 		updated_at = NOW()
-	WHERE id = $4`
+	WHERE id = $6`
 
 	// Prepare the pre-compiled SQL template
 	statement, err := tx.PrepareContext(ctx, query)
@@ -190,15 +240,21 @@ func (r *MatchRepository) UpdateMatchesResult(ctx context.Context, updates []dom
 	defer statement.Close()
 
 	for _, update := range updates {
+		homePenalty := nullableInt(update.HomePenaltyScore)
+		awayPenalty := nullableInt(update.AwayPenaltyScore)
 		if _, err := statement.ExecContext(
 			ctx,
 			update.HomeScore,
 			update.AwayScore,
+			homePenalty,
+			awayPenalty,
 			string(update.Status),
 			update.MatchID,
-			// We need to pass values twice because of the pg can't reuse params in different context within a prepared statement
+			// pg can't reuse params across CASE branches, so we re-pass the values
 			update.HomeScore,
 			update.AwayScore,
+			homePenalty,
+			awayPenalty,
 		); err != nil {
 			return handleDBError(err, resourceMatch)
 		}
@@ -260,6 +316,8 @@ func (r *MatchRepository) ResetMatchResult(ctx context.Context, matchID int64) e
 	query := `UPDATE matches SET
 	  home_score = NULL,
 	  away_score = NULL,
+	  home_penalty_score = NULL,
+	  away_penalty_score = NULL,
 	  status = 'scheduled',
 	  winner_team_fifa_code = NULL,
 	  updated_at = NOW()

@@ -31,6 +31,7 @@ type MatchService struct {
 	matchRepository         domain.MatchRepository
 	groupStandingRepository domain.GroupStandingRepository
 	groupStandingService    GroupStandingServiceInterface
+	scoringService          ScoringServiceInterface
 	logger                  logging.Logger
 	combinations            []domain.ThirdPlaceCombination
 }
@@ -39,12 +40,14 @@ func NewMatchService(
 	matchRepository domain.MatchRepository,
 	groupStandingRepository domain.GroupStandingRepository,
 	groupStandingService GroupStandingServiceInterface,
+	scoringService ScoringServiceInterface,
 	logger logging.Logger,
 ) *MatchService {
 	return &MatchService{
 		matchRepository:         matchRepository,
 		groupStandingRepository: groupStandingRepository,
 		groupStandingService:    groupStandingService,
+		scoringService:          scoringService,
 		logger:                  logger,
 		combinations:            loadThirdPlaceCombinations(),
 	}
@@ -55,27 +58,71 @@ func (s *MatchService) GetMatches(ctx context.Context, filters domain.MatchFilte
 }
 
 func (s *MatchService) UpdateMatchResult(ctx context.Context, matchID int64, payload dtos.UpdateMatchResultDto) (*domain.SyncGroupStageOutcomes, error) {
+	matches, err := s.matchRepository.GetMatches(ctx, domain.MatchFilters{MatchIDs: []int64{matchID}})
+	if err != nil {
+		return nil, err
+	}
+	if len(matches) == 0 {
+		return nil, domain.ErrMatchNotFound
+	}
+
+	if err := validateMatchResultForStage(matches[0].StageCode, payload); err != nil {
+		return nil, err
+	}
+
 	updatedMatch := domain.MatchResultUpdate{
-		MatchID:   matchID,
-		HomeScore: *payload.HomeScore,
-		AwayScore: *payload.AwayScore,
-		Status:    domain.MatchStatusFinished,
+		MatchID:          matchID,
+		HomeScore:        *payload.HomeScore,
+		AwayScore:        *payload.AwayScore,
+		HomePenaltyScore: payload.HomePenaltyScore,
+		AwayPenaltyScore: payload.AwayPenaltyScore,
+		Status:           domain.MatchStatusFinished,
 	}
 	if err := s.matchRepository.UpdateMatchesResult(ctx, []domain.MatchResultUpdate{updatedMatch}); err != nil {
 		return nil, err
 	}
 
-	return s.SyncGroupStageOutcomes(ctx)
+	outcomes, err := s.SyncGroupStageOutcomes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	s.firePickemScoring(outcomes, []int64{matchID})
+	return outcomes, nil
 }
 
 func (s *MatchService) UpdateMatchResultsBulk(ctx context.Context, payload dtos.BulkUpdateMatchesResultDto) (*domain.SyncGroupStageOutcomes, error) {
-	var updates []domain.MatchResultUpdate
+	matchIDs := make([]int64, 0, len(payload.Matches))
 	for _, match := range payload.Matches {
+		matchIDs = append(matchIDs, match.ID)
+	}
+
+	existingMatches, err := s.matchRepository.GetMatches(ctx, domain.MatchFilters{MatchIDs: matchIDs})
+	if err != nil {
+		return nil, err
+	}
+
+	stageByMatchID := make(map[int64]domain.MatchStageCode, len(existingMatches))
+	for _, match := range existingMatches {
+		stageByMatchID[match.ID] = match.StageCode
+	}
+
+	updates := make([]domain.MatchResultUpdate, 0, len(payload.Matches))
+	for _, match := range payload.Matches {
+		stage, ok := stageByMatchID[match.ID]
+		if !ok {
+			return nil, domain.ErrMatchesNotFound([]int64{match.ID})
+		}
+		if err := validateMatchResultForStage(stage, match.UpdateMatchResultDto); err != nil {
+			return nil, err
+		}
 		updates = append(updates, domain.MatchResultUpdate{
-			MatchID:   match.ID,
-			HomeScore: *match.HomeScore,
-			AwayScore: *match.AwayScore,
-			Status:    domain.MatchStatusFinished,
+			MatchID:          match.ID,
+			HomeScore:        *match.HomeScore,
+			AwayScore:        *match.AwayScore,
+			HomePenaltyScore: match.HomePenaltyScore,
+			AwayPenaltyScore: match.AwayPenaltyScore,
+			Status:           domain.MatchStatusFinished,
 		})
 	}
 
@@ -83,7 +130,13 @@ func (s *MatchService) UpdateMatchResultsBulk(ctx context.Context, payload dtos.
 		return nil, err
 	}
 
-	return s.SyncGroupStageOutcomes(ctx)
+	outcomes, err := s.SyncGroupStageOutcomes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	s.firePickemScoring(outcomes, matchIDs)
+	return outcomes, nil
 }
 
 func (s *MatchService) ResetMatchResult(ctx context.Context, matchID int64) (*domain.SyncGroupStageOutcomes, error) {
@@ -92,6 +145,32 @@ func (s *MatchService) ResetMatchResult(ctx context.Context, matchID int64) (*do
 	}
 
 	return s.SyncGroupStageOutcomes(ctx)
+	// Note: we deliberately do NOT trigger pickem scoring on reset
+	// Resetting a result doesn't add new score events; an admin must explicitly
+	// rescore after correcting and re-finalizing the match result
+}
+
+func (s *MatchService) firePickemScoring(outcomes *domain.SyncGroupStageOutcomes, matchIDs []int64) {
+	go func() {
+		bgCtx := context.Background()
+
+		if err := s.scoringService.ScoreMatches(bgCtx, matchIDs); err != nil {
+			s.logger.Error("pickem scoring failed",
+				logging.Error, err.Error(),
+				"match_ids", matchIDs,
+			)
+		}
+
+		// If third-place auto-promotion just completed, run best-thirds scoring too
+		if outcomes != nil && outcomes.PromotionOutcome != nil &&
+			outcomes.PromotionOutcome.Status == domain.PromotionStatusCompleted {
+			if err := s.scoringService.ScoreBestThirds(bgCtx); err != nil {
+				s.logger.Error("pickem best-thirds scoring failed",
+					logging.Error, err.Error(),
+				)
+			}
+		}
+	}()
 }
 
 func (s *MatchService) SyncGroupStageOutcomes(ctx context.Context) (*domain.SyncGroupStageOutcomes, error) {
@@ -184,7 +263,21 @@ func (s *MatchService) ResolveThirdPlaceConflict(ctx context.Context, payload dt
 		return nil, err
 	}
 
-	return s.SyncGroupStageOutcomes(ctx)
+	outcomes, err := s.SyncGroupStageOutcomes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Third-place qualifiers are now resolved -> best_third_pick events can be scored
+	go func() {
+		if err := s.scoringService.ScoreBestThirds(context.Background()); err != nil {
+			s.logger.Error("pickem best-thirds scoring failed (post conflict resolve)",
+				logging.Error, err.Error(),
+			)
+		}
+	}()
+
+	return outcomes, nil
 }
 
 func (s *MatchService) promoteGroupWinners(ctx context.Context) error {
@@ -407,7 +500,7 @@ func buildThirdPlaceMatchUpdates(assignments map[string]string, thirdPlaceTeams 
 func buildGroupPositionMatchUpdates(groupCode string, groupStandings []*domain.GroupStanding) []domain.MatchTeamUpdate {
 	positionToTeamCode := make(map[int]string)
 	for _, standing := range groupStandings {
-		positionToTeamCode[standing.Position] = *standing.Team.FifaCode
+		positionToTeamCode[standing.Position] = standing.Team.FifaCode
 	}
 
 	var matchTeamUpdates []domain.MatchTeamUpdate
@@ -438,4 +531,29 @@ func loadThirdPlaceCombinations() []domain.ThirdPlaceCombination {
 	var combinations []domain.ThirdPlaceCombination
 	json.Unmarshal(combinationsJSON, &combinations)
 	return combinations
+}
+
+func validateMatchResultForStage(stage domain.MatchStageCode, payload dtos.UpdateMatchResultDto) error {
+	hasPenalty := payload.HomePenaltyScore != nil
+
+	// If penalty input is provided on group-stage matches, reject it
+	if !stage.IsKnockout() {
+		if hasPenalty {
+			return domain.ErrPenaltyForbidden
+		}
+
+		return nil
+	}
+
+	regularTied := *payload.HomeScore == *payload.AwayScore
+	switch {
+	// If the match is tied and no penalties are provided, reject it
+	case regularTied && !hasPenalty:
+		return domain.ErrPenaltyRequired
+	// If the match is not tied and penalties are provided, reject it
+	case !regularTied && hasPenalty:
+		return domain.ErrPenaltyForbidden
+	}
+
+	return nil
 }

@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS matches (
   status VARCHAR(20) NOT NULL DEFAULT 'scheduled',
   home_score SMALLINT,
   away_score SMALLINT,
+  home_penalty_score SMALLINT,
+  away_penalty_score SMALLINT,
   winner_team_fifa_code VARCHAR(8) REFERENCES teams(fifa_code),
   updated_at TIMESTAMP(0) WITH TIME ZONE NOT NULL DEFAULT NOW(),
   CHECK (stage_code IN (
@@ -32,13 +34,34 @@ CREATE TABLE IF NOT EXISTS matches (
   )),
   CHECK (status IN ('scheduled', 'finished')),
   CHECK (group_code IS NULL OR group_code IN ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L')),
-  CONSTRAINT check_winner_is_home_or_away 
+  CONSTRAINT check_winner_is_home_or_away
   CHECK (
-    winner_team_fifa_code IS NULL OR 
-    (home_team_fifa_code IS NOT NULL AND 
-      away_team_fifa_code IS NOT NULL AND 
-      (winner_team_fifa_code = home_team_fifa_code OR 
+    winner_team_fifa_code IS NULL OR
+    (home_team_fifa_code IS NOT NULL AND
+      away_team_fifa_code IS NOT NULL AND
+      (winner_team_fifa_code = home_team_fifa_code OR
         winner_team_fifa_code = away_team_fifa_code))
+  ),
+  CONSTRAINT check_penalty_pair
+  CHECK (
+    (home_penalty_score IS NULL AND away_penalty_score IS NULL)
+    OR (
+      home_penalty_score IS NOT NULL
+      AND away_penalty_score IS NOT NULL
+      AND home_penalty_score != away_penalty_score
+      AND home_penalty_score BETWEEN 0 AND 20
+      AND away_penalty_score BETWEEN 0 AND 20
+    )
+  ),
+  CONSTRAINT check_penalty_only_on_tied_knockout
+  CHECK (
+    home_penalty_score IS NULL
+    OR (
+      stage_code != 'group_stage'
+      AND home_score IS NOT NULL
+      AND away_score IS NOT NULL
+      AND home_score = away_score
+    )
   )
 );
 

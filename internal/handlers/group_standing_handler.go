@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/httpx"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/infrastructure/validator"
@@ -40,23 +42,9 @@ func NewGroupStandingHandler(
 //	@Failure		500			{object}	httpx.ErrorResponse							"Internal server error"
 //	@Router			/standings [get]
 func (h *GroupStandingHandler) GetGroupStandings(w http.ResponseWriter, r *http.Request) {
-	groupCodes := httpx.ParseStringSliceParam(r, "group_codes")
-
-	for i, code := range groupCodes {
-		upperCode := strings.ToUpper(code)
-
-		if !validator.IsValidGroupCode(upperCode) {
-			// TODO: move code somewhere, and use domain error
-			httpx.RespondWithError(w, r, http.StatusBadRequest, "INVALID_GROUP_CODE", "invalid group code")
-			return
-		}
-		groupCodes[i] = upperCode
-	}
-
-	// TODO: validate position 1 - 4 if provided
-	position, err := httpx.ParseInt64Param(r, "position")
+	groupCodes, position, err := parseGroupStandingFilters(r)
 	if err != nil {
-		httpx.RespondWithError(w, r, http.StatusBadRequest, "INVALID_QUERY_PARAM", err.Error())
+		handleServiceError(w, r, err, h.logger)
 		return
 	}
 
@@ -67,4 +55,25 @@ func (h *GroupStandingHandler) GetGroupStandings(w http.ResponseWriter, r *http.
 	}
 
 	httpx.RespondWithData(w, http.StatusOK, groupStandings)
+}
+
+func parseGroupStandingFilters(r *http.Request) ([]string, *int64, error) {
+	groupCodes := httpx.ParseStringSliceParam(r, "group_codes")
+	for index, code := range groupCodes {
+		upperCode := strings.ToUpper(code)
+		if !validator.IsValidGroupCode(upperCode) {
+			return nil, nil, domain.ErrInvalidGroupCode
+		}
+		groupCodes[index] = upperCode
+	}
+
+	position, err := httpx.ParseInt64Param(r, "position")
+	if err != nil {
+		return nil, nil, fmt.Errorf("position: %s: %w", err.Error(), domain.ErrInvalidQueryParam)
+	}
+	if position != nil && !validator.IsValidStandingPosition(*position) {
+		return nil, nil, domain.ErrInvalidStandingPosition
+	}
+
+	return groupCodes, position, nil
 }

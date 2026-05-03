@@ -39,7 +39,14 @@ func NewValidator() *Validator {
 		validateAuthenticationInput,
 		dtos.AuthenticationInputDto{},
 	)
+	v.validate.RegisterStructValidation(
+		validateUpdateMatchResult,
+		dtos.UpdateMatchResultDto{},
+	)
 	v.validate.RegisterValidation("min_array_len", validateMinArrayLen)
+	v.validate.RegisterValidation("fifa_code", func(fl validator.FieldLevel) bool {
+		return IsValidFifaCode(fl.Field().String())
+	})
 
 	return v
 }
@@ -98,6 +105,14 @@ func formatFieldError(err validator.FieldError) ValidationField {
 			Message: "must be one of: " + strings.Join(options, ", "),
 			Params:  map[string]any{"options": options},
 		}
+	case "len":
+		return ValidationField{Code: "LEN", Message: "must have " + param + " elements", Params: map[string]any{"len": parseParamInt(param)}}
+	case "fifa_code":
+		return ValidationField{Code: "INVALID_FIFA_CODE", Message: "must be a valid FIFA team code"}
+	case "penalty_incomplete":
+		return ValidationField{Code: "PENALTY_INCOMPLETE", Message: "penalty score must include both home and away values"}
+	case "penalty_tied":
+		return ValidationField{Code: "PENALTY_TIED", Message: "penalty score must be decisive: home and away values cannot be equal"}
 	default:
 		return ValidationField{Code: "INVALID", Message: "is invalid"}
 	}
@@ -116,6 +131,24 @@ func validateAuthenticationInput(sl validator.StructLevel) {
 	input := sl.Current().Interface().(dtos.AuthenticationInputDto)
 	if input.Purpose == domain.OTPPurposeRegistration && input.User == nil {
 		sl.ReportError(input.User, "user", "user", "required", "")
+	}
+}
+
+func validateUpdateMatchResult(sl validator.StructLevel) {
+	input := sl.Current().Interface().(dtos.UpdateMatchResultDto)
+
+	homeSet := input.HomePenaltyScore != nil
+	awaySet := input.AwayPenaltyScore != nil
+
+	if homeSet != awaySet {
+		sl.ReportError(input.HomePenaltyScore, "home_penalty_score", "HomePenaltyScore", "penalty_incomplete", "")
+		sl.ReportError(input.AwayPenaltyScore, "away_penalty_score", "AwayPenaltyScore", "penalty_incomplete", "")
+		return
+	}
+
+	if homeSet && awaySet && *input.HomePenaltyScore == *input.AwayPenaltyScore {
+		sl.ReportError(input.HomePenaltyScore, "home_penalty_score", "HomePenaltyScore", "penalty_tied", "")
+		sl.ReportError(input.AwayPenaltyScore, "away_penalty_score", "AwayPenaltyScore", "penalty_tied", "")
 	}
 }
 

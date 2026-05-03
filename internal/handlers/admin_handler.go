@@ -15,6 +15,7 @@ import (
 type AdminHandler struct {
 	matchService         services.MatchServiceInterface
 	groupStandingService services.GroupStandingServiceInterface
+	pickemScoringService services.ScoringServiceInterface
 	logger               logging.Logger
 	auditLogger          logging.AuditLogger
 	validator            *validator.Validator
@@ -23,6 +24,7 @@ type AdminHandler struct {
 func NewAdminHandler(
 	matchService services.MatchServiceInterface,
 	groupStandingService services.GroupStandingServiceInterface,
+	pickemScoringService services.ScoringServiceInterface,
 	logger logging.Logger,
 	auditLogger logging.AuditLogger,
 	validator *validator.Validator,
@@ -30,6 +32,7 @@ func NewAdminHandler(
 	return &AdminHandler{
 		matchService:         matchService,
 		groupStandingService: groupStandingService,
+		pickemScoringService: pickemScoringService,
 		logger:               logger,
 		auditLogger:          auditLogger,
 		validator:            validator,
@@ -260,4 +263,52 @@ func (h *AdminHandler) ResolveThirdPlaceConflict(w http.ResponseWriter, r *http.
 	})
 
 	httpx.RespondWithData(w, http.StatusOK, outcome)
+}
+
+// RescoreMatch godoc
+//
+//	@Summary		Re-run scoring for a match
+//	@Description	Re-runs match-score, group-standing (if the group is finished), and bracket scoring for a single match. Idempotent — safe to call any number of times. Requires authentication and admin role.
+//	@Tags			admin-pickems
+//	@Produce		json
+//	@Param			id	path	string	true	"Match ID"
+//	@Success		204	"Scoring re-run successfully"
+//	@Failure		400	{object}	httpx.ErrorResponse	"Invalid match ID"
+//	@Failure		401	{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		403	{object}	httpx.ErrorResponse	"Forbidden - admin role required"
+//	@Failure		404	{object}	httpx.ErrorResponse	"Match not found"
+//	@Failure		500	{object}	httpx.ErrorResponse	"Internal server error"
+//	@Security		BearerAuth
+//	@Router			/admin/pickems/rescore/match/{id} [post]
+func (h *AdminHandler) RescoreMatch(w http.ResponseWriter, r *http.Request) {
+	matchID := httpctx.GetMatchID(r.Context())
+
+	if err := h.pickemScoringService.ScoreMatches(r.Context(), []int64{matchID}); err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
+}
+
+// RescoreBestThirds godoc
+//
+//	@Summary		Re-run best-thirds scoring
+//	@Description	Awards points to users who picked teams that actually advanced as best-thirds, derived from the populated R32 best-third slots. Returns 400 BEST_THIRDS_NOT_SCOREABLE if the third-place qualifiers haven't been resolved yet. Idempotent — safe to call any number of times. Requires authentication and admin role.
+//	@Tags			admin-pickems
+//	@Produce		json
+//	@Success		204	"Best-thirds scoring re-run successfully"
+//	@Failure		400	{object}	httpx.ErrorResponse	"Best-thirds not scoreable: third-place qualifiers not yet resolved"
+//	@Failure		401	{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		403	{object}	httpx.ErrorResponse	"Forbidden - admin role required"
+//	@Failure		500	{object}	httpx.ErrorResponse	"Internal server error"
+//	@Security		BearerAuth
+//	@Router			/admin/pickems/rescore/best-thirds [post]
+func (h *AdminHandler) RescoreBestThirds(w http.ResponseWriter, r *http.Request) {
+	if err := h.pickemScoringService.ScoreBestThirds(r.Context()); err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
 }

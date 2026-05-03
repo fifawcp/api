@@ -111,11 +111,11 @@ Action:
 GET /api/boards/{boardId}/ranking
 Response: [
   {
-    board_id: "uuid",
     user_id: "uuid",
+    rank: 1,
     total_points: 100,
-    global_points: 50,
-    detailed_points: 50,
+    pickem_points: 50,
+    match_score_points: 50,
     exact_hits: 5,
     correct_outcomes: 10,
     updated_at: "2026-01-01T00:00:00Z"
@@ -259,20 +259,21 @@ Action:
 | role | varchar(20) | 'admin' or 'member', default 'member' |
 | created_at | timestamp(0) with time zone | |
 
-### board_rankings
+### user_scores
+
+Per-user totals — one row per user, board-agnostic. Per-board rank is computed at read time via a `RANK()` window function joined with `board_members`.
 
 | Column | Type | Notes |
 | ------ | ---- | ----- |
-| board_id | UUID | FK → boards, PK |
 | user_id | UUID | FK → users, PK |
-| total_points | int | Default 0 |
-| global_points | int | Default 0 |
-| detailed_points | int | Default 0 |
+| total_points | int | Default 0; sum of pickem_points and match_score_points (and future sources) |
+| pickem_points | int | Default 0; points from bracket / group / best-third pickems (see `pickems.md`) |
+| match_score_points | int | Default 0; points from match score picks (see `pickems.md`) |
 | exact_hits | int | Default 0 |
 | correct_outcomes | int | Default 0 |
 | updated_at | timestamp(0) with time zone | |
 
-**Foreign Key Cascade:** board_rankings has FK to board_members with ON DELETE CASCADE. When a member is removed, their ranking is automatically deleted.
+**Lifecycle:** the row is created at user signup (in the same transaction as the `users` INSERT) and updated by scoring runs.
 
 ---
 

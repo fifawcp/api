@@ -50,6 +50,7 @@ var ErrBoardInvalidJoinCode = errors.New("invalid or expired board join code")
 var ErrBoardUserAlreadyInBoard = errors.New("user is already in this board")
 var ErrMaxBoardMembersExceeded = errors.New("maximum board members exceeded")
 var ErrBoardOwnerCannotLeaveWithMembers = errors.New("board owner cannot leave while other members remain")
+var ErrBoardIsPublic = errors.New("operation not allowed on public board")
 
 // Board Member
 var ErrBoardMemberNotFound = errors.New("board member not found")
@@ -57,15 +58,21 @@ var ErrBoardMemberAlreadyInBoard = errors.New("user is already a member of this 
 
 // Group Standings
 var ErrInvalidGroupCode = errors.New("invalid group code")
+var ErrInvalidStandingPosition = errors.New("invalid standing position: must be between 1 and 4")
 
 // Match
 var ErrInvalidStageCode = errors.New("invalid stage code")
 var ErrInvalidStatus = errors.New("invalid status")
 var ErrInvalidFifaCode = errors.New("invalid fifa code")
 var ErrInvalidDateRange = errors.New("from_date must be before or equal to to_date")
-
-// TODO: documentar en el doc de matches que esto puede pasar si el match esta en TBD
+var ErrInvalidQueryParam = errors.New("invalid query parameter")
 var ErrInvalidWinnerTeam = errors.New("winner team must be either home or away team")
+
+// Match result — penalty rules
+var ErrPenaltyForbidden = errors.New("penalty score is not allowed: group-stage match, or knockout match decided in regular time")
+var ErrPenaltyRequired = errors.New("penalty score is required: knockout match ended tied in regular time")
+var ErrPenaltyIncomplete = errors.New("penalty score must include both home and away values")
+var ErrPenaltyTied = errors.New("penalty score must be decisive: home and away values cannot be equal")
 
 type MatchesNotFoundError struct {
 	MatchIDs []int64
@@ -94,3 +101,13 @@ var ErrOAuthStateNotFound = errors.New("oauth state not found")
 var ErrMissingIDToken = errors.New("missing identity token")
 var ErrOAuthAccountNotFound = errors.New("oauth account not found")
 var ErrOAuthAccountNotVerified = errors.New("oauth account not verified")
+
+// Pickem
+var ErrPickemLocked = errors.New("pickem is locked: tournament has started")
+var ErrMatchPickLocked = errors.New("match pick is locked: match has already started")
+var ErrInvalidGroupPicks = errors.New("invalid group picks: each group must have exactly 4 distinct teams in positions 1-4")
+var ErrInvalidBestThirdTeam = errors.New("each best-third team must be in position 3 within submitted group picks")
+var ErrInvalidBracketPickTeam = errors.New("picked team is not a projected participant for this bracket match")
+var ErrGroupPicksRequired = errors.New("group picks must be complete (12 groups x 4 teams + 8 best thirds) before bracket picks")
+var ErrTeamGroupMismatch = errors.New("a submitted team does not belong to the declared group")
+var ErrBestThirdsNotScoreable = errors.New("best-thirds scoring unavailable: not all 8 third-place teams have been placed in the round of 32")

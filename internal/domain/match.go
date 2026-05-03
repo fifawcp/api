@@ -24,21 +24,28 @@ const (
 	MatchStageCodeFinal         MatchStageCode = "final"
 )
 
+func (s MatchStageCode) IsKnockout() bool {
+	return s != MatchStageCodeGroupStage
+}
+
 type Match struct {
 	ID                 int64          `json:"id"`
 	StageCode          MatchStageCode `json:"stage_code"`
 	GroupCode          *string        `json:"group_code"`
-	HomeTeam           Team           `json:"home_team"`
-	AwayTeam           Team           `json:"away_team"`
+	HomeTeam           *Team          `json:"home_team"`
+	AwayTeam           *Team          `json:"away_team"`
 	KickoffAt          time.Time      `json:"kickoff_at"`
 	Status             MatchStatus    `json:"status"`
 	HomeScore          *int           `json:"home_score"`
 	AwayScore          *int           `json:"away_score"`
+	HomePenaltyScore   *int           `json:"home_penalty_score"`
+	AwayPenaltyScore   *int           `json:"away_penalty_score"`
 	WinnerTeamFifaCode *string        `json:"winner_team_fifa_code"`
 	UpdatedAt          time.Time      `json:"updated_at"`
 }
 
 type MatchFilters struct {
+	MatchIDs      []int64          `json:"match_ids"`
 	GroupCodes    []string         `json:"group_codes"`
 	StageCodes    []MatchStageCode `json:"stage_codes"`
 	Status        MatchStatus      `json:"status"`
@@ -47,13 +54,13 @@ type MatchFilters struct {
 	ToDate        *time.Time       `json:"to_date"`
 }
 
-// TODO: think in the future how to update knockout matchs if tied (defined by penalties)
 type MatchResultUpdate struct {
-	MatchID            int64
-	HomeScore          int
-	AwayScore          int
-	Status             MatchStatus
-	WinnerTeamFifaCode *string
+	MatchID          int64
+	HomeScore        int
+	AwayScore        int
+	HomePenaltyScore *int
+	AwayPenaltyScore *int
+	Status           MatchStatus
 }
 
 type MatchTeamUpdate struct {
@@ -227,6 +234,7 @@ var MatchSlotRules = map[int64]MatchSlotRule{
 
 type MatchRepository interface {
 	GetMatches(ctx context.Context, filters MatchFilters) ([]*Match, error)
+	GetFirstGroupStageMatchKickoff(ctx context.Context) (time.Time, error)
 	UpdateMatchesResult(ctx context.Context, updates []MatchResultUpdate) error
 	UpdateMatchTeams(ctx context.Context, updates []MatchTeamUpdate) error
 	ResetMatchResult(ctx context.Context, matchID int64) error

@@ -76,13 +76,12 @@ func (r *OAuthAccountRepository) CreateUserWithOAuthAccount(
 	) VALUES ($1, $2, $3, $4)
 	RETURNING id, created_at, updated_at`
 
-	err = tx.QueryRowContext(ctx, userQuery,
+	if err := tx.QueryRowContext(ctx, userQuery,
 		user.FirstName,
 		user.LastName,
 		user.Username,
 		user.Email,
-	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
-	if err != nil {
+	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt); err != nil {
 		return handleDBError(err, resourceUser)
 	}
 
@@ -93,16 +92,28 @@ func (r *OAuthAccountRepository) CreateUserWithOAuthAccount(
 	) VALUES ($1, $2, $3)
 	RETURNING id, created_at`
 
-	err = tx.QueryRowContext(ctx, accountQuery,
+	if err := tx.QueryRowContext(ctx, accountQuery,
 		account.Provider,
 		account.ProviderSub,
 		user.ID,
-	).Scan(&account.ID, &account.CreatedAt)
-	if err != nil {
+	).Scan(&account.ID, &account.CreatedAt); err != nil {
 		return handleDBError(err, resourceOAuthAccount)
 	}
 
 	account.UserID = user.ID
+
+	if _, err := tx.ExecContext(ctx, `INSERT INTO user_scores (user_id) VALUES ($1)`, user.ID); err != nil {
+		return handleDBError(err, resourceUserScore)
+	}
+
+	joinGlobalBoardQuery := `
+		INSERT INTO board_members (board_id, user_id, role)
+		SELECT id, $1, 'member' FROM boards WHERE privacy = 'public' AND name = 'Global Leaderboard'
+		ON CONFLICT (board_id, user_id) DO NOTHING`
+
+	if _, err := tx.ExecContext(ctx, joinGlobalBoardQuery, user.ID); err != nil {
+		return handleDBError(err, resourceBoardMember)
+	}
 
 	return tx.Commit()
 }

@@ -243,3 +243,89 @@ func TestValidateStruct_AuthenticationInput_LoginDoesNotRequireUser(t *testing.T
 	result := v.ValidateStruct(dto)
 	assert.Nil(t, result)
 }
+
+func TestValidateStruct_UpdateMatchResult_AcceptsNoPenalties(t *testing.T) {
+	homeScore, awayScore := 2, 1
+
+	result := v.ValidateStruct(dtos.UpdateMatchResultDto{
+		HomeScore: &homeScore,
+		AwayScore: &awayScore,
+	})
+
+	assert.Nil(t, result)
+}
+
+func TestValidateStruct_UpdateMatchResult_AcceptsBothPenaltiesDecisive(t *testing.T) {
+	homeScore, awayScore := 2, 2
+	homePenalty, awayPenalty := 5, 4
+
+	result := v.ValidateStruct(dtos.UpdateMatchResultDto{
+		HomeScore:        &homeScore,
+		AwayScore:        &awayScore,
+		HomePenaltyScore: &homePenalty,
+		AwayPenaltyScore: &awayPenalty,
+	})
+
+	assert.Nil(t, result)
+}
+
+func TestValidateStruct_UpdateMatchResult_RejectsOnlyHomePenalty(t *testing.T) {
+	homeScore, awayScore := 2, 2
+	homePenalty := 5
+
+	result := v.ValidateStruct(dtos.UpdateMatchResultDto{
+		HomeScore:        &homeScore,
+		AwayScore:        &awayScore,
+		HomePenaltyScore: &homePenalty,
+	})
+
+	require.NotNil(t, result)
+	homeField, ok := result["home_penalty_score"]
+	require.True(t, ok)
+	assert.Equal(t, "PENALTY_INCOMPLETE", homeField.Code)
+
+	awayField, ok := result["away_penalty_score"]
+	require.True(t, ok)
+	assert.Equal(t, "PENALTY_INCOMPLETE", awayField.Code)
+}
+
+func TestValidateStruct_UpdateMatchResult_RejectsOnlyAwayPenalty(t *testing.T) {
+	homeScore, awayScore := 2, 2
+	awayPenalty := 4
+
+	result := v.ValidateStruct(dtos.UpdateMatchResultDto{
+		HomeScore:        &homeScore,
+		AwayScore:        &awayScore,
+		AwayPenaltyScore: &awayPenalty,
+	})
+
+	require.NotNil(t, result)
+	homeField, ok := result["home_penalty_score"]
+	require.True(t, ok)
+	assert.Equal(t, "PENALTY_INCOMPLETE", homeField.Code)
+
+	awayField, ok := result["away_penalty_score"]
+	require.True(t, ok)
+	assert.Equal(t, "PENALTY_INCOMPLETE", awayField.Code)
+}
+
+func TestValidateStruct_UpdateMatchResult_RejectsTiedPenalties(t *testing.T) {
+	homeScore, awayScore := 2, 2
+	homePenalty, awayPenalty := 5, 5
+
+	result := v.ValidateStruct(dtos.UpdateMatchResultDto{
+		HomeScore:        &homeScore,
+		AwayScore:        &awayScore,
+		HomePenaltyScore: &homePenalty,
+		AwayPenaltyScore: &awayPenalty,
+	})
+
+	require.NotNil(t, result)
+	homeField, ok := result["home_penalty_score"]
+	require.True(t, ok)
+	assert.Equal(t, "PENALTY_TIED", homeField.Code)
+
+	awayField, ok := result["away_penalty_score"]
+	require.True(t, ok)
+	assert.Equal(t, "PENALTY_TIED", awayField.Code)
+}

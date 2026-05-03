@@ -51,6 +51,7 @@ func (c *Container) NewRouter() *chi.Mux {
 
 		r.Mount("/boards", boardsRoutes(c))
 		r.Mount("/users", usersRoutes(c))
+		r.Mount("/pickems", pickemRoutes(c))
 
 		if !c.Config.IsProd() {
 			r.Mount("/debug", debugRoutes(c))

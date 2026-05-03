@@ -40,6 +40,9 @@ func (s *UserService) GetUser(ctx context.Context, userID string) (*domain.User,
 		)
 	}
 
+	// TODO: where should we remove the chached user?
+	// TODO: e.g what happens if a useer becomes admin? and its still cached as role: user
+	// TODO: perhaps we don't need to worry about this, as we can manually remove the cached key for the only admin users
 	if user != nil {
 		return user, nil
 	}

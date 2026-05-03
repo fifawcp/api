@@ -28,5 +28,14 @@ func adminRoutes(c *Container) chi.Router {
 		})
 	})
 
+	r.Route("/pickems", func(r chi.Router) {
+		r.Post("/rescore/best-thirds", c.AdminHandler.RescoreBestThirds)
+
+		r.Route("/rescore/match/{id}", func(r chi.Router) {
+			r.Use(middlewares.RequireValidMatchID)
+			r.Post("/", c.AdminHandler.RescoreMatch)
+		})
+	})
+
 	return r
 }

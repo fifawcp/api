@@ -140,14 +140,46 @@ func (h *BoardHandler) JoinBoard(w http.ResponseWriter, r *http.Request) {
 //	@Router			/boards/{boardId} [get]
 func (h *BoardHandler) GetBoardByID(w http.ResponseWriter, r *http.Request) {
 	boardID := httpctx.GetBoardID(r.Context())
+	user := httpctx.GetAuthenticatedUser(r.Context())
 
-	board, err := h.boardService.GetBoardByID(r.Context(), boardID)
+	board, err := h.boardService.GetBoardByID(r.Context(), boardID, user.ID)
 	if err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return
 	}
 
 	httpx.RespondWithData(w, http.StatusOK, board)
+}
+
+// GetBoardMembers godoc
+//
+//	@Summary		Get board members (paginated leaderboard)
+//	@Description	Returns the board's members with their ranking, paginated by `page` and `limit` query params (defaults: page=1, limit=20, max limit=100). Requires authentication and board membership.
+//	@Tags			boards
+//	@Produce		json
+//	@Param			boardId	path		string				true	"Board ID"
+//	@Param			page	query		int					false	"Page number (1-indexed, default 1)"
+//	@Param			limit	query		int					false	"Page size (default 20, max 100)"
+//	@Success		200		{object}	httpx.Response		"Board members page retrieved successfully"
+//	@Failure		400		{object}	httpx.ErrorResponse	"Invalid pagination params"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board"
+//	@Failure		404		{object}	httpx.ErrorResponse	"Board not found"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
+//	@Security		BearerAuth
+//	@Router			/boards/{boardId}/members [get]
+func (h *BoardHandler) GetBoardMembers(w http.ResponseWriter, r *http.Request) {
+	boardID := httpctx.GetBoardID(r.Context())
+
+	page, limit := httpx.ParsePagination(w, r)
+
+	membersPage, err := h.boardMemberService.GetBoardMembers(r.Context(), boardID, page, limit)
+	if err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	httpx.RespondWithData(w, http.StatusOK, membersPage)
 }
 
 // LeaveBoard godoc

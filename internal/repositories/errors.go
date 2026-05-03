@@ -18,15 +18,19 @@ const (
 )
 
 const (
-	resourceUser          resourceType = "user"
-	resourceSession       resourceType = "session"
-	resourceRefreshToken  resourceType = "refresh_token"
-	resourceBoard         resourceType = "board"
-	resourceBoardMember   resourceType = "board_member"
-	resourceBoardRanking  resourceType = "board_ranking"
-	resourceGroupStanding resourceType = "group_standing"
-	resourceMatch         resourceType = "match"
-	resourceOAuthAccount  resourceType = "oauth_account"
+	resourceUser           resourceType = "user"
+	resourceSession        resourceType = "session"
+	resourceRefreshToken   resourceType = "refresh_token"
+	resourceBoard          resourceType = "board"
+	resourceBoardMember    resourceType = "board_member"
+	resourceUserScore      resourceType = "user_score"
+	resourceGroupStanding  resourceType = "group_standing"
+	resourceMatch          resourceType = "match"
+	resourceOAuthAccount   resourceType = "oauth_account"
+	resourcePickem         resourceType = "pickem"
+	resourceMatchScorePick resourceType = "match_score_pick"
+	resourceScoreEvent     resourceType = "score_event"
+	resourceTeam           resourceType = "team"
 )
 
 func handleDBError(
@@ -70,6 +74,8 @@ func translateSQLNoRowsError(err error, resource resourceType) error {
 		return domain.ErrBoardMemberNotFound
 	case resourceOAuthAccount:
 		return domain.ErrOAuthAccountNotFound
+	case resourceMatch:
+		return domain.ErrMatchNotFound
 	default:
 		return err
 	}
@@ -80,9 +86,7 @@ func translateForeignKeyViolation(pqErr *pq.Error) error {
 	case
 		"boards_owner_user_id_fkey",
 		"board_members_board_id_fkey",
-		"board_members_user_id_fkey",
-		"board_rankings_board_id_fkey",
-		"board_rankings_user_id_fkey":
+		"board_members_user_id_fkey":
 		return domain.ErrUserNotFound
 	default:
 		return buildErrorFromPQError(pqErr)
@@ -98,8 +102,6 @@ func translateUniqueViolation(pqErr *pq.Error) error {
 	case "boards_join_code_key":
 		return domain.ErrBoardAlreadyExists
 	case "board_members_pkey":
-		return domain.ErrBoardMemberAlreadyInBoard
-	case "board_rankings_pkey":
 		return domain.ErrBoardMemberAlreadyInBoard
 	default:
 		return buildErrorFromPQError(pqErr)

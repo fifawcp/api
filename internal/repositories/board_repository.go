@@ -38,10 +38,6 @@ func (r *BoardRepository) CreateBoardWithOwner(
 		new_board_member AS (
 			INSERT INTO board_members (board_id, user_id, role)
 			SELECT id, owner_user_id, 'admin' FROM new_board
-		),
-		new_board_ranking AS (
-			INSERT INTO board_rankings (board_id, user_id)
-			SELECT id, owner_user_id FROM new_board
 		)
 		SELECT id, created_at FROM new_board`
 
@@ -62,49 +58,15 @@ func (r *BoardRepository) CreateBoardWithOwner(
 	return nil
 }
 
-func (r *BoardRepository) GetUserBoards(ctx context.Context, userID string) ([]*domain.BoardSummary, error) {
+func (r *BoardRepository) GetUserBoards(ctx context.Context, userID string) ([]*domain.UserBoardListItem, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
 
-	// Rank only boards the user belongs to, then select the user's row from each board.
 	query := `
-		WITH user_boards AS (
-			SELECT board_id, created_at AS joined_at
-			FROM board_members
-			WHERE user_id = $1
-		),
-		board_member_counts AS (
-			SELECT board_id, COUNT(user_id) AS members_count
-			FROM board_members
-			WHERE board_id IN (SELECT board_id FROM user_boards)
-			GROUP BY board_id
-		),
-		ranked AS (
-			SELECT
-				board_id,
-				user_id,
-				RANK() OVER (
-					PARTITION BY board_id
-					ORDER BY total_points DESC, updated_at ASC, user_id ASC
-				) AS rank
-			FROM board_rankings
-			WHERE board_id IN (SELECT board_id FROM user_boards)
-		)
-		SELECT
-			b.id,
-			b.name,
-			b.owner_user_id,
-			b.created_at,
-			ub.joined_at,
-			r.rank AS user_rank,
-			bmc.members_count
+		SELECT b.id, b.name
 		FROM boards b
-		INNER JOIN user_boards ub
-			ON ub.board_id = b.id
-		INNER JOIN board_member_counts bmc
-			ON bmc.board_id = b.id
-		LEFT JOIN ranked r
-			ON r.board_id = b.id AND r.user_id = $1
+		INNER JOIN board_members bm ON bm.board_id = b.id
+		WHERE bm.user_id = $1
 		ORDER BY b.created_at DESC
 	`
 
@@ -114,23 +76,12 @@ func (r *BoardRepository) GetUserBoards(ctx context.Context, userID string) ([]*
 	}
 	defer rows.Close()
 
-	boards := []*domain.BoardSummary{}
-
+	boards := []*domain.UserBoardListItem{}
 	for rows.Next() {
-		var board domain.BoardSummary
-		err := rows.Scan(
-			&board.ID,
-			&board.Name,
-			&board.OwnerUserID,
-			&board.CreatedAt,
-			&board.JoinedAt,
-			&board.UserRank,
-			&board.MembersCount,
-		)
-		if err != nil {
+		var board domain.UserBoardListItem
+		if err := rows.Scan(&board.ID, &board.Name); err != nil {
 			return nil, handleDBError(err, resourceBoard)
 		}
-
 		boards = append(boards, &board)
 	}
 
@@ -141,106 +92,191 @@ func (r *BoardRepository) GetUserBoards(ctx context.Context, userID string) ([]*
 	return boards, nil
 }
 
-func (r *BoardRepository) GetBoardDetails(ctx context.Context, boardID string) (*domain.BoardDetails, error) {
+func (r *BoardRepository) GetBoardDetails(
+	ctx context.Context,
+	boardID string,
+	userID string,
+) (*domain.BoardDetails, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
 
 	query := `
+		WITH ranked AS (
+			SELECT
+				bm.user_id,
+				bm.created_at AS joined_at,
+				RANK() OVER (
+					ORDER BY us.total_points DESC, us.updated_at ASC, bm.user_id ASC
+				) AS rank
+			FROM board_members bm
+			LEFT JOIN user_scores us ON us.user_id = bm.user_id
+			WHERE bm.board_id = $1
+		)
 		SELECT
-			id,
-			name,
-			owner_user_id,
-			join_code,
-			created_at
-		FROM boards
-		WHERE id = $1
+			b.id,
+			b.name,
+			b.owner_user_id,
+			b.join_code,
+			b.privacy,
+			b.created_at,
+			r.joined_at,
+			r.rank
+		FROM boards b
+		LEFT JOIN ranked r ON r.user_id = $2
+		WHERE b.id = $1
 	`
 
 	var details domain.BoardDetails
+	var ownerUserID, joinCode sql.NullString
+	var joinedAt sql.NullTime
+	var userRank sql.NullInt64
 
-	err := r.db.QueryRowContext(ctx, query, boardID).Scan(
+	err := r.db.QueryRowContext(ctx, query, boardID, userID).Scan(
 		&details.ID,
 		&details.Name,
-		&details.OwnerUserID,
-		&details.JoinCode,
+		&ownerUserID,
+		&joinCode,
+		&details.Privacy,
 		&details.CreatedAt,
+		&joinedAt,
+		&userRank,
 	)
 	if err != nil {
 		return nil, handleDBError(err, resourceBoard)
 	}
 
-	// Board fields are loaded once, then members are attached from the ranked query below
-	membersQuery := `
+	if ownerUserID.Valid {
+		details.OwnerUserID = &ownerUserID.String
+	}
+
+	if joinCode.Valid {
+		details.JoinCode = &joinCode.String
+	}
+
+	if joinedAt.Valid {
+		details.JoinedAt = joinedAt.Time
+	}
+
+	if userRank.Valid {
+		details.UserRank = int(userRank.Int64)
+	}
+
+	return &details, nil
+}
+
+func (r *BoardRepository) GetBoardMembers(
+	ctx context.Context,
+	boardID string,
+	page, limit int,
+) (*domain.BoardMembersPage, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	offset := (page - 1) * limit
+
+	// RANK() is computed over the full board, then OFFSET/LIMIT slices the page
+	// COUNT(*) OVER () returns the full member count alongside each row
+	query := `
 		WITH ranked AS (
 			SELECT
-				board_id,
-				user_id,
-				total_points,
-				global_points,
-				detailed_points,
-				exact_hits,
-				correct_outcomes,
-				updated_at,
+				bm.user_id,
+				u.username,
+				u.first_name,
+				u.last_name,
+				bm.role,
+				bm.created_at AS joined_at,
+				us.total_points,
+				us.pickem_points,
+				us.match_score_points,
+				us.exact_hits,
+				us.correct_outcomes,
+				us.updated_at,
 				RANK() OVER (
-					PARTITION BY board_id
-					ORDER BY total_points DESC, updated_at ASC, user_id ASC
-				) AS rank
-			FROM board_rankings
-			WHERE board_id = $1
+					ORDER BY us.total_points DESC, us.updated_at ASC, bm.user_id ASC
+				) AS rank,
+				COUNT(*) OVER () AS total
+			FROM board_members bm
+			INNER JOIN users u        ON u.id       = bm.user_id
+			LEFT  JOIN user_scores us ON us.user_id = bm.user_id
+			WHERE bm.board_id = $1
 		)
 		SELECT
-			bm.user_id,
-			u.username,
-			bm.role,
-			bm.created_at AS joined_at,
-			r.rank AS rank,
-			r.total_points,
-			r.global_points,
-			r.detailed_points,
-			r.exact_hits,
-			r.correct_outcomes,
-			r.updated_at
-		FROM board_members bm
-		INNER JOIN users u ON bm.user_id = u.id
-		LEFT JOIN ranked r ON r.board_id = bm.board_id AND r.user_id = bm.user_id
-		WHERE bm.board_id = $1
-		ORDER BY rank ASC, bm.created_at ASC
+			user_id,
+			username,
+			first_name,
+			last_name,
+			role,
+			joined_at,
+			rank,
+			total_points,
+			pickem_points,
+			match_score_points,
+			exact_hits,
+			correct_outcomes,
+			updated_at,
+			total
+		FROM ranked
+		ORDER BY rank ASC, joined_at ASC
+		OFFSET $2 LIMIT $3
 	`
 
-	rows, err := r.db.QueryContext(ctx, membersQuery, boardID)
+	rows, err := r.db.QueryContext(ctx, query, boardID, offset, limit)
 	if err != nil {
 		return nil, handleDBError(err, resourceBoard)
 	}
 	defer rows.Close()
 
-	details.Members = []*domain.BoardDetailsMember{}
+	membersPage := &domain.BoardMembersPage{
+		Members: []*domain.BoardMemberDetails{},
+		Pagination: domain.Pagination{
+			Page:  page,
+			Limit: limit,
+		},
+	}
 
 	for rows.Next() {
-		var member domain.BoardDetailsMember
+		var member domain.BoardMemberDetails
+		var membersTotal int
+
 		if err := rows.Scan(
 			&member.UserID,
 			&member.UserName,
+			&member.FirstName,
+			&member.LastName,
 			&member.Role,
 			&member.JoinedAt,
 			&member.Rank,
 			&member.TotalPoints,
-			&member.GlobalPoints,
-			&member.DetailedPoints,
+			&member.PickemPoints,
+			&member.MatchScorePoints,
 			&member.ExactHits,
 			&member.CorrectOutcomes,
 			&member.UpdatedAt,
+			&membersTotal,
 		); err != nil {
 			return nil, handleDBError(err, resourceBoard)
 		}
 
-		details.Members = append(details.Members, &member)
+		membersPage.Pagination.Total = membersTotal
+		membersPage.Members = append(membersPage.Members, &member)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, handleDBError(err, resourceBoard)
 	}
 
-	return &details, nil
+	// If the requested page is past the end, the windowed COUNT didn't return
+	// Fall back to a direct count so pagination.total is still populated
+	if len(membersPage.Members) == 0 {
+		countQuery := `SELECT COUNT(*) FROM board_members WHERE board_id = $1`
+		if err := r.db.QueryRowContext(ctx, countQuery, boardID).Scan(&membersPage.Pagination.Total); err != nil {
+			return nil, handleDBError(err, resourceBoard)
+		}
+	}
+
+	membersPage.Pagination.HasMore = page*limit < membersPage.Pagination.Total
+
+	return membersPage, nil
 }
 
 func (r *BoardRepository) GetBoardByID(ctx context.Context, boardID string) (*domain.Board, error) {
@@ -253,22 +289,33 @@ func (r *BoardRepository) GetBoardByID(ctx context.Context, boardID string) (*do
 			name,
 			owner_user_id,
 			join_code,
+			privacy,
 			created_at
 		FROM boards
 		WHERE id = $1
 	`
 
 	var board domain.Board
+	var ownerUserID, joinCode sql.NullString
 
 	err := r.db.QueryRowContext(ctx, query, boardID).Scan(
 		&board.ID,
 		&board.Name,
-		&board.OwnerUserID,
-		&board.JoinCode,
+		&ownerUserID,
+		&joinCode,
+		&board.Privacy,
 		&board.CreatedAt,
 	)
 	if err != nil {
 		return nil, handleDBError(err, resourceBoard)
+	}
+
+	if ownerUserID.Valid {
+		board.OwnerUserID = &ownerUserID.String
+	}
+
+	if joinCode.Valid {
+		board.JoinCode = &joinCode.String
 	}
 
 	return &board, nil

@@ -23,6 +23,7 @@ func boardsRoutes(c *Container) chi.Router {
 		r.Post("/regenerate-join-code", c.BoardHandler.RegenerateJoinCode)
 
 		r.Route("/members", func(r chi.Router) {
+			r.Get("/", c.BoardHandler.GetBoardMembers)
 			r.With(middlewares.RequireValidUserID).Patch("/{userId}/role", c.BoardHandler.UpdateBoardMemberRole)
 			r.With(middlewares.RequireValidUserID).Delete("/{userId}", c.BoardHandler.RemoveBoardMember)
 		})
