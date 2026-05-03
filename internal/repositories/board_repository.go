@@ -38,10 +38,6 @@ func (r *BoardRepository) CreateBoardWithOwner(
 		new_board_member AS (
 			INSERT INTO board_members (board_id, user_id, role)
 			SELECT id, owner_user_id, 'admin' FROM new_board
-		),
-		new_board_ranking AS (
-			INSERT INTO board_rankings (board_id, user_id)
-			SELECT id, owner_user_id FROM new_board
 		)
 		SELECT id, created_at FROM new_board`
 
@@ -81,14 +77,15 @@ func (r *BoardRepository) GetUserBoards(ctx context.Context, userID string) ([]*
 		),
 		ranked AS (
 			SELECT
-				board_id,
-				user_id,
+				bm.board_id,
+				bm.user_id,
 				RANK() OVER (
-					PARTITION BY board_id
-					ORDER BY total_points DESC, updated_at ASC, user_id ASC
+					PARTITION BY bm.board_id
+					ORDER BY us.total_points DESC, us.updated_at ASC, bm.user_id ASC
 				) AS rank
-			FROM board_rankings
-			WHERE board_id IN (SELECT board_id FROM user_boards)
+			FROM board_members bm
+			JOIN user_scores us ON us.user_id = bm.user_id
+			WHERE bm.board_id IN (SELECT board_id FROM user_boards)
 		)
 		SELECT
 			b.id,
@@ -169,34 +166,38 @@ func (r *BoardRepository) GetBoardDetails(ctx context.Context, boardID string) (
 		return nil, handleDBError(err, resourceBoard)
 	}
 
-	// Board fields are loaded once, then members are attached from the ranked query below
+	// Members + ranking are derived at read time from user_scores (per-user totals)
+	// joined to board_members, with RANK() partitioned by board.
 	membersQuery := `
 		WITH ranked AS (
 			SELECT
-				board_id,
-				user_id,
-				total_points,
-				global_points,
-				detailed_points,
-				exact_hits,
-				correct_outcomes,
-				updated_at,
+				bm.board_id,
+				bm.user_id,
+				us.total_points,
+				us.pickem_points,
+				us.match_score_points,
+				us.exact_hits,
+				us.correct_outcomes,
+				us.updated_at,
 				RANK() OVER (
-					PARTITION BY board_id
-					ORDER BY total_points DESC, updated_at ASC, user_id ASC
+					PARTITION BY bm.board_id
+					ORDER BY us.total_points DESC, us.updated_at ASC, bm.user_id ASC
 				) AS rank
-			FROM board_rankings
-			WHERE board_id = $1
+			FROM board_members bm
+			JOIN user_scores us ON us.user_id = bm.user_id
+			WHERE bm.board_id = $1
 		)
 		SELECT
 			bm.user_id,
 			u.username,
+			u.first_name,
+			u.last_name,
 			bm.role,
 			bm.created_at AS joined_at,
 			r.rank AS rank,
 			r.total_points,
-			r.global_points,
-			r.detailed_points,
+			r.pickem_points,
+			r.match_score_points,
 			r.exact_hits,
 			r.correct_outcomes,
 			r.updated_at
@@ -220,12 +221,14 @@ func (r *BoardRepository) GetBoardDetails(ctx context.Context, boardID string) (
 		if err := rows.Scan(
 			&member.UserID,
 			&member.UserName,
+			&member.FirstName,
+			&member.LastName,
 			&member.Role,
 			&member.JoinedAt,
 			&member.Rank,
 			&member.TotalPoints,
-			&member.GlobalPoints,
-			&member.DetailedPoints,
+			&member.PickemPoints,
+			&member.MatchScorePoints,
 			&member.ExactHits,
 			&member.CorrectOutcomes,
 			&member.UpdatedAt,

@@ -35,18 +35,11 @@ func (r *BoardMemberRepository) CreateBoardMember(
 	query := `
 		WITH board AS (
       SELECT id FROM boards WHERE join_code = $1
-    ),
-    new_board_member AS (
-      INSERT INTO board_members (board_id, user_id, role)
-      SELECT id, $2, 'member' FROM board
-      WHERE EXISTS(SELECT 1 FROM board)
-      RETURNING board_id
-    ),
-    new_board_ranking AS (
-      INSERT INTO board_rankings (board_id, user_id)
-      SELECT board_id, $2 FROM new_board_member
     )
-    SELECT board_id FROM new_board_member
+    INSERT INTO board_members (board_id, user_id, role)
+    SELECT id, $2, 'member' FROM board
+    WHERE EXISTS(SELECT 1 FROM board)
+    RETURNING board_id
 	`
 
 	var boardID string

@@ -71,7 +71,18 @@ func (s *BoardService) GetUserBoards(ctx context.Context, userID string) ([]*dom
 }
 
 func (s *BoardService) GetBoardByID(ctx context.Context, boardID string) (*domain.BoardDetails, error) {
-	return s.boardRepository.GetBoardDetails(ctx, boardID)
+	details, err := s.boardRepository.GetBoardDetails(ctx, boardID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Privacy is hardcoded for now — all boards are private. When public boards
+	// land, this becomes a column on `boards` and the assignment moves into the
+	// repository SELECT.
+	details.Privacy = "private"
+	details.MembersCount = len(details.Members)
+
+	return details, nil
 }
 
 func (s *BoardService) RegenerateJoinCode(ctx context.Context, boardID string) (string, error) {

@@ -19,6 +19,21 @@ type Config struct {
 	Mailer     MailerConfig
 	Cron       CronConfig
 	RateLimit  RateLimitConfig
+	Scoring    ScoringConfig
+}
+
+type ScoringConfig struct {
+	GroupPositionExact int
+	GroupQualifies     int
+	BestThird          int
+	RoundOf32          int
+	RoundOf16          int
+	Quarterfinals      int
+	Semifinals         int
+	ThirdPlace         int
+	Final              int
+	MatchScoreExact    int
+	MatchScoreOutcome  int
 }
 
 type ServerConfig struct {
@@ -173,6 +188,19 @@ func NewConfig() *Config {
 				RequestsPerWindow: env.GetInt("RATE_LIMIT_RELAXED_IP_REQUESTS_PER_WINDOW", 60),
 				Window:            env.GetDuration("RATE_LIMIT_RELAXED_IP_WINDOW", 1*time.Hour),
 			},
+		},
+		Scoring: ScoringConfig{
+			GroupPositionExact: env.GetInt("SCORING_GROUP_POSITION_EXACT", 3),
+			GroupQualifies:     env.GetInt("SCORING_GROUP_QUALIFIES", 1),
+			BestThird:          env.GetInt("SCORING_BEST_THIRD", 2),
+			RoundOf32:          env.GetInt("SCORING_ROUND_OF_32", 4),
+			RoundOf16:          env.GetInt("SCORING_ROUND_OF_16", 6),
+			Quarterfinals:      env.GetInt("SCORING_QUARTERFINALS", 8),
+			Semifinals:         env.GetInt("SCORING_SEMIFINALS", 12),
+			ThirdPlace:         env.GetInt("SCORING_THIRD_PLACE", 6),
+			Final:              env.GetInt("SCORING_FINAL", 20),
+			MatchScoreExact:    env.GetInt("SCORING_MATCH_SCORE_EXACT", 5),
+			MatchScoreOutcome:  env.GetInt("SCORING_MATCH_SCORE_OUTCOME", 2),
 		},
 	}
 }

@@ -27,7 +27,13 @@ func (r *UserRepository) CreateUser(
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
 
-	query := `INSERT INTO users
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	userQuery := `INSERT INTO users
 		(
 			first_name,
 			last_name,
@@ -37,9 +43,9 @@ func (r *UserRepository) CreateUser(
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at, updated_at`
 
-	err := r.db.QueryRowContext(
+	if err := tx.QueryRowContext(
 		ctx,
-		query,
+		userQuery,
 		user.FirstName,
 		user.LastName,
 		user.Username,
@@ -48,12 +54,15 @@ func (r *UserRepository) CreateUser(
 		&user.ID,
 		&user.CreatedAt,
 		&user.UpdatedAt,
-	)
-	if err != nil {
+	); err != nil {
 		return handleDBError(err, resourceUser)
 	}
 
-	return nil
+	if _, err := tx.ExecContext(ctx, `INSERT INTO user_scores (user_id) VALUES ($1)`, user.ID); err != nil {
+		return handleDBError(err, resourceUserScore)
+	}
+
+	return tx.Commit()
 }
 
 func (r *UserRepository) GetUserByIdentifier(

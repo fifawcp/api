@@ -1,9 +1,24 @@
 package app
 
-import "github.com/go-chi/chi/v5"
+import (
+	"github.com/fifawcp/api/internal/middlewares"
+	"github.com/go-chi/chi/v5"
+)
 
 func matchRoutes(c *Container) chi.Router {
 	r := chi.NewRouter()
-	r.Get("/", c.MatchHandler.GetMatches)
+
+	// GET /matches embeds the caller's user_pick when authenticated
+	// OptionalAuth lets anonymous callers through with no pick attached
+	r.With(middlewares.OptionalAuth(c.Authenticator, c.UserService, c.Logger)).
+		Get("/", c.MatchHandler.GetMatches)
+
+	r.Group(func(r chi.Router) {
+		r.Use(middlewares.Auth(c.Authenticator, c.UserService, c.Logger))
+
+		r.With(middlewares.RequireValidMatchID).
+			Put("/{id}/pick", c.MatchHandler.SaveMatchScorePick)
+	})
+
 	return r
 }

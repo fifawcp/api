@@ -51,10 +51,24 @@ const (
 	codeThirdPlaceInvalidSelection = "THIRD_PLACE_INVALID_SELECTION"
 	codeOAuthStateNotFound         = "OAUTH_STATE_NOT_FOUND"
 	codeInvalidGroupCode           = "INVALID_GROUP_CODE"
+	codeInvalidStandingPosition    = "INVALID_STANDING_POSITION"
 	codeInvalidStageCode           = "INVALID_STAGE_CODE"
 	codeInvalidStatus              = "INVALID_STATUS"
 	codeInvalidFifaCode            = "INVALID_FIFA_CODE"
 	codeInvalidDateRange           = "INVALID_DATE_RANGE"
+	codeInvalidQueryParam          = "INVALID_QUERY_PARAM"
+	codePickemLocked               = "PICKEM_LOCKED"
+	codeMatchPickLocked            = "MATCH_PICK_LOCKED"
+	codePenaltyForbidden           = "PENALTY_FORBIDDEN"
+	codePenaltyRequired            = "PENALTY_REQUIRED"
+	codePenaltyIncomplete          = "PENALTY_INCOMPLETE"
+	codePenaltyTied                = "PENALTY_TIED"
+	codeBestThirdsNotScoreable     = "BEST_THIRDS_NOT_SCOREABLE"
+	codeInvalidGroupPicks          = "INVALID_GROUP_PICKS"
+	codeInvalidBestThirdTeam       = "INVALID_BEST_THIRD_TEAM"
+	codeInvalidBracketPick         = "INVALID_BRACKET_PICK"
+	codeGroupPicksRequired         = "GROUP_PICKS_REQUIRED"
+	codeTeamGroupMismatch          = "TEAM_GROUP_MISMATCH"
 
 	// 502 Bad Gateway
 	codeMissingIDToken = "MISSING_ID_TOKEN"
@@ -142,6 +156,8 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.BadRequest(w, r, codeOAuthStateNotFound, domain.ErrOAuthStateNotFound.Error())
 	case errors.Is(err, domain.ErrInvalidGroupCode):
 		httpx.BadRequest(w, r, codeInvalidGroupCode, domain.ErrInvalidGroupCode.Error())
+	case errors.Is(err, domain.ErrInvalidStandingPosition):
+		httpx.BadRequest(w, r, codeInvalidStandingPosition, domain.ErrInvalidStandingPosition.Error())
 	case errors.Is(err, domain.ErrInvalidStageCode):
 		httpx.BadRequest(w, r, codeInvalidStageCode, domain.ErrInvalidStageCode.Error())
 	case errors.Is(err, domain.ErrInvalidStatus):
@@ -150,6 +166,32 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.BadRequest(w, r, codeInvalidFifaCode, domain.ErrInvalidFifaCode.Error())
 	case errors.Is(err, domain.ErrInvalidDateRange):
 		httpx.BadRequest(w, r, codeInvalidDateRange, domain.ErrInvalidDateRange.Error())
+	case errors.Is(err, domain.ErrInvalidQueryParam):
+		httpx.BadRequest(w, r, codeInvalidQueryParam, err.Error())
+	case errors.Is(err, domain.ErrPickemLocked):
+		httpx.BadRequest(w, r, codePickemLocked, domain.ErrPickemLocked.Error())
+	case errors.Is(err, domain.ErrMatchPickLocked):
+		httpx.BadRequest(w, r, codeMatchPickLocked, domain.ErrMatchPickLocked.Error())
+	case errors.Is(err, domain.ErrPenaltyForbidden):
+		httpx.BadRequest(w, r, codePenaltyForbidden, domain.ErrPenaltyForbidden.Error())
+	case errors.Is(err, domain.ErrPenaltyRequired):
+		httpx.BadRequest(w, r, codePenaltyRequired, domain.ErrPenaltyRequired.Error())
+	case errors.Is(err, domain.ErrPenaltyIncomplete):
+		httpx.BadRequest(w, r, codePenaltyIncomplete, domain.ErrPenaltyIncomplete.Error())
+	case errors.Is(err, domain.ErrPenaltyTied):
+		httpx.BadRequest(w, r, codePenaltyTied, domain.ErrPenaltyTied.Error())
+	case errors.Is(err, domain.ErrInvalidGroupPicks):
+		httpx.BadRequest(w, r, codeInvalidGroupPicks, domain.ErrInvalidGroupPicks.Error())
+	case errors.Is(err, domain.ErrInvalidBestThirdTeam):
+		httpx.BadRequest(w, r, codeInvalidBestThirdTeam, domain.ErrInvalidBestThirdTeam.Error())
+	case errors.Is(err, domain.ErrInvalidBracketPickTeam):
+		httpx.BadRequest(w, r, codeInvalidBracketPick, domain.ErrInvalidBracketPickTeam.Error())
+	case errors.Is(err, domain.ErrGroupPicksRequired):
+		httpx.BadRequest(w, r, codeGroupPicksRequired, domain.ErrGroupPicksRequired.Error())
+	case errors.Is(err, domain.ErrTeamGroupMismatch):
+		httpx.BadRequest(w, r, codeTeamGroupMismatch, domain.ErrTeamGroupMismatch.Error())
+	case errors.Is(err, domain.ErrBestThirdsNotScoreable):
+		httpx.BadRequest(w, r, codeBestThirdsNotScoreable, domain.ErrBestThirdsNotScoreable.Error())
 
 	// 502 Bad Gateway
 	case errors.Is(err, domain.ErrMissingIDToken):

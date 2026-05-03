@@ -5,8 +5,10 @@ type BulkUpdateMatchesResultDto struct {
 }
 
 type UpdateMatchResultDto struct {
-	HomeScore *int `json:"home_score" validate:"required,gte=0,lt=100" example:"2"`
-	AwayScore *int `json:"away_score" validate:"required,gte=0,lt=100" example:"1"`
+	HomeScore        *int `json:"home_score" validate:"required,gte=0,lte=20" example:"2"`
+	AwayScore        *int `json:"away_score" validate:"required,gte=0,lte=20" example:"2"`
+	HomePenaltyScore *int `json:"home_penalty_score" validate:"omitempty,gte=0,lte=20" example:"5"`
+	AwayPenaltyScore *int `json:"away_penalty_score" validate:"omitempty,gte=0,lte=20" example:"4"`
 }
 
 type BulkUpdateMatchResultDto struct {
@@ -15,5 +17,5 @@ type BulkUpdateMatchResultDto struct {
 }
 
 type ResolveThirdPlaceConflictDto struct {
-	TeamFifaCodes []string `json:"team_fifa_codes" validate:"required,min=8,max=8,dive,required"`
+	TeamFifaCodes []string `json:"team_fifa_codes" validate:"required,len=8,unique,dive,required,fifa_code"`
 }

@@ -44,11 +44,11 @@ func (r *GroupStandingRepository) GetGroupStandings(ctx context.Context, groupCo
     gs.goal_difference,
     gs.points,
     t.fifa_code,
-    t.name,
+    t.name_translations,
     t.flag_url,
     t.group_code
 	FROM group_standings gs
-	JOIN teams t ON gs.fifa_code = t.fifa_code`
+	JOIN team_localized t ON gs.fifa_code = t.fifa_code`
 
 	query := baseQuery
 

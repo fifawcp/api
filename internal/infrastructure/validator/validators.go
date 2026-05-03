@@ -68,6 +68,10 @@ func IsValidFifaCode(code string) bool {
 	return validFifaCodes[code]
 }
 
+func IsValidStandingPosition(position int64) bool {
+	return position >= 1 && position <= 4
+}
+
 func IsValidDateRange(from, to *time.Time) bool {
 	if from == nil || to == nil {
 		return true // Only validate if both are provided

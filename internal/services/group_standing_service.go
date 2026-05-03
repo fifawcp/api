@@ -99,7 +99,7 @@ func (s *GroupStandingService) recalculateStandingsByGroup(
 	if len(tiedGroups) > 0 {
 		fifaCodeToIndex = make(map[string]int)
 		for i, standing := range standings {
-			fifaCodeToIndex[*standing.Team.FifaCode] = i
+			fifaCodeToIndex[standing.Team.FifaCode] = i
 		}
 	}
 
@@ -117,7 +117,7 @@ func (s *GroupStandingService) recalculateStandingsByGroup(
 		// Update the original standings with the sorted group
 		// Replace in original standings array
 		for _, team := range sortedGroup {
-			originalIndex := fifaCodeToIndex[*team.Team.FifaCode]
+			originalIndex := fifaCodeToIndex[team.Team.FifaCode]
 			standings[originalIndex] = team
 		}
 	}
@@ -168,14 +168,14 @@ func filterHeadToHeadMatches(tiedTeams []*domain.GroupStanding, allMatches []*do
 	// Get FIFA codes of tied teams
 	tiedCodes := make(map[string]bool)
 	for _, team := range tiedTeams {
-		tiedCodes[*team.Team.FifaCode] = true
+		tiedCodes[team.Team.FifaCode] = true
 	}
 
 	// Filter matches where both teams are in the tied group
 	var h2hMatches []*domain.Match
 	for _, match := range allMatches {
-		homeCode := *match.HomeTeam.FifaCode
-		awayCode := *match.AwayTeam.FifaCode
+		homeCode := match.HomeTeam.FifaCode
+		awayCode := match.AwayTeam.FifaCode
 		if tiedCodes[homeCode] && tiedCodes[awayCode] {
 			h2hMatches = append(h2hMatches, match)
 		}
@@ -188,19 +188,19 @@ func calculateOverallStats(matches []*domain.Match) map[string]*domain.GroupStan
 	stats := make(map[string]*domain.GroupStanding)
 
 	for _, match := range matches {
-		homeCode := *match.HomeTeam.FifaCode
-		awayCode := *match.AwayTeam.FifaCode
+		homeCode := match.HomeTeam.FifaCode
+		awayCode := match.AwayTeam.FifaCode
 
 		// Initialize stats with team data
 		if _, ok := stats[homeCode]; !ok {
 			stats[homeCode] = &domain.GroupStanding{
-				Team: match.HomeTeam,
+				Team: *match.HomeTeam,
 			}
 		}
 
 		if _, ok := stats[awayCode]; !ok {
 			stats[awayCode] = &domain.GroupStanding{
-				Team: match.AwayTeam,
+				Team: *match.AwayTeam,
 			}
 		}
 
@@ -243,14 +243,14 @@ func calculateOverallStats(matches []*domain.Match) map[string]*domain.GroupStan
 func calculateHeadToHeadStats(tiedTeams []*domain.GroupStanding, h2hMatches []*domain.Match) map[string]*domain.GroupStanding {
 	teamMap := make(map[string]*domain.GroupStanding)
 	for _, team := range tiedTeams {
-		teamMap[*team.Team.FifaCode] = team
+		teamMap[team.Team.FifaCode] = team
 	}
 
 	stats := make(map[string]*domain.GroupStanding)
 
 	for _, match := range h2hMatches {
-		homeCode := *match.HomeTeam.FifaCode
-		awayCode := *match.AwayTeam.FifaCode
+		homeCode := match.HomeTeam.FifaCode
+		awayCode := match.AwayTeam.FifaCode
 
 		// Initialize stats with team data from teamMap
 		if _, ok := stats[homeCode]; !ok {
@@ -324,8 +324,8 @@ func sortTiedGroupByHeadToHead(tiedTeams []*domain.GroupStanding, h2hStats map[s
 	sort.Slice(tiedTeams, func(i, j int) bool {
 		teamA := tiedTeams[i]
 		teamB := tiedTeams[j]
-		statsA := h2hStats[*teamA.Team.FifaCode]
-		statsB := h2hStats[*teamB.Team.FifaCode]
+		statsA := h2hStats[teamA.Team.FifaCode]
+		statsB := h2hStats[teamB.Team.FifaCode]
 
 		// Rule a: Head-to-head points
 		if statsA.Points != statsB.Points {
@@ -349,11 +349,11 @@ func isStillTied(sortedGroup []*domain.GroupStanding, h2hStats map[string]*domai
 		return false
 	}
 
-	firstCode := *sortedGroup[0].Team.FifaCode
+	firstCode := sortedGroup[0].Team.FifaCode
 	firstStats := h2hStats[firstCode]
 
 	for _, team := range sortedGroup[1:] {
-		teamStats := h2hStats[*team.Team.FifaCode]
+		teamStats := h2hStats[team.Team.FifaCode]
 		if teamStats.Points != firstStats.Points ||
 			teamStats.GoalDifference != firstStats.GoalDifference ||
 			teamStats.GoalsFor != firstStats.GoalsFor {

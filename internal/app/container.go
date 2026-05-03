@@ -48,14 +48,19 @@ type Container struct {
 	OIDCIdentityVerifier domain.IDTokenVerifier
 
 	// repositories
-	userRepository          *repositories.UserRepository
-	sessionRepository       *repositories.SessionRepository
-	refreshTokenRepository  *repositories.RefreshTokenRepository
-	boardRepository         *repositories.BoardRepository
-	boardMemberRepository   *repositories.BoardMemberRepository
-	groupStandingRepository *repositories.GroupStandingRepository
-	matchRepository         *repositories.MatchRepository
-	oauthAccountRepository  *repositories.OAuthAccountRepository
+	userRepository           *repositories.UserRepository
+	sessionRepository        *repositories.SessionRepository
+	refreshTokenRepository   *repositories.RefreshTokenRepository
+	boardRepository          *repositories.BoardRepository
+	boardMemberRepository    *repositories.BoardMemberRepository
+	userScoreRepository      *repositories.UserScoreRepository
+	groupStandingRepository  *repositories.GroupStandingRepository
+	matchRepository          *repositories.MatchRepository
+	oauthAccountRepository   *repositories.OAuthAccountRepository
+	teamRepository           *repositories.TeamRepository
+	pickemRepository         *repositories.PickemRepository
+	matchScorePickRepository *repositories.MatchScorePickRepository
+	scoreEventRepository     *repositories.ScoreEventRepository
 
 	// storages
 	otpStorage        *storage.OTPStorage
@@ -63,23 +68,27 @@ type Container struct {
 	oauthStateStorage *storage.OAuthStorage
 
 	// services
-	authService          services.AuthServiceInterface
-	boardService         services.BoardServiceInterface
-	groupStandingService services.GroupStandingServiceInterface
-	matchService         services.MatchServiceInterface
-	oauthService         services.OAuthServiceInterface
-	UserService          services.UserServiceInterface
-	BoardMemberService   services.BoardMemberServiceInterface
+	authService           services.AuthServiceInterface
+	boardService          services.BoardServiceInterface
+	groupStandingService  services.GroupStandingServiceInterface
+	matchService          services.MatchServiceInterface
+	matchScorePickService services.MatchScorePickServiceInterface
+	oauthService          services.OAuthServiceInterface
+	UserService           services.UserServiceInterface
+	BoardMemberService    services.BoardMemberServiceInterface
+	pickemService         services.PickemServiceInterface
+	pickemScoringService  services.ScoringServiceInterface
 
 	// handlers
-	RateLimiters *RateLimiters
-	AuthHandler  *handlers.AuthHandler
-	OAuthHandler *handlers.OAuthHandler
-	UserHandler  *handlers.UserHandler
-	BoardHandler *handlers.BoardHandler
-	GroupHandler *handlers.GroupStandingHandler
-	MatchHandler *handlers.MatchHandler
-	AdminHandler *handlers.AdminHandler
+	RateLimiters  *RateLimiters
+	AuthHandler   *handlers.AuthHandler
+	OAuthHandler  *handlers.OAuthHandler
+	UserHandler   *handlers.UserHandler
+	BoardHandler  *handlers.BoardHandler
+	GroupHandler  *handlers.GroupStandingHandler
+	MatchHandler  *handlers.MatchHandler
+	AdminHandler  *handlers.AdminHandler
+	PickemHandler *handlers.PickemHandler
 }
 
 func NewContainer(cfg *config.Config) (*Container, error) {
@@ -94,7 +103,9 @@ func NewContainer(cfg *config.Config) (*Container, error) {
 
 	c.initRepositories()
 	c.initStorages()
-	c.initServices()
+	if err := c.initServices(); err != nil {
+		return nil, fmt.Errorf("services: %w", err)
+	}
 	c.initHandlers()
 	c.initJobs()
 
@@ -170,9 +181,14 @@ func (c *Container) initRepositories() {
 	c.refreshTokenRepository = repositories.NewRefreshTokenRepository(c.db, c.Config)
 	c.boardRepository = repositories.NewBoardRepository(c.db, c.Config)
 	c.boardMemberRepository = repositories.NewBoardMemberRepository(c.db, c.Config)
+	c.userScoreRepository = repositories.NewUserScoreRepository(c.db, c.Config)
 	c.groupStandingRepository = repositories.NewGroupStandingRepository(c.db, c.Config)
 	c.matchRepository = repositories.NewMatchRepository(c.db, c.Config)
 	c.oauthAccountRepository = repositories.NewOAuthAccountRepository(c.db, c.Config)
+	c.teamRepository = repositories.NewTeamRepository(c.db, c.Config)
+	c.pickemRepository = repositories.NewPickemRepository(c.db, c.Config)
+	c.matchScorePickRepository = repositories.NewMatchScorePickRepository(c.db, c.Config)
+	c.scoreEventRepository = repositories.NewScoreEventRepository(c.db, c.Config)
 }
 
 func (c *Container) initStorages() {
@@ -181,7 +197,7 @@ func (c *Container) initStorages() {
 	c.oauthStateStorage = storage.NewOAuthStorage(c.redis, c.Config)
 }
 
-func (c *Container) initServices() {
+func (c *Container) initServices() error {
 	c.authService = services.NewAuthService(
 		c.userRepository, c.sessionRepository, c.refreshTokenRepository,
 		c.otpStorage, c.Logger, c.Config, c.Authenticator, c.mailer,
@@ -190,11 +206,39 @@ func (c *Container) initServices() {
 	c.boardService = services.NewBoardService(c.boardRepository)
 	c.BoardMemberService = services.NewBoardMemberService(c.boardRepository, c.boardMemberRepository)
 	c.groupStandingService = services.NewGroupStandingService(c.groupStandingRepository, c.matchRepository, c.Logger)
-	c.matchService = services.NewMatchService(c.matchRepository, c.groupStandingRepository, c.groupStandingService, c.Logger)
+
+	teams, err := c.teamRepository.GetAllTeams(context.Background())
+	if err != nil {
+		return fmt.Errorf("loading team catalog: %w", err)
+	}
+
+	firstKickoff, err := c.matchRepository.GetFirstGroupStageMatchKickoff(context.Background())
+	if err != nil {
+		return fmt.Errorf("loading first group stage match kickoff: %w", err)
+	}
+
+	c.pickemScoringService = services.NewScoringService(
+		c.pickemRepository, c.matchScorePickRepository, c.scoreEventRepository,
+		c.userScoreRepository, c.matchRepository, c.groupStandingRepository,
+		c.Config, c.Logger,
+	)
+	c.pickemService = services.NewPickemService(
+		c.pickemRepository,
+		teams, firstKickoff, c.Config, c.Logger,
+	)
+	c.matchScorePickService = services.NewMatchScorePickService(
+		c.matchScorePickRepository, c.matchRepository,
+	)
+
+	c.matchService = services.NewMatchService(
+		c.matchRepository, c.groupStandingRepository,
+		c.groupStandingService, c.pickemScoringService, c.Logger,
+	)
 	c.oauthService = services.NewOAuthService(
 		c.oauthStateStorage, c.GoogleOauthConfig, c.OIDCIdentityVerifier,
 		c.oauthAccountRepository, c.userRepository, c.authService,
 	)
+	return nil
 }
 
 func (c *Container) initHandlers() {
@@ -202,9 +246,10 @@ func (c *Container) initHandlers() {
 	c.UserHandler = handlers.NewUserHandler(c.UserService, c.Logger)
 	c.BoardHandler = handlers.NewBoardHandler(c.boardService, c.BoardMemberService, c.Config, c.validator, c.Logger)
 	c.GroupHandler = handlers.NewGroupStandingHandler(c.groupStandingService, c.Logger)
-	c.MatchHandler = handlers.NewMatchHandler(c.matchService, c.Logger)
-	c.AdminHandler = handlers.NewAdminHandler(c.matchService, c.groupStandingService, c.Logger, c.AuditLogger, c.validator)
+	c.MatchHandler = handlers.NewMatchHandler(c.matchService, c.matchScorePickService, c.Logger, c.validator)
+	c.AdminHandler = handlers.NewAdminHandler(c.matchService, c.groupStandingService, c.pickemScoringService, c.Logger, c.AuditLogger, c.validator)
 	c.OAuthHandler = handlers.NewOAuthHandler(c.oauthService, c.Logger, c.Config)
+	c.PickemHandler = handlers.NewPickemHandler(c.pickemService, c.Logger, c.validator)
 }
 
 func (c *Container) initJobs() {
