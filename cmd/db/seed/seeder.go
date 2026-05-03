@@ -61,16 +61,21 @@ func (s *Seeder) Seed() {
 	ctx := context.Background()
 
 	users := s.generateUsers(usersAmount)
+	createdUsers := make([]*domain.User, 0, len(users))
+
 	for _, user := range users {
 		if err := s.userRepository.CreateUser(ctx, user); err != nil {
 			s.logger.Error(
 				"Error seeding users",
 				logging.Error, err.Error(),
 			)
+			continue
 		}
+
+		createdUsers = append(createdUsers, user)
 	}
 
-	s.seedBoards(ctx, users)
+	s.seedBoards(ctx, createdUsers)
 }
 
 func (s *Seeder) Run() {
