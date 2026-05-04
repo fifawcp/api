@@ -366,6 +366,26 @@ func TestBoardService_UpdateBoard(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "database error")
 	})
+
+	t.Run("propagates assert private board error", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.UUID()
+		payload := dtos.UpdateBoardDto{Name: "Updated Board"}
+
+		br := &mocks.MockBoardRepository{
+			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
+				return nil, errors.New("database error")
+			},
+		}
+
+		service := newTestBoardService(br)
+
+		err := service.UpdateBoard(context.Background(), boardID, domain.BoardMemberRoleAdmin, payload)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "database error")
+	})
 }
 
 // ---------------------------------------------------------------------------
