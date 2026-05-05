@@ -67,6 +67,7 @@ var ErrInvalidFifaCode = errors.New("invalid fifa code")
 var ErrInvalidDateRange = errors.New("from_date must be before or equal to to_date")
 var ErrInvalidQueryParam = errors.New("invalid query parameter")
 var ErrInvalidWinnerTeam = errors.New("winner team must be either home or away team")
+var ErrMatchTeamsNotAssigned = errors.New("match teams not yet assigned: both contenders must be determined first")
 
 // Match result — penalty rules
 var ErrPenaltyForbidden = errors.New("penalty score is not allowed: group-stage match, or knockout match decided in regular time")

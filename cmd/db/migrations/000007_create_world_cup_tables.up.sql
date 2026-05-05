@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS matches (
       AND away_score IS NOT NULL
       AND home_score = away_score
     )
+  ),
+  CONSTRAINT check_finished_match_has_teams
+  CHECK (
+    status = 'scheduled'
+    OR (home_team_fifa_code IS NOT NULL AND away_team_fifa_code IS NOT NULL)
   )
 );
 

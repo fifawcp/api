@@ -66,6 +66,10 @@ func (s *MatchService) UpdateMatchResult(ctx context.Context, matchID int64, pay
 		return nil, domain.ErrMatchNotFound
 	}
 
+	if matches[0].Teams.Home == nil || matches[0].Teams.Away == nil {
+		return nil, domain.ErrMatchTeamsNotAssigned
+	}
+
 	if err := validateMatchResultForStage(matches[0].StageCode, payload); err != nil {
 		return nil, err
 	}
@@ -102,18 +106,21 @@ func (s *MatchService) UpdateMatchResultsBulk(ctx context.Context, payload dtos.
 		return nil, err
 	}
 
-	stageByMatchID := make(map[int64]domain.MatchStageCode, len(existingMatches))
+	matchByID := make(map[int64]*domain.Match, len(existingMatches))
 	for _, match := range existingMatches {
-		stageByMatchID[match.ID] = match.StageCode
+		matchByID[match.ID] = match
 	}
 
 	updates := make([]domain.MatchResultUpdate, 0, len(payload.Matches))
 	for _, match := range payload.Matches {
-		stage, ok := stageByMatchID[match.ID]
+		existing, ok := matchByID[match.ID]
 		if !ok {
 			return nil, domain.ErrMatchesNotFound([]int64{match.ID})
 		}
-		if err := validateMatchResultForStage(stage, match.UpdateMatchResultDto); err != nil {
+		if existing.Teams.Home == nil || existing.Teams.Away == nil {
+			return nil, domain.ErrMatchTeamsNotAssigned
+		}
+		if err := validateMatchResultForStage(existing.StageCode, match.UpdateMatchResultDto); err != nil {
 			return nil, err
 		}
 		updates = append(updates, domain.MatchResultUpdate{

@@ -26,7 +26,7 @@ func (a *slogAuditLogger) LogEvent(ctx context.Context, event Event) {
 	}
 
 	if user := httpctx.GetAuthenticatedUser(ctx); user != nil {
-		fields = append(fields, ActorID, user.ID, ActorRole, string(user.Role))
+		fields = append(fields, ActorID, user.ID)
 	}
 
 	if info := httpctx.GetRequestInfo(ctx); info != nil {

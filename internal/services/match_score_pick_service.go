@@ -40,6 +40,10 @@ func (s *MatchScorePickService) SaveMatchScorePick(ctx context.Context, userID s
 		return domain.ErrMatchNotFound
 	}
 
+	if matches[0].Teams.Home == nil || matches[0].Teams.Away == nil {
+		return domain.ErrMatchTeamsNotAssigned
+	}
+
 	if isMatchPickLocked(matches[0]) {
 		return domain.ErrMatchPickLocked
 	}

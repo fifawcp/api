@@ -364,6 +364,36 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 		assert.Nil(t, outcomes)
 	})
 
+	t.Run("returns ErrMatchTeamsNotAssigned for knockout match without contenders", func(t *testing.T) {
+		t.Parallel()
+
+		mr := &mocks.MockMatchRepository{
+			GetMatchesFunc: func(ctx context.Context, filters domain.MatchFilters) ([]*domain.Match, error) {
+				return []*domain.Match{
+					{
+						ID:        79,
+						StageCode: domain.MatchStageCodeRoundOf32,
+						Status:    domain.MatchStatusScheduled,
+						Teams:     domain.MatchTeams{Home: nil, Away: nil},
+					},
+				}, nil
+			},
+		}
+
+		service := newTestMatchService(mr, nil, nil, nil, nil)
+
+		home, away, homePenalty, awayPenalty := 0, 0, 1, 2
+		outcomes, err := service.UpdateMatchResult(context.Background(), 79, dtos.UpdateMatchResultDto{
+			HomeScore:        &home,
+			AwayScore:        &away,
+			HomePenaltyScore: &homePenalty,
+			AwayPenaltyScore: &awayPenalty,
+		})
+
+		assert.ErrorIs(t, err, domain.ErrMatchTeamsNotAssigned)
+		assert.Nil(t, outcomes)
+	})
+
 	t.Run("propagates repository update error", func(t *testing.T) {
 		t.Parallel()
 
@@ -531,6 +561,40 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 		})
 
 		assert.ErrorIs(t, err, domain.ErrPenaltyForbidden)
+		assert.Nil(t, outcomes)
+	})
+
+	t.Run("returns ErrMatchTeamsNotAssigned for knockout match without contenders", func(t *testing.T) {
+		t.Parallel()
+
+		mr := &mocks.MockMatchRepository{
+			GetMatchesFunc: func(ctx context.Context, filters domain.MatchFilters) ([]*domain.Match, error) {
+				return []*domain.Match{
+					{
+						ID:        79,
+						StageCode: domain.MatchStageCodeRoundOf32,
+						Status:    domain.MatchStatusScheduled,
+						Teams:     domain.MatchTeams{Home: nil, Away: nil},
+					},
+				}, nil
+			},
+		}
+
+		service := newTestMatchService(mr, nil, nil, nil, nil)
+
+		home, away, homePenalty, awayPenalty := 0, 0, 1, 2
+		outcomes, err := service.UpdateMatchResultsBulk(context.Background(), dtos.BulkUpdateMatchesResultDto{
+			Matches: []dtos.BulkUpdateMatchResultDto{
+				{ID: 79, UpdateMatchResultDto: dtos.UpdateMatchResultDto{
+					HomeScore:        &home,
+					AwayScore:        &away,
+					HomePenaltyScore: &homePenalty,
+					AwayPenaltyScore: &awayPenalty,
+				}},
+			},
+		})
+
+		assert.ErrorIs(t, err, domain.ErrMatchTeamsNotAssigned)
 		assert.Nil(t, outcomes)
 	})
 
