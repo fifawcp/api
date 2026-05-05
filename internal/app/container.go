@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/handlers"
@@ -48,19 +49,24 @@ type Container struct {
 	OIDCIdentityVerifier domain.IDTokenVerifier
 
 	// repositories
-	userRepository           *repositories.UserRepository
-	sessionRepository        *repositories.SessionRepository
-	refreshTokenRepository   *repositories.RefreshTokenRepository
-	boardRepository          *repositories.BoardRepository
-	boardMemberRepository    *repositories.BoardMemberRepository
-	userScoreRepository      *repositories.UserScoreRepository
-	groupStandingRepository  *repositories.GroupStandingRepository
-	matchRepository          *repositories.MatchRepository
-	oauthAccountRepository   *repositories.OAuthAccountRepository
-	teamRepository           *repositories.TeamRepository
-	pickemRepository         *repositories.PickemRepository
-	matchScorePickRepository *repositories.MatchScorePickRepository
-	scoreEventRepository     *repositories.ScoreEventRepository
+	userRepository           domain.UserRepository
+	sessionRepository        domain.SessionRepository
+	refreshTokenRepository   domain.RefreshTokenRepository
+	boardRepository          domain.BoardRepository
+	boardMemberRepository    domain.BoardMemberRepository
+	userScoreRepository      domain.UserScoreRepository
+	groupStandingRepository  domain.GroupStandingRepository
+	matchRepository          domain.MatchRepository
+	oauthAccountRepository   domain.OAuthAccountRepository
+	teamRepository           domain.TeamRepository
+	pickemRepository         domain.PickemRepository
+	matchScorePickRepository domain.MatchScorePickRepository
+	scoreEventRepository     domain.ScoreEventRepository
+
+	// startup data loaded once at startup; consumed by services
+	teams        []*domain.Team
+	teamLookup   *domain.TeamLookup
+	firstKickoff time.Time
 
 	// storages
 	otpStorage        *storage.OTPStorage
@@ -100,12 +106,12 @@ func NewContainer(cfg *config.Config) (*Container, error) {
 	if err := c.initCoreDeps(cfg); err != nil {
 		return nil, fmt.Errorf("core dependencies: %w", err)
 	}
-
 	c.initRepositories()
 	c.initStorages()
-	if err := c.initServices(); err != nil {
-		return nil, fmt.Errorf("services: %w", err)
+	if err := c.initStartupData(); err != nil {
+		return nil, fmt.Errorf("startup data: %w", err)
 	}
+	c.initServices()
 	c.initHandlers()
 	c.initJobs()
 
@@ -182,13 +188,32 @@ func (c *Container) initRepositories() {
 	c.boardRepository = repositories.NewBoardRepository(c.db, c.Config)
 	c.boardMemberRepository = repositories.NewBoardMemberRepository(c.db, c.Config)
 	c.userScoreRepository = repositories.NewUserScoreRepository(c.db, c.Config)
-	c.groupStandingRepository = repositories.NewGroupStandingRepository(c.db, c.Config)
-	c.matchRepository = repositories.NewMatchRepository(c.db, c.Config)
 	c.oauthAccountRepository = repositories.NewOAuthAccountRepository(c.db, c.Config)
 	c.teamRepository = repositories.NewTeamRepository(c.db, c.Config)
 	c.pickemRepository = repositories.NewPickemRepository(c.db, c.Config)
 	c.matchScorePickRepository = repositories.NewMatchScorePickRepository(c.db, c.Config)
 	c.scoreEventRepository = repositories.NewScoreEventRepository(c.db, c.Config)
+
+	c.teamLookup = domain.NewTeamLookup(nil)
+	c.matchRepository = repositories.NewMatchRepository(c.db, c.Config, c.teamLookup)
+	c.groupStandingRepository = repositories.NewGroupStandingRepository(c.db, c.Config, c.teamLookup)
+}
+
+func (c *Container) initStartupData() error {
+	teams, err := c.teamRepository.GetAllTeams(context.Background())
+	if err != nil {
+		return fmt.Errorf("loading team catalog: %w", err)
+	}
+	c.teams = teams
+	c.teamLookup.Set(teams)
+
+	firstKickoff, err := c.matchRepository.GetFirstGroupStageMatchKickoff(context.Background())
+	if err != nil {
+		return fmt.Errorf("loading first group stage match kickoff: %w", err)
+	}
+	c.firstKickoff = firstKickoff
+
+	return nil
 }
 
 func (c *Container) initStorages() {
@@ -197,7 +222,7 @@ func (c *Container) initStorages() {
 	c.oauthStateStorage = storage.NewOAuthStorage(c.redis, c.Config)
 }
 
-func (c *Container) initServices() error {
+func (c *Container) initServices() {
 	c.authService = services.NewAuthService(
 		c.userRepository, c.sessionRepository, c.refreshTokenRepository,
 		c.otpStorage, c.Logger, c.Config, c.Authenticator, c.mailer,
@@ -207,16 +232,6 @@ func (c *Container) initServices() error {
 	c.BoardMemberService = services.NewBoardMemberService(c.boardRepository, c.boardMemberRepository)
 	c.groupStandingService = services.NewGroupStandingService(c.groupStandingRepository, c.matchRepository, c.Logger)
 
-	teams, err := c.teamRepository.GetAllTeams(context.Background())
-	if err != nil {
-		return fmt.Errorf("loading team catalog: %w", err)
-	}
-
-	firstKickoff, err := c.matchRepository.GetFirstGroupStageMatchKickoff(context.Background())
-	if err != nil {
-		return fmt.Errorf("loading first group stage match kickoff: %w", err)
-	}
-
 	c.pickemScoringService = services.NewScoringService(
 		c.pickemRepository, c.matchScorePickRepository, c.scoreEventRepository,
 		c.userScoreRepository, c.matchRepository, c.groupStandingRepository,
@@ -224,7 +239,7 @@ func (c *Container) initServices() error {
 	)
 	c.pickemService = services.NewPickemService(
 		c.pickemRepository,
-		teams, firstKickoff, c.Config, c.Logger,
+		c.teams, c.firstKickoff, c.Config, c.Logger,
 	)
 	c.matchScorePickService = services.NewMatchScorePickService(
 		c.matchScorePickRepository, c.matchRepository,
@@ -238,7 +253,6 @@ func (c *Container) initServices() error {
 		c.oauthStateStorage, c.GoogleOauthConfig, c.OIDCIdentityVerifier,
 		c.oauthAccountRepository, c.userRepository, c.authService,
 	)
-	return nil
 }
 
 func (c *Container) initHandlers() {

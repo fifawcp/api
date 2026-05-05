@@ -181,8 +181,8 @@ func (s *ScoringService) ScoreBestThirds(ctx context.Context) error {
 	actualThirdTeams := make([]string, 0, 8)
 
 	for _, match := range r32Matches {
-		if match.AwayTeam != nil {
-			actualThirdTeams = append(actualThirdTeams, match.AwayTeam.FifaCode)
+		if match.Teams.Away != nil {
+			actualThirdTeams = append(actualThirdTeams, match.Teams.Away.FifaCode)
 		}
 	}
 
@@ -255,8 +255,8 @@ func (s *ScoringService) scoreMatchScorePicks(ctx context.Context, match *domain
 	}
 
 	// Actual scores and outcome
-	actualHome := *match.HomeScore
-	actualAway := *match.AwayScore
+	actualHome := match.Result.HomeScore
+	actualAway := match.Result.AwayScore
 	actualOutcome := matchOutcome(actualHome, actualAway)
 
 	scoreEvents := make([]*domain.ScoreEvent, 0, len(matchScorePicks))
@@ -368,7 +368,7 @@ func (s *ScoringService) scoreBracketPicks(ctx context.Context, match *domain.Ma
 
 	for _, pick := range bracketPicks {
 		// If the picked team is the winner, points awarded
-		if pick.TeamFifaCode == *match.WinnerTeamFifaCode {
+		if pick.TeamFifaCode == *match.Result.WinnerTeamFifaCode {
 			bracketEvents = append(bracketEvents, &domain.ScoreEvent{
 				UserID:     pick.UserID,
 				SourceType: domain.ScoreSourceBracketPick,

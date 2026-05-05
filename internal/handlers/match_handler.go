@@ -40,7 +40,7 @@ func NewMatchHandler(
 //
 //	@Summary		List matches
 //	@Description	Returns matches ordered by kickoff time ascending. When the caller is authenticated,
-//	@Description	each match includes their score pick under `user_pick` (null if no pick yet)
+//	@Description	each match includes their score pick under `user_score_pick` (null if no pick yet)
 //	@Description	Supports optional filters by group code, stage code, status, team FIFA code, and kickoff date range
 //	@Description	List query params can be repeated (`?group_codes=A&group_codes=B`) or comma-separated (`?group_codes=A,B`)
 //	@Tags			matches
@@ -153,7 +153,7 @@ func buildMatchResponse(
 
 		// If the user has a pick for this match, add it to the response
 		if pick := picksByMatchID[match.ID]; pick != nil {
-			entry.UserPick = &dtos.MatchUserPickDto{
+			entry.UserScorePick = &dtos.UserScorePickDto{
 				HomeScore: pick.HomeScore,
 				AwayScore: pick.AwayScore,
 			}

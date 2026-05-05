@@ -19,16 +19,6 @@ func newTestGroupStandingService(
 	return NewGroupStandingService(gr, mr, logger)
 }
 
-func intScorePtr(n int) *int {
-	v := n
-	return &v
-}
-
-func stringPtr(s string) *string {
-	v := s
-	return &v
-}
-
 // ---------------------------------------------------------------------------
 // TestGroupStandingService_GetGroupStandings
 // ---------------------------------------------------------------------------
@@ -88,10 +78,10 @@ func TestGroupStandingService_RecalculateStandings(t *testing.T) {
 		mr := &mocks.MockMatchRepository{
 			GetMatchesFunc: func(ctx context.Context, filters domain.MatchFilters) ([]*domain.Match, error) {
 				rows := []struct {
-					id                   int64
-					groupCode            string
-					homeFifa, awayFifa   string
-					homeScore, awayScore int
+					id                                 int64
+					groupCode                          string
+					homeTeamFifaCode, awayTeamFifaCode string
+					homeScore, awayScore               int
 				}{
 					{1, "A", "MEX", "RSA", 2, 1},
 					{2, "A", "KOR", "CZE", 0, 3},
@@ -106,13 +96,14 @@ func TestGroupStandingService_RecalculateStandings(t *testing.T) {
 				for i, r := range rows {
 					matches[i] = &domain.Match{
 						ID:        r.id,
-						GroupCode: stringPtr(r.groupCode),
+						GroupCode: &r.groupCode,
 						Status:    domain.MatchStatusFinished,
 						StageCode: domain.MatchStageCodeGroupStage,
-						HomeTeam:  &domain.Team{FifaCode: r.homeFifa},
-						AwayTeam:  &domain.Team{FifaCode: r.awayFifa},
-						HomeScore: intScorePtr(r.homeScore),
-						AwayScore: intScorePtr(r.awayScore),
+						Teams: domain.MatchTeams{
+							Home: &domain.Team{FifaCode: r.homeTeamFifaCode},
+							Away: &domain.Team{FifaCode: r.awayTeamFifaCode},
+						},
+						Result:    &domain.MatchResult{HomeScore: r.homeScore, AwayScore: r.awayScore},
 						UpdatedAt: now,
 					}
 				}
@@ -190,10 +181,11 @@ func TestGroupStandingService_rankGroup(t *testing.T) {
 		matches := make([]*domain.Match, len(scores))
 		for i, s := range scores {
 			matches[i] = &domain.Match{
-				HomeTeam:  &domain.Team{FifaCode: s.home},
-				AwayTeam:  &domain.Team{FifaCode: s.away},
-				HomeScore: intScorePtr(s.homeScore),
-				AwayScore: intScorePtr(s.awayScore),
+				Teams: domain.MatchTeams{
+					Home: &domain.Team{FifaCode: s.home},
+					Away: &domain.Team{FifaCode: s.away},
+				},
+				Result: &domain.MatchResult{HomeScore: s.homeScore, AwayScore: s.awayScore},
 			}
 		}
 

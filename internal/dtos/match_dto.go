@@ -4,10 +4,10 @@ import "github.com/fifawcp/api/internal/domain"
 
 type MatchResponseDto struct {
 	*domain.Match
-	UserPick *MatchUserPickDto `json:"user_pick"`
+	UserScorePick *UserScorePickDto `json:"user_score_pick,omitempty"`
 }
 
-type MatchUserPickDto struct {
+type UserScorePickDto struct {
 	HomeScore int `json:"home_score"`
 	AwayScore int `json:"away_score"`
 }

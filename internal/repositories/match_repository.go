@@ -13,14 +13,16 @@ import (
 )
 
 type MatchRepository struct {
-	db  *sql.DB
-	cfg *config.Config
+	db    *sql.DB
+	cfg   *config.Config
+	teams *domain.TeamLookup
 }
 
-func NewMatchRepository(db *sql.DB, cfg *config.Config) *MatchRepository {
+func NewMatchRepository(db *sql.DB, cfg *config.Config, teams *domain.TeamLookup) *MatchRepository {
 	return &MatchRepository{
-		db:  db,
-		cfg: cfg,
+		db:    db,
+		cfg:   cfg,
+		teams: teams,
 	}
 }
 
@@ -35,6 +37,10 @@ func (r *MatchRepository) GetMatches(ctx context.Context, filters domain.MatchFi
     m.id,
     m.stage_code,
     m.group_code,
+    m.venue_name,
+    m.venue_city,
+    m.home_team_fifa_code,
+    m.away_team_fifa_code,
     m.kickoff_at,
     m.status,
     m.home_score,
@@ -42,16 +48,8 @@ func (r *MatchRepository) GetMatches(ctx context.Context, filters domain.MatchFi
     m.home_penalty_score,
     m.away_penalty_score,
     m.winner_team_fifa_code,
-    m.updated_at,
-    ht.fifa_code,
-    ht.name_translations,
-    ht.flag_url,
-    at.fifa_code,
-    at.name_translations,
-    at.flag_url
-  FROM matches m
-  LEFT JOIN team_localized ht ON m.home_team_fifa_code = ht.fifa_code
-  LEFT JOIN team_localized at ON m.away_team_fifa_code = at.fifa_code`
+    m.updated_at
+  FROM matches m`
 
 	if len(filters.MatchIDs) > 0 {
 		conditions = append(conditions, "m.id = ANY($"+strconv.Itoa(len(args)+1)+")")
@@ -121,29 +119,35 @@ func (r *MatchRepository) GetMatches(ctx context.Context, filters domain.MatchFi
 
 	for rows.Next() {
 		var match domain.Match
-		var homeFifa, homeFlagURL, awayFifa, awayFlagURL sql.NullString
-		var homeNames, awayNames domain.TeamNames
+		var homeFifa, awayFifa sql.NullString
+		var homeScore, awayScore, homePenaltyScore, awayPenaltyScore sql.NullInt64
+		var winnerFifaCode sql.NullString
 		err := rows.Scan(
 			&match.ID,
 			&match.StageCode,
 			&match.GroupCode,
+			&match.Venue.Name,
+			&match.Venue.City,
+			&homeFifa,
+			&awayFifa,
 			&match.KickoffAt,
 			&match.Status,
-			&match.HomeScore,
-			&match.AwayScore,
-			&match.HomePenaltyScore,
-			&match.AwayPenaltyScore,
-			&match.WinnerTeamFifaCode,
+			&homeScore,
+			&awayScore,
+			&homePenaltyScore,
+			&awayPenaltyScore,
+			&winnerFifaCode,
 			&match.UpdatedAt,
-			&homeFifa, &homeNames, &homeFlagURL,
-			&awayFifa, &awayNames, &awayFlagURL,
 		)
 		if err != nil {
 			return nil, handleDBError(err, resourceMatch)
 		}
 
-		match.HomeTeam = buildMatchTeam(homeFifa, homeNames, homeFlagURL)
-		match.AwayTeam = buildMatchTeam(awayFifa, awayNames, awayFlagURL)
+		match.Teams = domain.MatchTeams{
+			Home: r.teams.Get(homeFifa.String),
+			Away: r.teams.Get(awayFifa.String),
+		}
+		match.Result = buildMatchResult(homeScore, awayScore, homePenaltyScore, awayPenaltyScore, winnerFifaCode)
 		matches = append(matches, &match)
 	}
 
@@ -172,18 +176,32 @@ func nullableInt(value *int) any {
 	return *value
 }
 
-func buildMatchTeam(fifaCode sql.NullString, names domain.TeamNames, flagURL sql.NullString) *domain.Team {
-	// Match has no assigned team yet (TBD)
-	if !fifaCode.Valid {
+func buildMatchResult(
+	homeScore, awayScore, homePenalty, awayPenalty sql.NullInt64,
+	winnerFifaCode sql.NullString,
+) *domain.MatchResult {
+	if !homeScore.Valid || !awayScore.Valid {
 		return nil
 	}
 
-	// Match has defined team
-	return &domain.Team{
-		FifaCode: fifaCode.String,
-		Name:     names,
-		FlagURL:  flagURL.String,
+	result := &domain.MatchResult{
+		HomeScore: int(homeScore.Int64),
+		AwayScore: int(awayScore.Int64),
 	}
+
+	if winnerFifaCode.Valid {
+		code := winnerFifaCode.String
+		result.WinnerTeamFifaCode = &code
+	}
+
+	if homePenalty.Valid && awayPenalty.Valid {
+		result.Penalties = &domain.Penalties{
+			Home: int(homePenalty.Int64),
+			Away: int(awayPenalty.Int64),
+		}
+	}
+
+	return result
 }
 
 func (r *MatchRepository) UpdateMatchesResult(ctx context.Context, updates []domain.MatchResultUpdate) error {

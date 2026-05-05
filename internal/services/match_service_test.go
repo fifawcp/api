@@ -27,8 +27,6 @@ func newTestMatchService(
 	)
 }
 
-func intPtr(v int) *int { return &v }
-
 // thirdPlaceTeamsNoConflict returns 8 third-place teams with clearly distinct rankings
 // (groups A-C-D-E-H-I-J-B, matching combination 470 for tests that exercise third-place promotion)
 func thirdPlaceTeamsNoConflict() []*domain.ThirdPlaceTeam {
@@ -67,13 +65,14 @@ func thirdPlaceTeamsWithConflict() []*domain.ThirdPlaceTeam {
 
 func groupStageMatch() *domain.Match {
 	return &domain.Match{
-		ID:        1,
-		HomeTeam:  &domain.Team{FifaCode: "MEX"},
-		AwayTeam:  &domain.Team{FifaCode: "USA"},
+		ID: 1,
+		Teams: domain.MatchTeams{
+			Home: &domain.Team{FifaCode: "MEX"},
+			Away: &domain.Team{FifaCode: "USA"},
+		},
 		StageCode: domain.MatchStageCodeGroupStage,
 		Status:    domain.MatchStatusFinished,
-		HomeScore: intPtr(1),
-		AwayScore: intPtr(0),
+		Result:    &domain.MatchResult{HomeScore: 1, AwayScore: 0},
 	}
 }
 
@@ -89,7 +88,7 @@ func TestMatchService_GetMatches(t *testing.T) {
 		mr := &mocks.MockMatchRepository{
 			GetMatchesFunc: func(ctx context.Context, filters domain.MatchFilters) ([]*domain.Match, error) {
 				return []*domain.Match{
-					{ID: 1, HomeTeam: &domain.Team{FifaCode: "MEX"}, AwayTeam: &domain.Team{FifaCode: "USA"}},
+					{ID: 1, Teams: domain.MatchTeams{Home: &domain.Team{FifaCode: "MEX"}, Away: &domain.Team{FifaCode: "USA"}}},
 				}, nil
 			},
 		}
@@ -100,7 +99,7 @@ func TestMatchService_GetMatches(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, matches, []*domain.Match{
-			{ID: 1, HomeTeam: &domain.Team{FifaCode: "MEX"}, AwayTeam: &domain.Team{FifaCode: "USA"}},
+			{ID: 1, Teams: domain.MatchTeams{Home: &domain.Team{FifaCode: "MEX"}, Away: &domain.Team{FifaCode: "USA"}}},
 		})
 	})
 
@@ -131,58 +130,64 @@ func TestValidateMatchResultForStage(t *testing.T) {
 
 	t.Run("group stage without penalty returns nil", func(t *testing.T) {
 		t.Parallel()
+		home, away := 1, 0
 		err := validateMatchResultForStage(domain.MatchStageCodeGroupStage, dtos.UpdateMatchResultDto{
-			HomeScore: intPtr(1),
-			AwayScore: intPtr(0),
+			HomeScore: &home,
+			AwayScore: &away,
 		})
 		assert.NoError(t, err)
 	})
 
 	t.Run("group stage with penalty returns ErrPenaltyForbidden", func(t *testing.T) {
 		t.Parallel()
+		home, away, homePenalty := 1, 0, 5
 		err := validateMatchResultForStage(domain.MatchStageCodeGroupStage, dtos.UpdateMatchResultDto{
-			HomeScore:        intPtr(1),
-			AwayScore:        intPtr(0),
-			HomePenaltyScore: intPtr(5),
+			HomeScore:        &home,
+			AwayScore:        &away,
+			HomePenaltyScore: &homePenalty,
 		})
 		assert.ErrorIs(t, err, domain.ErrPenaltyForbidden)
 	})
 
 	t.Run("knockout tied with penalty returns nil", func(t *testing.T) {
 		t.Parallel()
+		home, away, homePenalty, awayPenalty := 1, 1, 5, 4
 		err := validateMatchResultForStage(domain.MatchStageCodeRoundOf32, dtos.UpdateMatchResultDto{
-			HomeScore:        intPtr(1),
-			AwayScore:        intPtr(1),
-			HomePenaltyScore: intPtr(5),
-			AwayPenaltyScore: intPtr(4),
+			HomeScore:        &home,
+			AwayScore:        &away,
+			HomePenaltyScore: &homePenalty,
+			AwayPenaltyScore: &awayPenalty,
 		})
 		assert.NoError(t, err)
 	})
 
 	t.Run("knockout tied without penalty returns ErrPenaltyRequired", func(t *testing.T) {
 		t.Parallel()
+		home, away := 1, 1
 		err := validateMatchResultForStage(domain.MatchStageCodeRoundOf32, dtos.UpdateMatchResultDto{
-			HomeScore: intPtr(1),
-			AwayScore: intPtr(1),
+			HomeScore: &home,
+			AwayScore: &away,
 		})
 		assert.ErrorIs(t, err, domain.ErrPenaltyRequired)
 	})
 
 	t.Run("knockout decided with penalty returns ErrPenaltyForbidden", func(t *testing.T) {
 		t.Parallel()
+		home, away, homePenalty := 2, 1, 5
 		err := validateMatchResultForStage(domain.MatchStageCodeRoundOf32, dtos.UpdateMatchResultDto{
-			HomeScore:        intPtr(2),
-			AwayScore:        intPtr(1),
-			HomePenaltyScore: intPtr(5),
+			HomeScore:        &home,
+			AwayScore:        &away,
+			HomePenaltyScore: &homePenalty,
 		})
 		assert.ErrorIs(t, err, domain.ErrPenaltyForbidden)
 	})
 
 	t.Run("knockout decided without penalty returns nil", func(t *testing.T) {
 		t.Parallel()
+		home, away := 2, 1
 		err := validateMatchResultForStage(domain.MatchStageCodeRoundOf32, dtos.UpdateMatchResultDto{
-			HomeScore: intPtr(2),
-			AwayScore: intPtr(1),
+			HomeScore: &home,
+			AwayScore: &away,
 		})
 		assert.NoError(t, err)
 	})
@@ -251,9 +256,10 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 
 		service := newTestMatchService(mr, gsr, gss, ss, nil)
 
+		home, away := 1, 0
 		syncGroupStageOutcomes, err := service.UpdateMatchResult(context.Background(), 1, dtos.UpdateMatchResultDto{
-			HomeScore: intPtr(1),
-			AwayScore: intPtr(0),
+			HomeScore: &home,
+			AwayScore: &away,
 		})
 
 		assert.NoError(t, err)
@@ -303,9 +309,10 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 
 		service := newTestMatchService(mr, nil, gss, ss, nil)
 
+		home, away := 1, 0
 		syncGroupStageOutcomes, err := service.UpdateMatchResult(context.Background(), 1, dtos.UpdateMatchResultDto{
-			HomeScore: intPtr(1),
-			AwayScore: intPtr(0),
+			HomeScore: &home,
+			AwayScore: &away,
 		})
 
 		assert.NoError(t, err)
@@ -325,9 +332,10 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 
 		service := newTestMatchService(mr, nil, nil, nil, nil)
 
+		home, away := 1, 0
 		outcomes, err := service.UpdateMatchResult(context.Background(), 99, dtos.UpdateMatchResultDto{
-			HomeScore: intPtr(1),
-			AwayScore: intPtr(0),
+			HomeScore: &home,
+			AwayScore: &away,
 		})
 
 		assert.ErrorIs(t, err, domain.ErrMatchNotFound)
@@ -345,10 +353,11 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 
 		service := newTestMatchService(mr, nil, nil, nil, nil)
 
+		home, away, homePenalty := 1, 0, 5
 		outcomes, err := service.UpdateMatchResult(context.Background(), 1, dtos.UpdateMatchResultDto{
-			HomeScore:        intPtr(1),
-			AwayScore:        intPtr(0),
-			HomePenaltyScore: intPtr(5),
+			HomeScore:        &home,
+			AwayScore:        &away,
+			HomePenaltyScore: &homePenalty,
 		})
 
 		assert.ErrorIs(t, err, domain.ErrPenaltyForbidden)
@@ -369,9 +378,10 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 
 		service := newTestMatchService(mr, nil, nil, nil, nil)
 
+		home, away := 1, 0
 		outcomes, err := service.UpdateMatchResult(context.Background(), 1, dtos.UpdateMatchResultDto{
-			HomeScore: intPtr(1),
-			AwayScore: intPtr(0),
+			HomeScore: &home,
+			AwayScore: &away,
 		})
 
 		assert.Error(t, err)
@@ -414,9 +424,10 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 
 		service := newTestMatchService(mr, nil, gss, ss, nil)
 
+		home, away := 1, 0
 		outcomes, err := service.UpdateMatchResultsBulk(context.Background(), dtos.BulkUpdateMatchesResultDto{
 			Matches: []dtos.BulkUpdateMatchResultDto{
-				{ID: 1, UpdateMatchResultDto: dtos.UpdateMatchResultDto{HomeScore: intPtr(1), AwayScore: intPtr(0)}},
+				{ID: 1, UpdateMatchResultDto: dtos.UpdateMatchResultDto{HomeScore: &home, AwayScore: &away}},
 			},
 		})
 
@@ -462,9 +473,10 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 
 		service := newTestMatchService(mr, gsr, gss, ss, nil)
 
+		home, away := 1, 0
 		outcomes, err := service.UpdateMatchResultsBulk(context.Background(), dtos.BulkUpdateMatchesResultDto{
 			Matches: []dtos.BulkUpdateMatchResultDto{
-				{ID: 1, UpdateMatchResultDto: dtos.UpdateMatchResultDto{HomeScore: intPtr(1), AwayScore: intPtr(0)}},
+				{ID: 1, UpdateMatchResultDto: dtos.UpdateMatchResultDto{HomeScore: &home, AwayScore: &away}},
 			},
 		})
 
@@ -484,9 +496,10 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 
 		service := newTestMatchService(mr, nil, nil, nil, nil)
 
+		home, away := 1, 0
 		outcomes, err := service.UpdateMatchResultsBulk(context.Background(), dtos.BulkUpdateMatchesResultDto{
 			Matches: []dtos.BulkUpdateMatchResultDto{
-				{ID: 99, UpdateMatchResultDto: dtos.UpdateMatchResultDto{HomeScore: intPtr(1), AwayScore: intPtr(0)}},
+				{ID: 99, UpdateMatchResultDto: dtos.UpdateMatchResultDto{HomeScore: &home, AwayScore: &away}},
 			},
 		})
 
@@ -506,12 +519,13 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 
 		service := newTestMatchService(mr, nil, nil, nil, nil)
 
+		home, away, homePenalty := 1, 0, 5
 		outcomes, err := service.UpdateMatchResultsBulk(context.Background(), dtos.BulkUpdateMatchesResultDto{
 			Matches: []dtos.BulkUpdateMatchResultDto{
 				{ID: 1, UpdateMatchResultDto: dtos.UpdateMatchResultDto{
-					HomeScore:        intPtr(1),
-					AwayScore:        intPtr(0),
-					HomePenaltyScore: intPtr(5),
+					HomeScore:        &home,
+					AwayScore:        &away,
+					HomePenaltyScore: &homePenalty,
 				}},
 			},
 		})
@@ -534,9 +548,10 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 
 		service := newTestMatchService(mr, nil, nil, nil, nil)
 
+		home, away := 1, 0
 		outcomes, err := service.UpdateMatchResultsBulk(context.Background(), dtos.BulkUpdateMatchesResultDto{
 			Matches: []dtos.BulkUpdateMatchResultDto{
-				{ID: 1, UpdateMatchResultDto: dtos.UpdateMatchResultDto{HomeScore: intPtr(1), AwayScore: intPtr(0)}},
+				{ID: 1, UpdateMatchResultDto: dtos.UpdateMatchResultDto{HomeScore: &home, AwayScore: &away}},
 			},
 		})
 

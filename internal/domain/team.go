@@ -48,3 +48,29 @@ func (n *TeamNames) Scan(value any) error {
 type TeamRepository interface {
 	GetAllTeams(ctx context.Context) ([]*Team, error)
 }
+
+type TeamLookup struct {
+	byCode map[string]*Team
+}
+
+func NewTeamLookup(teams []*Team) *TeamLookup {
+	lookup := &TeamLookup{}
+	lookup.Set(teams)
+	return lookup
+}
+
+func (lookup *TeamLookup) Set(teams []*Team) {
+	byCode := make(map[string]*Team, len(teams))
+	for _, team := range teams {
+		byCode[team.FifaCode] = team
+	}
+	lookup.byCode = byCode
+}
+
+func (lookup *TeamLookup) Get(fifaCode string) *Team {
+	if fifaCode == "" {
+		return nil
+	}
+
+	return lookup.byCode[fifaCode]
+}
