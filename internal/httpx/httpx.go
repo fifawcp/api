@@ -18,9 +18,13 @@ import (
 const refreshTokenCookieName = "refresh_token"
 const maxBodySizeInBytes = 1_048_576 // 1 MB
 
-// TODO: see if we can like customize the field of each response
+// Response is the envelope for every successful API response.
+// `data` carries the resource (object or array). `pagination` is set only for
+// list endpoints — it sits at envelope level so client code can handle
+// pagination uniformly across endpoints, and is omitted from the wire when nil.
 type Response struct {
-	Data any `json:"data,omitempty"`
+	Data       any `json:"data,omitempty"`
+	Pagination any `json:"pagination,omitempty"`
 }
 
 type APIError struct {
@@ -39,6 +43,10 @@ type ErrorResponse struct {
 // ---------------------------------------------------------------------------
 func RespondWithData(w http.ResponseWriter, status int, data any) {
 	writeJSON(w, status, Response{Data: data})
+}
+
+func RespondWithPaginatedData(w http.ResponseWriter, status int, data, pagination any) {
+	writeJSON(w, status, Response{Data: data, Pagination: pagination})
 }
 
 func RespondWithError(w http.ResponseWriter, r *http.Request, status int, code, message string) {

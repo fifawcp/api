@@ -60,7 +60,7 @@ func TestDebugHandler_RequestOtp(t *testing.T) {
 		assert.IsType(t, "", resp.Data["otp"])
 		assert.NotEmpty(t, resp.Data["otp"])
 
-		assert.IsType(t, float64(1), resp.Data["expiresIn"])
-		assert.NotEmpty(t, resp.Data["expiresIn"])
+		assert.IsType(t, float64(1), resp.Data["expires_in"])
+		assert.NotEmpty(t, resp.Data["expires_in"])
 	})
 }

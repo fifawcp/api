@@ -41,8 +41,8 @@ type BoardViewer struct {
 }
 
 type BoardMembersPage struct {
-	Members    []*BoardMemberDetails `json:"members"`
-	Pagination Pagination            `json:"pagination"`
+	Members    []*BoardMemberDetails
+	Pagination Pagination
 }
 
 type BoardMembersSort string

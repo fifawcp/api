@@ -196,7 +196,7 @@ func (h *BoardHandler) GetBoardMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.RespondWithData(w, http.StatusOK, membersPage)
+	httpx.RespondWithPaginatedData(w, http.StatusOK, membersPage.Members, membersPage.Pagination)
 }
 
 func parseBoardMembersFilters(r *http.Request) (domain.BoardMembersFilters, error) {

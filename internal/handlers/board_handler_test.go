@@ -512,14 +512,15 @@ func TestBoardHandler_GetBoardMembers(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var resp struct {
-			Data *domain.BoardMembersPage `json:"data"`
+			Data       []*domain.BoardMemberDetails `json:"data"`
+			Pagination domain.Pagination            `json:"pagination"`
 		}
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Len(t, resp.Data.Members, 2)
-		assert.Equal(t, 1, resp.Data.Pagination.Page)
-		assert.Equal(t, 10, resp.Data.Pagination.Limit)
-		assert.Equal(t, 2, resp.Data.Pagination.Total)
-		assert.False(t, resp.Data.Pagination.HasMore)
+		assert.Len(t, resp.Data, 2)
+		assert.Equal(t, 1, resp.Pagination.Page)
+		assert.Equal(t, 10, resp.Pagination.Limit)
+		assert.Equal(t, 2, resp.Pagination.Total)
+		assert.False(t, resp.Pagination.HasMore)
 	})
 
 	t.Run("forwards default page+limit when query params missing", func(t *testing.T) {
