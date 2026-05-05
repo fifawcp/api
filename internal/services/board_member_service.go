@@ -8,7 +8,7 @@ import (
 )
 
 type BoardMemberServiceInterface interface {
-	JoinBoard(ctx context.Context, joinCode string, userID string) error
+	JoinBoard(ctx context.Context, joinCode string, userID string) (string, error)
 	GetBoardMember(ctx context.Context, boardID string, userID string) (*domain.BoardMember, error)
 	GetBoardMembers(ctx context.Context, boardID string, page, limit int) (*domain.BoardMembersPage, error)
 	UpdateBoardMemberRole(ctx context.Context, boardID string, userID string, role domain.BoardMemberRole, payload dtos.UpdateBoardMemberRoleDto) error
@@ -35,7 +35,7 @@ func (s *BoardMemberService) JoinBoard(
 	ctx context.Context,
 	joinCode string,
 	userID string,
-) error {
+) (string, error) {
 	return s.boardMemberRepository.CreateBoardMember(ctx, joinCode, userID)
 }
 

@@ -21,7 +21,7 @@ const (
 )
 
 type BoardMemberRepository interface {
-	CreateBoardMember(ctx context.Context, joinCode string, userID string) error
+	CreateBoardMember(ctx context.Context, joinCode string, userID string) (string, error)
 	GetBoardMember(ctx context.Context, boardID string, userID string) (*BoardMember, error)
 	UpdateBoardMemberRole(ctx context.Context, boardID string, userID string, role BoardMemberRole) error
 	RemoveBoardMember(ctx context.Context, boardID string, userID string) error

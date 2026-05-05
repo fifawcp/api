@@ -105,6 +105,7 @@ func (r *BoardRepository) GetBoardDetails(
 		WITH ranked AS (
 			SELECT
 				bm.user_id,
+				bm.role,
 				bm.created_at AS joined_at,
 				RANK() OVER (
 					ORDER BY us.total_points DESC, us.updated_at ASC, bm.user_id ASC
@@ -121,6 +122,7 @@ func (r *BoardRepository) GetBoardDetails(
 			b.join_code,
 			b.privacy,
 			b.created_at,
+			r.role,
 			r.joined_at,
 			r.rank,
 			r.total_points
@@ -131,8 +133,9 @@ func (r *BoardRepository) GetBoardDetails(
 
 	var details domain.BoardDetails
 	var ownerUserID, joinCode sql.NullString
+	var role sql.NullString
 	var joinedAt sql.NullTime
-	var userRank, totalPoints sql.NullInt64
+	var rank, totalPoints sql.NullInt64
 
 	err := r.db.QueryRowContext(ctx, query, boardID, userID).Scan(
 		&details.ID,
@@ -141,8 +144,9 @@ func (r *BoardRepository) GetBoardDetails(
 		&joinCode,
 		&details.Privacy,
 		&details.CreatedAt,
+		&role,
 		&joinedAt,
-		&userRank,
+		&rank,
 		&totalPoints,
 	)
 	if err != nil {
@@ -151,22 +155,27 @@ func (r *BoardRepository) GetBoardDetails(
 
 	if ownerUserID.Valid {
 		details.OwnerUserID = &ownerUserID.String
+		details.Viewer.IsOwner = ownerUserID.String == userID
 	}
 
 	if joinCode.Valid {
 		details.JoinCode = &joinCode.String
 	}
 
-	if joinedAt.Valid {
-		details.JoinedAt = joinedAt.Time
+	if role.Valid {
+		details.Viewer.Role = domain.BoardMemberRole(role.String)
 	}
 
-	if userRank.Valid {
-		details.UserRank = int(userRank.Int64)
+	if joinedAt.Valid {
+		details.Viewer.JoinedAt = joinedAt.Time
+	}
+
+	if rank.Valid {
+		details.Viewer.Rank = int(rank.Int64)
 	}
 
 	if totalPoints.Valid {
-		details.UserTotalPoints = int(totalPoints.Int64)
+		details.Viewer.TotalPoints = int(totalPoints.Int64)
 	}
 
 	return &details, nil

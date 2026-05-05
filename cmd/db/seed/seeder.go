@@ -159,7 +159,7 @@ func (s *Seeder) seedBoards(ctx context.Context, users []*domain.User) {
 
 		// Insert the members into the board
 		for j := 0; j < memberCount && j < len(candidates); j++ {
-			if err := s.boardMemberRepository.CreateBoardMember(ctx, joinCode, candidates[j].ID); err != nil {
+			if _, err := s.boardMemberRepository.CreateBoardMember(ctx, joinCode, candidates[j].ID); err != nil {
 				s.logger.Error(
 					"Error seeding board member",
 					logging.Error, err.Error(),

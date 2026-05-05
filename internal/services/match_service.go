@@ -532,7 +532,7 @@ func loadThirdPlaceCombinations() []domain.ThirdPlaceCombination {
 	if err := json.Unmarshal(combinationsJSON, &combinations); err != nil {
 		panic("failed to parse embedded combinations.json: " + err.Error())
 	}
-	
+
 	return combinations
 }
 

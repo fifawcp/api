@@ -268,16 +268,17 @@ func TestBoardHandler_JoinBoard(t *testing.T) {
 		)
 	}
 
-	t.Run("return 204 when join is successful", func(t *testing.T) {
+	t.Run("returns 201 with board id when join is successful", func(t *testing.T) {
 		t.Parallel()
 
 		body := dtos.JoinBoardDto{
 			JoinCode: "ABCD1234",
 		}
+		expectedBoardID := gofakeit.UUID()
 
 		bms := &mocks.MockBoardMemberService{
-			JoinBoardFunc: func(ctx context.Context, joinCode string, userID string) error {
-				return nil
+			JoinBoardFunc: func(ctx context.Context, joinCode string, userID string) (string, error) {
+				return expectedBoardID, nil
 			},
 		}
 
@@ -288,7 +289,14 @@ func TestBoardHandler_JoinBoard(t *testing.T) {
 
 		h.JoinBoard(w, req)
 
-		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		var resp struct {
+			Data dtos.JoinBoardResponseDto `json:"data"`
+		}
+
+		testutils.ParseJSONResponse(t, w, &resp)
+		assert.Equal(t, expectedBoardID, resp.Data.BoardID)
 	})
 
 	t.Run("returns 400 on validation fails", func(t *testing.T) {
@@ -356,8 +364,8 @@ func TestBoardHandler_JoinBoard(t *testing.T) {
 		}
 
 		bms := &mocks.MockBoardMemberService{
-			JoinBoardFunc: func(ctx context.Context, joinCode string, userID string) error {
-				return errors.New("db error")
+			JoinBoardFunc: func(ctx context.Context, joinCode string, userID string) (string, error) {
+				return "", errors.New("db error")
 			},
 		}
 
@@ -400,12 +408,18 @@ func TestBoardHandler_GetBoardByID(t *testing.T) {
 		bs := &mocks.MockBoardService{
 			GetBoardByIDFunc: func(ctx context.Context, boardID string, userID string) (*domain.BoardDetails, error) {
 				return &domain.BoardDetails{
-					ID:       boardID,
-					Name:     "Test Board",
-					JoinCode: &joinCode,
-					Privacy:  domain.BoardPrivacyPrivate,
-					JoinedAt: time.Now(),
-					UserRank: 5,
+					Board: domain.Board{
+						ID:       boardID,
+						Name:     "Test Board",
+						JoinCode: &joinCode,
+						Privacy:  domain.BoardPrivacyPrivate,
+					},
+					Viewer: domain.BoardViewer{
+						Role:     domain.BoardMemberRoleAdmin,
+						IsOwner:  true,
+						JoinedAt: time.Now(),
+						Rank:     5,
+					},
 				}, nil
 			},
 		}
@@ -427,7 +441,9 @@ func TestBoardHandler_GetBoardByID(t *testing.T) {
 		assert.Equal(t, "Test Board", resp.Data.Name)
 		assert.NotNil(t, resp.Data.JoinCode)
 		assert.Equal(t, joinCode, *resp.Data.JoinCode)
-		assert.Equal(t, 5, resp.Data.UserRank)
+		assert.Equal(t, 5, resp.Data.Viewer.Rank)
+		assert.Equal(t, domain.BoardMemberRoleAdmin, resp.Data.Viewer.Role)
+		assert.True(t, resp.Data.Viewer.IsOwner)
 	})
 
 	t.Run("propagates service error", func(t *testing.T) {

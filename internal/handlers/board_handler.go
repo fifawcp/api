@@ -98,8 +98,8 @@ func (h *BoardHandler) GetUserBoards(w http.ResponseWriter, r *http.Request) {
 //	@Tags			boards
 //	@Accept			json
 //	@Produce		json
-//	@Param			joinCode	body	dtos.JoinBoardDto	true	"Join code"
-//	@Success		204			"Joined board successfully"
+//	@Param			joinCode	body		dtos.JoinBoardDto	true	"Join code"
+//	@Success		201			{object}	httpx.Response		"Joined board successfully"
 //	@Failure		400			{object}	httpx.ErrorResponse	"Invalid request body or validation error"
 //	@Failure		401			{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
 //	@Failure		401			{object}	httpx.ErrorResponse	"Invalid or expired board join code"
@@ -116,12 +116,15 @@ func (h *BoardHandler) JoinBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.boardMemberService.JoinBoard(r.Context(), body.JoinCode, user.ID); err != nil {
+	boardID, err := h.boardMemberService.JoinBoard(r.Context(), body.JoinCode, user.ID)
+	if err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return
 	}
 
-	httpx.RespondWithData(w, http.StatusNoContent, nil)
+	httpx.RespondWithData(w, http.StatusCreated, &dtos.JoinBoardResponseDto{
+		BoardID: boardID,
+	})
 }
 
 // GetBoardByID godoc

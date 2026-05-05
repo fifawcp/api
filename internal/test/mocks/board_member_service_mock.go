@@ -8,7 +8,7 @@ import (
 )
 
 type MockBoardMemberService struct {
-	JoinBoardFunc             func(ctx context.Context, joinCode string, userID string) error
+	JoinBoardFunc             func(ctx context.Context, joinCode string, userID string) (string, error)
 	GetBoardMemberFunc        func(ctx context.Context, boardID string, userID string) (*domain.BoardMember, error)
 	GetBoardMembersFunc       func(ctx context.Context, boardID string, page, limit int) (*domain.BoardMembersPage, error)
 	UpdateBoardMemberRoleFunc func(ctx context.Context, boardID string, userID string, role domain.BoardMemberRole, payload dtos.UpdateBoardMemberRoleDto) error
@@ -16,7 +16,7 @@ type MockBoardMemberService struct {
 	LeaveBoardFunc            func(ctx context.Context, boardID string, userID string) error
 }
 
-func (m *MockBoardMemberService) JoinBoard(ctx context.Context, joinCode string, userID string) error {
+func (m *MockBoardMemberService) JoinBoard(ctx context.Context, joinCode string, userID string) (string, error) {
 	if m.JoinBoardFunc != nil {
 		return m.JoinBoardFunc(ctx, joinCode, userID)
 	}

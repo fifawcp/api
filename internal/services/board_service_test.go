@@ -159,11 +159,17 @@ func TestBoardService_GetBoardByID(t *testing.T) {
 		joinedAt := gofakeit.Date()
 
 		repoBoard := &domain.BoardDetails{
-			ID:       boardID,
-			Name:     "Test Board",
-			Privacy:  domain.BoardPrivacyPrivate,
-			JoinedAt: joinedAt,
-			UserRank: 3,
+			Board: domain.Board{
+				ID:      boardID,
+				Name:    "Test Board",
+				Privacy: domain.BoardPrivacyPrivate,
+			},
+			Viewer: domain.BoardViewer{
+				Role:     domain.BoardMemberRoleAdmin,
+				IsOwner:  true,
+				JoinedAt: joinedAt,
+				Rank:     3,
+			},
 		}
 
 		br := &mocks.MockBoardRepository{
@@ -180,8 +186,10 @@ func TestBoardService_GetBoardByID(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, domain.BoardPrivacyPrivate, result.Privacy)
-		assert.Equal(t, 3, result.UserRank)
-		assert.Equal(t, joinedAt, result.JoinedAt)
+		assert.Equal(t, domain.BoardMemberRoleAdmin, result.Viewer.Role)
+		assert.True(t, result.Viewer.IsOwner)
+		assert.Equal(t, 3, result.Viewer.Rank)
+		assert.Equal(t, joinedAt, result.Viewer.JoinedAt)
 	})
 
 	t.Run("propagates board repository error", func(t *testing.T) {
