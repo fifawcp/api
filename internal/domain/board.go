@@ -45,6 +45,21 @@ type BoardMembersPage struct {
 	Pagination Pagination            `json:"pagination"`
 }
 
+type BoardMembersSort string
+
+const (
+	BoardMembersSortTotalPoints      BoardMembersSort = "total_points"
+	BoardMembersSortPickemPoints     BoardMembersSort = "pickem_points"
+	BoardMembersSortMatchScorePoints BoardMembersSort = "match_score_points"
+	BoardMembersSortExactHits        BoardMembersSort = "exact_hits"
+	BoardMembersSortCorrectOutcomes  BoardMembersSort = "correct_outcomes"
+)
+
+type BoardMembersFilters struct {
+	Search string
+	Sort   BoardMembersSort
+}
+
 type BoardMemberDetails struct {
 	UserID           string          `json:"user_id" example:"123e4567-e89b-12d3-a456-426614174000"`
 	UserName         string          `json:"username" example:"johndoe"`
@@ -66,7 +81,7 @@ type BoardRepository interface {
 	GetUserBoards(ctx context.Context, userID string) ([]*UserBoardListItem, error)
 	GetBoardByID(ctx context.Context, boardID string) (*Board, error)
 	GetBoardDetails(ctx context.Context, boardID string, userID string) (*BoardDetails, error)
-	GetBoardMembers(ctx context.Context, boardID string, page, limit int) (*BoardMembersPage, error)
+	GetBoardMembers(ctx context.Context, boardID string, filters BoardMembersFilters, page, limit int) (*BoardMembersPage, error)
 	UpdateJoinCode(ctx context.Context, boardID string, joinCode string) error
 	UpdateBoard(ctx context.Context, boardID string, board *Board) error
 	DeleteBoard(ctx context.Context, boardID string, userID string) error

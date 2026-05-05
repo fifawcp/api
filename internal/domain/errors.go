@@ -55,6 +55,7 @@ var ErrBoardIsPublic = errors.New("operation not allowed on public board")
 // Board Member
 var ErrBoardMemberNotFound = errors.New("board member not found")
 var ErrBoardMemberAlreadyInBoard = errors.New("user is already a member of this board")
+var ErrInvalidBoardMembersSort = errors.New("invalid sort field for board members")
 
 // Group Standings
 var ErrInvalidGroupCode = errors.New("invalid group code")

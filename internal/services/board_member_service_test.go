@@ -181,9 +181,11 @@ func TestBoardMemberService_GetBoardMembers(t *testing.T) {
 			Pagination: domain.Pagination{Page: page, Limit: limit, Total: 2, HasMore: false},
 		}
 
+		filters := domain.BoardMembersFilters{Search: "alice", Sort: domain.BoardMembersSortMatchScorePoints}
 		br := &mocks.MockBoardRepository{
-			GetBoardMembersFunc: func(ctx context.Context, bid string, gotPage, gotLimit int) (*domain.BoardMembersPage, error) {
+			GetBoardMembersFunc: func(ctx context.Context, bid string, gotFilters domain.BoardMembersFilters, gotPage, gotLimit int) (*domain.BoardMembersPage, error) {
 				assert.Equal(t, boardID, bid)
+				assert.Equal(t, filters, gotFilters)
 				assert.Equal(t, page, gotPage)
 				assert.Equal(t, limit, gotLimit)
 				return expected, nil
@@ -192,7 +194,7 @@ func TestBoardMemberService_GetBoardMembers(t *testing.T) {
 
 		service := newTestBoardMemberService(br, nil)
 
-		result, err := service.GetBoardMembers(context.Background(), boardID, page, limit)
+		result, err := service.GetBoardMembers(context.Background(), boardID, filters, page, limit)
 
 		assert.NoError(t, err)
 		assert.Same(t, expected, result)
@@ -204,14 +206,14 @@ func TestBoardMemberService_GetBoardMembers(t *testing.T) {
 		boardID := gofakeit.UUID()
 
 		br := &mocks.MockBoardRepository{
-			GetBoardMembersFunc: func(ctx context.Context, bid string, page, limit int) (*domain.BoardMembersPage, error) {
+			GetBoardMembersFunc: func(ctx context.Context, bid string, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {
 				return nil, domain.ErrBoardNotFound
 			},
 		}
 
 		service := newTestBoardMemberService(br, nil)
 
-		result, err := service.GetBoardMembers(context.Background(), boardID, 1, 20)
+		result, err := service.GetBoardMembers(context.Background(), boardID, domain.BoardMembersFilters{}, 1, 20)
 
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, domain.ErrBoardNotFound)

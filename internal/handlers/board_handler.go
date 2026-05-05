@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
+	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/dtos"
 	"github.com/fifawcp/api/internal/httpctx"
 	"github.com/fifawcp/api/internal/httpx"
@@ -157,14 +159,20 @@ func (h *BoardHandler) GetBoardByID(w http.ResponseWriter, r *http.Request) {
 // GetBoardMembers godoc
 //
 //	@Summary		Get board members (paginated leaderboard)
-//	@Description	Returns the board's members with their ranking, paginated by `page` and `limit` query params (defaults: page=1, limit=20, max limit=100). Requires authentication and board membership.
+//	@Description	Returns the board's members with their ranking, paginated by `page` and `limit` query params (defaults: page=1, limit=20, max limit=100).
+//	@Description	`search` filters by case-insensitive substring match across first_name, last_name, and username.
+//	@Description	`sort` reorders the displayed list (always DESC); allowed values: total_points (default), pickem_points, match_score_points, exact_hits, correct_outcomes.
+//	@Description	The `rank` field always reflects the leaderboard position by total_points and is unaffected by `sort`.
+//	@Description	Requires authentication and board membership.
 //	@Tags			boards
 //	@Produce		json
 //	@Param			boardId	path		string				true	"Board ID"
 //	@Param			page	query		int					false	"Page number (1-indexed, default 1)"
 //	@Param			limit	query		int					false	"Page size (default 20, max 100)"
+//	@Param			search	query		string				false	"Search by first_name, last_name, or username (case-insensitive substring)"
+//	@Param			sort	query		string				false	"Sort column (total_points | pickem_points | match_score_points | exact_hits | correct_outcomes)"
 //	@Success		200		{object}	httpx.Response		"Board members page retrieved successfully"
-//	@Failure		400		{object}	httpx.ErrorResponse	"Invalid pagination params"
+//	@Failure		400		{object}	httpx.ErrorResponse	"Invalid pagination or sort param"
 //	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized"
 //	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board"
 //	@Failure		404		{object}	httpx.ErrorResponse	"Board not found"
@@ -176,13 +184,33 @@ func (h *BoardHandler) GetBoardMembers(w http.ResponseWriter, r *http.Request) {
 
 	page, limit := httpx.ParsePagination(w, r)
 
-	membersPage, err := h.boardMemberService.GetBoardMembers(r.Context(), boardID, page, limit)
+	filters, err := parseBoardMembersFilters(r)
+	if err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	membersPage, err := h.boardMemberService.GetBoardMembers(r.Context(), boardID, filters, page, limit)
 	if err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return
 	}
 
 	httpx.RespondWithData(w, http.StatusOK, membersPage)
+}
+
+func parseBoardMembersFilters(r *http.Request) (domain.BoardMembersFilters, error) {
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+
+	sort := r.URL.Query().Get("sort")
+	if sort != "" && !validator.IsValidBoardMembersSort(sort) {
+		return domain.BoardMembersFilters{}, domain.ErrInvalidBoardMembersSort
+	}
+
+	return domain.BoardMembersFilters{
+		Search: search,
+		Sort:   domain.BoardMembersSort(sort),
+	}, nil
 }
 
 // LeaveBoard godoc

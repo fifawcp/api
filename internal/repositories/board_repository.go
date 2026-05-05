@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/fifawcp/api/internal/domain"
@@ -184,6 +185,7 @@ func (r *BoardRepository) GetBoardDetails(
 func (r *BoardRepository) GetBoardMembers(
 	ctx context.Context,
 	boardID string,
+	filters domain.BoardMembersFilters,
 	page, limit int,
 ) (*domain.BoardMembersPage, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
@@ -191,8 +193,25 @@ func (r *BoardRepository) GetBoardMembers(
 
 	offset := (page - 1) * limit
 
-	// RANK() is computed over the full board, then OFFSET/LIMIT slices the page
-	// COUNT(*) OVER () returns the full member count alongside each row
+	args := []any{boardID}
+	searchClause := ""
+
+	if filters.Search != "" {
+		args = append(args, "%"+filters.Search+"%")
+		searchClause = `AND (
+				u.first_name ILIKE $2
+				OR u.last_name ILIKE $2
+				OR u.username ILIKE $2
+			)`
+	}
+
+	offsetPlaceholder := "$" + strconv.Itoa(len(args)+1)
+	limitPlaceholder := "$" + strconv.Itoa(len(args)+2)
+	args = append(args, offset, limit)
+
+	// RANK() is computed over the full filtered board, then OFFSET/LIMIT slices the page
+	// RANK is always by total_points DESC regardless of the user's chosen sort, so it
+	// reflects the leaderboard position rather than the row's position in the current view
 	query := `
 		WITH ranked AS (
 			SELECT
@@ -216,6 +235,7 @@ func (r *BoardRepository) GetBoardMembers(
 			INNER JOIN users u        ON u.id       = bm.user_id
 			LEFT  JOIN user_scores us ON us.user_id = bm.user_id
 			WHERE bm.board_id = $1
+				` + searchClause + `
 		)
 		SELECT
 			user_id,
@@ -233,11 +253,10 @@ func (r *BoardRepository) GetBoardMembers(
 			updated_at,
 			total
 		FROM ranked
-		ORDER BY rank ASC, joined_at ASC
-		OFFSET $2 LIMIT $3
-	`
+		ORDER BY ` + boardMembersSortColumn(filters.Sort) + ` DESC NULLS LAST, joined_at ASC, user_id ASC
+		OFFSET ` + offsetPlaceholder + ` LIMIT ` + limitPlaceholder
 
-	rows, err := r.db.QueryContext(ctx, query, boardID, offset, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, handleDBError(err, resourceBoard)
 	}
@@ -282,11 +301,23 @@ func (r *BoardRepository) GetBoardMembers(
 		return nil, handleDBError(err, resourceBoard)
 	}
 
-	// If the requested page is past the end, the windowed COUNT didn't return
-	// Fall back to a direct count so pagination.total is still populated
+	// If the requested page is past the end (or the search filter excluded everyone),
+	// the windowed COUNT never reached us. Fall back to a direct count that respects
+	// the same WHERE so pagination.total stays accurate.
 	if len(membersPage.Members) == 0 {
-		countQuery := `SELECT COUNT(*) FROM board_members WHERE board_id = $1`
-		if err := r.db.QueryRowContext(ctx, countQuery, boardID).Scan(&membersPage.Pagination.Total); err != nil {
+		countArgs := []any{boardID}
+		countQuery := `
+			SELECT COUNT(*)
+			FROM board_members bm
+			INNER JOIN users u ON u.id = bm.user_id
+			WHERE bm.board_id = $1`
+
+		if filters.Search != "" {
+			countArgs = append(countArgs, "%"+filters.Search+"%")
+			countQuery += ` AND (u.first_name ILIKE $2 OR u.last_name ILIKE $2 OR u.username ILIKE $2)`
+		}
+
+		if err := r.db.QueryRowContext(ctx, countQuery, countArgs...).Scan(&membersPage.Pagination.Total); err != nil {
 			return nil, handleDBError(err, resourceBoard)
 		}
 	}
@@ -294,6 +325,21 @@ func (r *BoardRepository) GetBoardMembers(
 	membersPage.Pagination.HasMore = page*limit < membersPage.Pagination.Total
 
 	return membersPage, nil
+}
+
+func boardMembersSortColumn(sort domain.BoardMembersSort) string {
+	switch sort {
+	case domain.BoardMembersSortPickemPoints:
+		return "pickem_points"
+	case domain.BoardMembersSortMatchScorePoints:
+		return "match_score_points"
+	case domain.BoardMembersSortExactHits:
+		return "exact_hits"
+	case domain.BoardMembersSortCorrectOutcomes:
+		return "correct_outcomes"
+	default:
+		return "total_points"
+	}
 }
 
 func (r *BoardRepository) GetBoardByID(ctx context.Context, boardID string) (*domain.Board, error) {
