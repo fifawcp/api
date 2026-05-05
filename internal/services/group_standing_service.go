@@ -38,7 +38,6 @@ func (s *GroupStandingService) GetGroupStandings(ctx context.Context, groupCodes
 }
 
 func (s *GroupStandingService) RecalculateStandings(ctx context.Context) error {
-	// Get all finished matches for the group stage
 	matches, err := s.matchRepository.GetMatches(ctx, domain.MatchFilters{
 		Status:     domain.MatchStatusFinished,
 		StageCodes: []domain.MatchStageCode{domain.MatchStageCodeGroupStage},
@@ -47,9 +46,9 @@ func (s *GroupStandingService) RecalculateStandings(ctx context.Context) error {
 		return err
 	}
 
-	matchesGroupedByGroup := make(map[string][]*domain.Match)
+	matchesByGroup := make(map[string][]*domain.Match)
 	for _, match := range matches {
-		matchesGroupedByGroup[*match.GroupCode] = append(matchesGroupedByGroup[*match.GroupCode], match)
+		matchesByGroup[*match.GroupCode] = append(matchesByGroup[*match.GroupCode], match)
 	}
 
 	groupCodes := []string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"}
@@ -62,7 +61,7 @@ func (s *GroupStandingService) RecalculateStandings(ctx context.Context) error {
 		wg.Add(1)
 		go func(groupCode string) {
 			defer wg.Done()
-			if err := s.recalculateStandingsByGroup(ctx, matchesGroupedByGroup[groupCode]); err != nil {
+			if err := s.recalculateStandingsByGroup(ctx, matchesByGroup[groupCode]); err != nil {
 				mu.Lock()
 				errs = append(errs, err)
 				mu.Unlock()
@@ -78,288 +77,273 @@ func (s *GroupStandingService) RecalculateStandings(ctx context.Context) error {
 	return nil
 }
 
-func (s *GroupStandingService) recalculateStandingsByGroup(
-	ctx context.Context,
-	groupMatches []*domain.Match,
-) error {
-	teamStats := calculateOverallStats(groupMatches)
-
-	// Convert map to slice for sorting
-	var standings []*domain.GroupStanding
-	for _, stat := range teamStats {
-		standings = append(standings, stat)
-	}
-
-	standings = sortByOverallStats(standings)
-	tiedGroups := identifyTiedGroups(standings)
-
-	// Build FIFA code map once (only if there are tied groups)
-	var fifaCodeToIndex map[string]int
-
-	if len(tiedGroups) > 0 {
-		fifaCodeToIndex = make(map[string]int)
-		for i, standing := range standings {
-			fifaCodeToIndex[standing.Team.FifaCode] = i
-		}
-	}
-
-	// Process tied groups only if any exist
-	for _, tiedGroup := range tiedGroups {
-		h2hMatches := filterHeadToHeadMatches(tiedGroup, groupMatches)
-		h2hStats := calculateHeadToHeadStats(tiedGroup, h2hMatches)
-		sortedGroup := sortTiedGroupByHeadToHead(tiedGroup, h2hStats)
-
-		if isStillTied(sortedGroup, h2hStats) {
-			// Fallback to overall stats (FIFA rules d, e)
-			sortedGroup = sortByOverallStats(sortedGroup)
-		}
-
-		// Update the original standings with the sorted group
-		// Replace in original standings array
-		for _, team := range sortedGroup {
-			originalIndex := fifaCodeToIndex[team.Team.FifaCode]
-			standings[originalIndex] = team
-		}
-	}
-
-	for i, standing := range standings {
-		standing.Position = i + 1
-	}
-
+func (s *GroupStandingService) recalculateStandingsByGroup(ctx context.Context, groupMatches []*domain.Match) error {
+	standings := rankGroup(groupMatches)
 	return s.groupStandingRepository.UpdateGroupStandings(ctx, standings)
 }
 
-func identifyTiedGroups(standings []*domain.GroupStanding) [][]*domain.GroupStanding {
-	if len(standings) == 0 {
-		return nil
-	}
-
-	var tiedGroups [][]*domain.GroupStanding
-	currentGroup := []*domain.GroupStanding{standings[0]}
-
-	for i := 1; i < len(standings); i++ {
-		prev := standings[i-1]
-		curr := standings[i]
-
-		// Check if current team has identical stats to previous
-		if prev.Points == curr.Points &&
-			prev.GoalDifference == curr.GoalDifference &&
-			prev.GoalsFor == curr.GoalsFor {
-			// Still tied, add to current group
-			currentGroup = append(currentGroup, curr)
-		} else {
-			// No longer tied, save current group and start new one
-			if len(currentGroup) > 1 {
-				tiedGroups = append(tiedGroups, currentGroup)
-			}
-			currentGroup = []*domain.GroupStanding{curr}
-		}
-	}
-
-	// Last group
-	if len(currentGroup) > 1 {
-		tiedGroups = append(tiedGroups, currentGroup)
-	}
-
-	return tiedGroups
+// rankGroup is the full FIFA Article 13 ranking pipeline
+func rankGroup(matches []*domain.Match) []*domain.GroupStanding {
+	standings := computeStandings(matches)
+	sortBy(standings, overallSortChain)
+	breakPointsTies(standings, matches)
+	assignPositions(standings)
+	return standings
 }
 
-func filterHeadToHeadMatches(tiedTeams []*domain.GroupStanding, allMatches []*domain.Match) []*domain.Match {
-	// Get FIFA codes of tied teams
-	tiedCodes := make(map[string]bool)
-	for _, team := range tiedTeams {
-		tiedCodes[team.Team.FifaCode] = true
-	}
+// Builds a GroupStanding per team from a slice of matches
+// Reused for both the overall table and h2h mini-tables
+// The returned slice has no defined order
+func computeStandings(matches []*domain.Match) []*domain.GroupStanding {
+	// Map team FIFA code to group standing stats
+	statsByTeam := make(map[string]*domain.GroupStanding)
 
-	// Filter matches where both teams are in the tied group
-	var h2hMatches []*domain.Match
-	for _, match := range allMatches {
-		homeCode := match.HomeTeam.FifaCode
-		awayCode := match.AwayTeam.FifaCode
-		if tiedCodes[homeCode] && tiedCodes[awayCode] {
-			h2hMatches = append(h2hMatches, match)
-		}
-	}
-
-	return h2hMatches
-}
-
-func calculateOverallStats(matches []*domain.Match) map[string]*domain.GroupStanding {
-	stats := make(map[string]*domain.GroupStanding)
-
+	// For each match, update the group standing stats for the home and away teams
 	for _, match := range matches {
-		homeCode := match.HomeTeam.FifaCode
-		awayCode := match.AwayTeam.FifaCode
+		homeTeam := match.HomeTeam.FifaCode
+		awayTeam := match.AwayTeam.FifaCode
 
-		// Initialize stats with team data
-		if _, ok := stats[homeCode]; !ok {
-			stats[homeCode] = &domain.GroupStanding{
-				Team: *match.HomeTeam,
-			}
+		if _, ok := statsByTeam[homeTeam]; !ok {
+			statsByTeam[homeTeam] = &domain.GroupStanding{Team: *match.HomeTeam}
 		}
 
-		if _, ok := stats[awayCode]; !ok {
-			stats[awayCode] = &domain.GroupStanding{
-				Team: *match.AwayTeam,
-			}
+		if _, ok := statsByTeam[awayTeam]; !ok {
+			statsByTeam[awayTeam] = &domain.GroupStanding{Team: *match.AwayTeam}
 		}
 
-		homeScore := *match.HomeScore
-		awayScore := *match.AwayScore
-
-		// Update matches played
-		stats[homeCode].MatchesPlayed++
-		stats[awayCode].MatchesPlayed++
-
-		// Update goals
-		stats[homeCode].GoalsFor += homeScore
-		stats[homeCode].GoalsAgainst += awayScore
-		stats[homeCode].GoalDifference = stats[homeCode].GoalsFor - stats[homeCode].GoalsAgainst
-
-		stats[awayCode].GoalsFor += awayScore
-		stats[awayCode].GoalsAgainst += homeScore
-		stats[awayCode].GoalDifference = stats[awayCode].GoalsFor - stats[awayCode].GoalsAgainst
-
-		// Update points and wins / draws / losses
-		if homeScore > awayScore {
-			stats[homeCode].Wins++
-			stats[homeCode].Points += 3
-			stats[awayCode].Losses++
-		} else if awayScore > homeScore {
-			stats[awayCode].Wins++
-			stats[awayCode].Points += 3
-			stats[homeCode].Losses++
-		} else {
-			stats[homeCode].Draws++
-			stats[homeCode].Points += 1
-			stats[awayCode].Draws++
-			stats[awayCode].Points += 1
-		}
+		applyMatchToStandings(
+			statsByTeam[homeTeam],
+			statsByTeam[awayTeam],
+			*match.HomeScore,
+			*match.AwayScore,
+		)
 	}
 
-	return stats
-}
-
-func calculateHeadToHeadStats(tiedTeams []*domain.GroupStanding, h2hMatches []*domain.Match) map[string]*domain.GroupStanding {
-	teamMap := make(map[string]*domain.GroupStanding)
-	for _, team := range tiedTeams {
-		teamMap[team.Team.FifaCode] = team
+	standings := make([]*domain.GroupStanding, 0, len(statsByTeam))
+	for _, s := range statsByTeam {
+		standings = append(standings, s)
 	}
-
-	stats := make(map[string]*domain.GroupStanding)
-
-	for _, match := range h2hMatches {
-		homeCode := match.HomeTeam.FifaCode
-		awayCode := match.AwayTeam.FifaCode
-
-		// Initialize stats with team data from teamMap
-		if _, ok := stats[homeCode]; !ok {
-			stats[homeCode] = &domain.GroupStanding{
-				Team: teamMap[homeCode].Team,
-			}
-		}
-
-		if _, ok := stats[awayCode]; !ok {
-			stats[awayCode] = &domain.GroupStanding{
-				Team: teamMap[awayCode].Team,
-			}
-		}
-
-		homeScore := *match.HomeScore
-		awayScore := *match.AwayScore
-
-		// Update matches played
-		stats[homeCode].MatchesPlayed++
-		stats[awayCode].MatchesPlayed++
-
-		// Update goals
-		stats[homeCode].GoalsFor += homeScore
-		stats[homeCode].GoalsAgainst += awayScore
-		stats[homeCode].GoalDifference = stats[homeCode].GoalsFor - stats[homeCode].GoalsAgainst
-
-		stats[awayCode].GoalsFor += awayScore
-		stats[awayCode].GoalsAgainst += homeScore
-		stats[awayCode].GoalDifference = stats[awayCode].GoalsFor - stats[awayCode].GoalsAgainst
-
-		// Update points and wins / draws / losses
-		if homeScore > awayScore {
-			stats[homeCode].Wins++
-			stats[homeCode].Points += 3
-			stats[awayCode].Losses++
-		} else if awayScore > homeScore {
-			stats[awayCode].Wins++
-			stats[awayCode].Points += 3
-			stats[homeCode].Losses++
-		} else {
-			stats[homeCode].Draws++
-			stats[homeCode].Points += 1
-			stats[awayCode].Draws++
-			stats[awayCode].Points += 1
-		}
-	}
-
-	return stats
-}
-
-func sortByOverallStats(standings []*domain.GroupStanding) []*domain.GroupStanding {
-	sort.Slice(standings, func(i, j int) bool {
-		teamA := standings[i]
-		teamB := standings[j]
-
-		if teamA.Points != teamB.Points {
-			return teamA.Points > teamB.Points
-		}
-
-		if teamA.GoalDifference != teamB.GoalDifference {
-			return teamA.GoalDifference > teamB.GoalDifference
-		}
-
-		return teamA.GoalsFor > teamB.GoalsFor
-	})
 
 	return standings
 }
 
-func sortTiedGroupByHeadToHead(tiedTeams []*domain.GroupStanding, h2hStats map[string]*domain.GroupStanding) []*domain.GroupStanding {
-	sort.Slice(tiedTeams, func(i, j int) bool {
-		teamA := tiedTeams[i]
-		teamB := tiedTeams[j]
-		statsA := h2hStats[teamA.Team.FifaCode]
-		statsB := h2hStats[teamB.Team.FifaCode]
+func applyMatchToStandings(home, away *domain.GroupStanding, homeScore, awayScore int) {
+	// Update the matches played count
+	home.MatchesPlayed++
+	away.MatchesPlayed++
 
-		// Rule a: Head-to-head points
-		if statsA.Points != statsB.Points {
-			return statsA.Points > statsB.Points
-		}
+	// Update the goals for, against counts and goal difference
+	home.GoalsFor += homeScore
+	home.GoalsAgainst += awayScore
+	home.GoalDifference = home.GoalsFor - home.GoalsAgainst
 
-		// Rule b: Head-to-head goal difference
-		if statsA.GoalDifference != statsB.GoalDifference {
-			return statsA.GoalDifference > statsB.GoalDifference
-		}
+	away.GoalsFor += awayScore
+	away.GoalsAgainst += homeScore
+	away.GoalDifference = away.GoalsFor - away.GoalsAgainst
 
-		// Rule c: Head-to-head goals for
-		return statsA.GoalsFor > statsB.GoalsFor
-	})
-
-	return tiedTeams
+	// Update the wins, draws, losses and points counts
+	switch {
+	case homeScore > awayScore:
+		home.Wins++
+		home.Points += 3
+		away.Losses++
+	case awayScore > homeScore:
+		away.Wins++
+		away.Points += 3
+		home.Losses++
+	default:
+		home.Draws++
+		home.Points++
+		away.Draws++
+		away.Points++
+	}
 }
 
-func isStillTied(sortedGroup []*domain.GroupStanding, h2hStats map[string]*domain.GroupStanding) bool {
-	if len(sortedGroup) <= 1 {
-		return false
+// breakPointsTies finds consecutive runs of teams equal on Points and re-orders
+// each run via the FIFA Article 13 tiebreaker chain (Step 1 + Step 2 with recursion)
+// Modifies `standings` in place
+func breakPointsTies(standings []*domain.GroupStanding, allMatches []*domain.Match) {
+	i := 0 // Index of the current team
+
+	// Iterate over the standings
+	for i < len(standings) {
+		j := i + 1 // Index of the next team
+
+		// Iterate over the standings until the points are not equal
+		for j < len(standings) && standings[j].Points == standings[i].Points {
+			j++ // If the next team has the same points, move to the next team
+		}
+
+		// If there are at least two teams with the same points, rank them
+		if j-i > 1 {
+			ranked := rankTiedSubgroup(standings[i:j], allMatches)
+			// Replace the tied teams with the ranked teams
+			for k, team := range ranked {
+				standings[i+k] = team
+			}
+		}
+
+		// Move to the next group of teams with the same points
+		i = j
+	}
+}
+
+// rankTiedSubgroup applies FIFA Article 13 a/b/c (head-to-head) to a subgroup of
+// teams equal on points, then recurses on any sub-run that remains tied on h2h
+// criteria (Step 2, first sentence). If the entire input remains h2h-tied (no
+// separation possible), falls back to the overall sort chain (rules d, e, [f])
+func rankTiedSubgroup(tiedTeams []*domain.GroupStanding, allMatches []*domain.Match) []*domain.GroupStanding {
+	// Get the matches between the tied teams
+	h2hMatches := matchesBetween(tiedTeams, allMatches)
+	// Compute the standings for the head-to-head matches
+	h2hStandings := computeStandings(h2hMatches)
+	// Map the head-to-head standings by team FIFA code
+	h2hByTeam := make(map[string]*domain.GroupStanding, len(h2hStandings))
+
+	for _, s := range h2hStandings {
+		h2hByTeam[s.Team.FifaCode] = s
 	}
 
-	firstCode := sortedGroup[0].Team.FifaCode
-	firstStats := h2hStats[firstCode]
+	// Sort the head-to-head standings by the head-to-head sort chain (points, GD, GF)
+	sortBy(h2hStandings, headToHeadSortChain)
 
-	for _, team := range sortedGroup[1:] {
-		teamStats := h2hStats[team.Team.FifaCode]
-		if teamStats.Points != firstStats.Points ||
-			teamStats.GoalDifference != firstStats.GoalDifference ||
-			teamStats.GoalsFor != firstStats.GoalsFor {
-			return false
+	tiedByCode := make(map[string]*domain.GroupStanding, len(tiedTeams))
+	for _, t := range tiedTeams {
+		tiedByCode[t.Team.FifaCode] = t
+	}
+
+	ordered := make([]*domain.GroupStanding, 0, len(tiedTeams))
+	for _, s := range h2hStandings {
+		if t, ok := tiedByCode[s.Team.FifaCode]; ok {
+			ordered = append(ordered, t)
 		}
 	}
 
-	return true
+	subgroups := partitionByH2HCriteria(ordered, h2hByTeam)
+
+	result := make([]*domain.GroupStanding, 0, len(tiedTeams))
+	for _, subgroup := range subgroups {
+		switch {
+		case len(subgroup) == 1:
+			result = append(result, subgroup...)
+		case len(subgroup) < len(tiedTeams):
+			// If there are fewer teams in the subgroup than the tied teams,
+			// recursively rank the subgroup
+			result = append(result, rankTiedSubgroup(subgroup, allMatches)...)
+		default:
+			sortBy(subgroup, overallSortChain)
+			result = append(result, subgroup...)
+		}
+	}
+
+	return result
+}
+
+// Returns the matches in allMatches where both teams are in `teams`
+func matchesBetween(teams []*domain.GroupStanding, allMatches []*domain.Match) []*domain.Match {
+	codes := make(map[string]bool, len(teams))
+	for _, t := range teams {
+		codes[t.Team.FifaCode] = true
+	}
+
+	var filtered []*domain.Match
+	for _, match := range allMatches {
+		if codes[match.HomeTeam.FifaCode] && codes[match.AwayTeam.FifaCode] {
+			filtered = append(filtered, match)
+		}
+	}
+	return filtered
+}
+
+// partitionByH2HCriteria splits a slice (already sorted by the head-to-head
+// chain) into consecutive runs of teams identical on h2h Points + GoalDifference + GoalsFor
+func partitionByH2HCriteria(sortedTeams []*domain.GroupStanding, h2hByCode map[string]*domain.GroupStanding) [][]*domain.GroupStanding {
+	if len(sortedTeams) == 0 {
+		return nil
+	}
+
+	var groups [][]*domain.GroupStanding
+	current := []*domain.GroupStanding{sortedTeams[0]}
+
+	for i := 1; i < len(sortedTeams); i++ {
+		prev := h2hByCode[sortedTeams[i-1].Team.FifaCode]
+		curr := h2hByCode[sortedTeams[i].Team.FifaCode]
+		if prev.Points == curr.Points &&
+			prev.GoalDifference == curr.GoalDifference &&
+			prev.GoalsFor == curr.GoalsFor {
+			current = append(current, sortedTeams[i])
+		} else {
+			groups = append(groups, current)
+			current = []*domain.GroupStanding{sortedTeams[i]}
+		}
+	}
+	groups = append(groups, current)
+
+	return groups
+}
+
+func assignPositions(standings []*domain.GroupStanding) {
+	for i, s := range standings {
+		s.Position = i + 1
+	}
+}
+
+// tiebreaker returns a negative value if a ranks above b, positive if b above a,
+// zero if equal on this criterion
+type tiebreaker func(a, b *domain.GroupStanding) int
+
+var (
+	byPoints tiebreaker = func(a, b *domain.GroupStanding) int {
+		return b.Points - a.Points
+	}
+
+	byGoalDifference tiebreaker = func(a, b *domain.GroupStanding) int {
+		return b.GoalDifference - a.GoalDifference
+	}
+
+	byGoalsFor tiebreaker = func(a, b *domain.GroupStanding) int {
+		return b.GoalsFor - a.GoalsFor
+	}
+
+	// FIFA rule f (fair play / cards) is not implemented yet. To enable:
+	//   1. Add a FairPlayScore int field on domain.GroupStanding
+	//   2. Populate it inside applyMatchToStandings from card data on domain.Match
+	//   3. Define byFairPlay below and append it to overallSortChain (before byFifaWorldRanking)
+	// No structural changes elsewhere are required
+	//
+	// byFairPlay tiebreaker = func(a, b *domain.GroupStanding) int {
+	//     return b.FairPlayScore - a.FairPlayScore
+	// }
+
+	// FIFA rule g — most recent published FIFA/Coca-Cola Men's World Ranking
+	byFifaWorldRanking tiebreaker = func(a, b *domain.GroupStanding) int {
+		return fifaWorldRankingPosition[a.Team.FifaCode] - fifaWorldRankingPosition[b.Team.FifaCode]
+	}
+)
+
+var overallSortChain = []tiebreaker{
+	byPoints,
+	byGoalDifference, // FIFA rule d
+	byGoalsFor,       // FIFA rule e
+	// byFairPlay,      // FIFA rule f - enable when card data exists
+	byFifaWorldRanking, // FIFA rule g
+}
+
+var headToHeadSortChain = []tiebreaker{
+	byPoints,
+	byGoalDifference,
+	byGoalsFor,
+}
+
+func sortBy(standings []*domain.GroupStanding, chain []tiebreaker) {
+	sort.SliceStable(standings, func(i, j int) bool {
+		// For each criterion in the chain, compare the standings at the current indices
+		for _, criterion := range chain {
+			if comparison := criterion(standings[i], standings[j]); comparison != 0 {
+				return comparison < 0
+			}
+		}
+
+		return false
+	})
 }

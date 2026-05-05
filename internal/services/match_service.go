@@ -87,7 +87,7 @@ func (s *MatchService) UpdateMatchResult(ctx context.Context, matchID int64, pay
 		return nil, err
 	}
 
-	s.firePickemScoring(outcomes, []int64{matchID})
+	s.asyncScoreMatches(outcomes, []int64{matchID})
 	return outcomes, nil
 }
 
@@ -135,7 +135,7 @@ func (s *MatchService) UpdateMatchResultsBulk(ctx context.Context, payload dtos.
 		return nil, err
 	}
 
-	s.firePickemScoring(outcomes, matchIDs)
+	s.asyncScoreMatches(outcomes, matchIDs)
 	return outcomes, nil
 }
 
@@ -150,7 +150,7 @@ func (s *MatchService) ResetMatchResult(ctx context.Context, matchID int64) (*do
 	// rescore after correcting and re-finalizing the match result
 }
 
-func (s *MatchService) firePickemScoring(outcomes *domain.SyncGroupStageOutcomes, matchIDs []int64) {
+func (s *MatchService) asyncScoreMatches(outcomes *domain.SyncGroupStageOutcomes, matchIDs []int64) {
 	go func() {
 		bgCtx := context.Background()
 
@@ -529,7 +529,10 @@ func buildGroupPositionMatchUpdates(groupCode string, groupStandings []*domain.G
 
 func loadThirdPlaceCombinations() []domain.ThirdPlaceCombination {
 	var combinations []domain.ThirdPlaceCombination
-	json.Unmarshal(combinationsJSON, &combinations)
+	if err := json.Unmarshal(combinationsJSON, &combinations); err != nil {
+		panic("failed to parse embedded combinations.json: " + err.Error())
+	}
+
 	return combinations
 }
 

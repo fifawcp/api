@@ -140,6 +140,7 @@ func (s *BoardService) DeleteBoard(ctx context.Context, boardID string, userID s
 func (s *BoardService) isAdminMember(role domain.BoardMemberRole) bool {
 	return role == domain.BoardMemberRoleAdmin
 }
+
 func assertPrivateBoard(ctx context.Context, boardRepository domain.BoardRepository, boardID string) error {
 	board, err := boardRepository.GetBoardByID(ctx, boardID)
 	if err != nil {

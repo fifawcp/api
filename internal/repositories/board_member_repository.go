@@ -28,7 +28,7 @@ func (r *BoardMemberRepository) CreateBoardMember(
 	ctx context.Context,
 	joinCode string,
 	userID string,
-) error {
+) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
 
@@ -47,12 +47,12 @@ func (r *BoardMemberRepository) CreateBoardMember(
 	err := r.db.QueryRowContext(ctx, query, joinCode, userID).Scan(&boardID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return domain.ErrBoardInvalidJoinCode
+			return "", domain.ErrBoardInvalidJoinCode
 		}
-		return handleDBError(err, resourceBoardMember)
+		return "", handleDBError(err, resourceBoardMember)
 	}
 
-	return nil
+	return boardID, nil
 }
 
 func (r *BoardMemberRepository) GetBoardMember(

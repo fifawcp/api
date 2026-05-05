@@ -28,15 +28,16 @@ type UserBoardListItem struct {
 }
 
 type BoardDetails struct {
-	ID              string       `json:"id" example:"123e4567-e89b-12d3-a456-426614174000"`
-	Name            string       `json:"name" example:"My Board"`
-	OwnerUserID     *string      `json:"owner_user_id,omitempty" example:"123e4567-e89b-12d3-a456-426614174000"`
-	JoinCode        *string      `json:"join_code,omitempty" example:"ABCD1234"`
-	Privacy         BoardPrivacy `json:"privacy" example:"private"`
-	CreatedAt       time.Time    `json:"created_at" example:"2026-01-15T10:30:00Z"`
-	JoinedAt        time.Time    `json:"joined_at" example:"2026-01-16T10:30:00Z"`
-	UserRank        int          `json:"user_rank" example:"3"`
-	UserTotalPoints int          `json:"user_total_points" example:"150"`
+	Board
+	Viewer BoardViewer `json:"viewer"`
+}
+
+type BoardViewer struct {
+	Role        BoardMemberRole `json:"role" example:"member"`
+	IsOwner     bool            `json:"is_owner" example:"false"`
+	JoinedAt    time.Time       `json:"joined_at" example:"2026-01-16T10:30:00Z"`
+	Rank        int             `json:"rank" example:"3"`
+	TotalPoints int             `json:"total_points" example:"150"`
 }
 
 type BoardMembersPage struct {

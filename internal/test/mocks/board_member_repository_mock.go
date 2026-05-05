@@ -7,14 +7,14 @@ import (
 )
 
 type MockBoardMemberRepository struct {
-	CreateBoardMemberFunc     func(ctx context.Context, joinCode string, userID string) error
+	CreateBoardMemberFunc     func(ctx context.Context, joinCode string, userID string) (string, error)
 	GetBoardMemberFunc        func(ctx context.Context, boardID string, userID string) (*domain.BoardMember, error)
 	UpdateBoardMemberRoleFunc func(ctx context.Context, boardID string, userID string, role domain.BoardMemberRole) error
 	RemoveBoardMemberFunc     func(ctx context.Context, boardID string, userID string) error
 	LeaveBoardFunc            func(ctx context.Context, boardID string, userID string) error
 }
 
-func (m *MockBoardMemberRepository) CreateBoardMember(ctx context.Context, joinCode string, userID string) error {
+func (m *MockBoardMemberRepository) CreateBoardMember(ctx context.Context, joinCode string, userID string) (string, error) {
 	if m.CreateBoardMemberFunc != nil {
 		return m.CreateBoardMemberFunc(ctx, joinCode, userID)
 	}

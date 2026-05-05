@@ -25,25 +25,27 @@ func newTestBoardMemberService(
 func TestBoardMemberService_JoinBoard(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns nil on success", func(t *testing.T) {
+	t.Run("returns board ID on success", func(t *testing.T) {
 		t.Parallel()
 
 		joinCode := "ABCD1234"
 		userID := gofakeit.UUID()
+		expectedBoardID := gofakeit.UUID()
 
 		bmr := &mocks.MockBoardMemberRepository{
-			CreateBoardMemberFunc: func(ctx context.Context, jc string, uid string) error {
+			CreateBoardMemberFunc: func(ctx context.Context, jc string, uid string) (string, error) {
 				assert.Equal(t, joinCode, jc)
 				assert.Equal(t, userID, uid)
-				return nil
+				return expectedBoardID, nil
 			},
 		}
 
 		service := newTestBoardMemberService(nil, bmr)
 
-		err := service.JoinBoard(context.Background(), joinCode, userID)
+		boardID, err := service.JoinBoard(context.Background(), joinCode, userID)
 
 		assert.NoError(t, err)
+		assert.Equal(t, expectedBoardID, boardID)
 	})
 
 	t.Run("propagates repository error", func(t *testing.T) {
@@ -53,17 +55,18 @@ func TestBoardMemberService_JoinBoard(t *testing.T) {
 		userID := gofakeit.UUID()
 
 		bmr := &mocks.MockBoardMemberRepository{
-			CreateBoardMemberFunc: func(ctx context.Context, jc string, uid string) error {
-				return errors.New("database error")
+			CreateBoardMemberFunc: func(ctx context.Context, jc string, uid string) (string, error) {
+				return "", errors.New("database error")
 			},
 		}
 
 		service := newTestBoardMemberService(nil, bmr)
 
-		err := service.JoinBoard(context.Background(), joinCode, userID)
+		boardID, err := service.JoinBoard(context.Background(), joinCode, userID)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "database error")
+		assert.Empty(t, boardID)
 	})
 }
 
