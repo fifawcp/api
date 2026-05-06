@@ -492,7 +492,7 @@ func TestBoardHandler_GetBoardMembers(t *testing.T) {
 		t.Parallel()
 
 		bms := &mocks.MockBoardMemberService{
-			GetBoardMembersFunc: func(ctx context.Context, boardID string, page, limit int) (*domain.BoardMembersPage, error) {
+			GetBoardMembersFunc: func(ctx context.Context, boardID string, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {
 				return &domain.BoardMembersPage{
 					Members: []*domain.BoardMemberDetails{
 						{UserID: gofakeit.UUID(), UserName: "alice", Rank: 1},
@@ -512,14 +512,15 @@ func TestBoardHandler_GetBoardMembers(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var resp struct {
-			Data *domain.BoardMembersPage `json:"data"`
+			Data       []*domain.BoardMemberDetails `json:"data"`
+			Pagination domain.Pagination            `json:"pagination"`
 		}
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Len(t, resp.Data.Members, 2)
-		assert.Equal(t, 1, resp.Data.Pagination.Page)
-		assert.Equal(t, 10, resp.Data.Pagination.Limit)
-		assert.Equal(t, 2, resp.Data.Pagination.Total)
-		assert.False(t, resp.Data.Pagination.HasMore)
+		assert.Len(t, resp.Data, 2)
+		assert.Equal(t, 1, resp.Pagination.Page)
+		assert.Equal(t, 10, resp.Pagination.Limit)
+		assert.Equal(t, 2, resp.Pagination.Total)
+		assert.False(t, resp.Pagination.HasMore)
 	})
 
 	t.Run("forwards default page+limit when query params missing", func(t *testing.T) {
@@ -528,7 +529,7 @@ func TestBoardHandler_GetBoardMembers(t *testing.T) {
 		var capturedPage, capturedLimit int
 
 		bms := &mocks.MockBoardMemberService{
-			GetBoardMembersFunc: func(ctx context.Context, boardID string, page, limit int) (*domain.BoardMembersPage, error) {
+			GetBoardMembersFunc: func(ctx context.Context, boardID string, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {
 				capturedPage = page
 				capturedLimit = limit
 				return &domain.BoardMembersPage{Members: []*domain.BoardMemberDetails{}}, nil
@@ -546,11 +547,48 @@ func TestBoardHandler_GetBoardMembers(t *testing.T) {
 		assert.Equal(t, httpx.DefaultPageLimit, capturedLimit)
 	})
 
+	t.Run("forwards search and sort filters to service", func(t *testing.T) {
+		t.Parallel()
+
+		var captured domain.BoardMembersFilters
+
+		bms := &mocks.MockBoardMemberService{
+			GetBoardMembersFunc: func(ctx context.Context, boardID string, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {
+				captured = filters
+				return &domain.BoardMembersPage{Members: []*domain.BoardMemberDetails{}}, nil
+			},
+		}
+
+		h := newTestBoardHandler(nil, bms)
+		req := makeReq(t, "search=alice&sort=match_score_points")
+		w := httptest.NewRecorder()
+
+		h.GetBoardMembers(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "alice", captured.Search)
+		assert.Equal(t, domain.BoardMembersSortMatchScorePoints, captured.Sort)
+	})
+
+	t.Run("returns 400 for invalid sort value", func(t *testing.T) {
+		t.Parallel()
+
+		bms := &mocks.MockBoardMemberService{}
+
+		h := newTestBoardHandler(nil, bms)
+		req := makeReq(t, "sort=email")
+		w := httptest.NewRecorder()
+
+		h.GetBoardMembers(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
 		bms := &mocks.MockBoardMemberService{
-			GetBoardMembersFunc: func(ctx context.Context, boardID string, page, limit int) (*domain.BoardMembersPage, error) {
+			GetBoardMembersFunc: func(ctx context.Context, boardID string, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {
 				return nil, errors.New("db error")
 			},
 		}

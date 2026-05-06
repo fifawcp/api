@@ -25,6 +25,14 @@ var validStatuses = map[string]bool{
 	"finished":  true,
 }
 
+var validBoardMembersSorts = map[string]bool{
+	"total_points":       true,
+	"pickem_points":      true,
+	"match_score_points": true,
+	"exact_hits":         true,
+	"correct_outcomes":   true,
+}
+
 var validFifaCodes = map[string]bool{
 	// Group A
 	"MEX": true, "RSA": true, "KOR": true, "CZE": true,
@@ -70,6 +78,10 @@ func IsValidFifaCode(code string) bool {
 
 func IsValidStandingPosition(position int64) bool {
 	return position >= 1 && position <= 4
+}
+
+func IsValidBoardMembersSort(sort string) bool {
+	return validBoardMembersSorts[sort]
 }
 
 func IsValidDateRange(from, to *time.Time) bool {

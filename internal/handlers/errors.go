@@ -60,6 +60,8 @@ const (
 	codeInvalidQueryParam          = "INVALID_QUERY_PARAM"
 	codePickemLocked               = "PICKEM_LOCKED"
 	codeMatchPickLocked            = "MATCH_PICK_LOCKED"
+	codeMatchTeamsNotAssigned      = "MATCH_TEAMS_NOT_ASSIGNED"
+	codeInvalidBoardMembersSort    = "INVALID_BOARD_MEMBERS_SORT"
 	codePenaltyForbidden           = "PENALTY_FORBIDDEN"
 	codePenaltyRequired            = "PENALTY_REQUIRED"
 	codePenaltyIncomplete          = "PENALTY_INCOMPLETE"
@@ -175,6 +177,10 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.BadRequest(w, r, codePickemLocked, domain.ErrPickemLocked.Error())
 	case errors.Is(err, domain.ErrMatchPickLocked):
 		httpx.BadRequest(w, r, codeMatchPickLocked, domain.ErrMatchPickLocked.Error())
+	case errors.Is(err, domain.ErrMatchTeamsNotAssigned):
+		httpx.BadRequest(w, r, codeMatchTeamsNotAssigned, domain.ErrMatchTeamsNotAssigned.Error())
+	case errors.Is(err, domain.ErrInvalidBoardMembersSort):
+		httpx.BadRequest(w, r, codeInvalidBoardMembersSort, domain.ErrInvalidBoardMembersSort.Error())
 	case errors.Is(err, domain.ErrPenaltyForbidden):
 		httpx.BadRequest(w, r, codePenaltyForbidden, domain.ErrPenaltyForbidden.Error())
 	case errors.Is(err, domain.ErrPenaltyRequired):

@@ -10,7 +10,7 @@ import (
 type BoardMemberServiceInterface interface {
 	JoinBoard(ctx context.Context, joinCode string, userID string) (string, error)
 	GetBoardMember(ctx context.Context, boardID string, userID string) (*domain.BoardMember, error)
-	GetBoardMembers(ctx context.Context, boardID string, page, limit int) (*domain.BoardMembersPage, error)
+	GetBoardMembers(ctx context.Context, boardID string, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error)
 	UpdateBoardMemberRole(ctx context.Context, boardID string, userID string, role domain.BoardMemberRole, payload dtos.UpdateBoardMemberRoleDto) error
 	RemoveBoardMember(ctx context.Context, boardID string, userID string, role domain.BoardMemberRole) error
 	LeaveBoard(ctx context.Context, boardID string, userID string) error
@@ -54,9 +54,10 @@ func (s *BoardMemberService) GetBoardMember(
 func (s *BoardMemberService) GetBoardMembers(
 	ctx context.Context,
 	boardID string,
+	filters domain.BoardMembersFilters,
 	page, limit int,
 ) (*domain.BoardMembersPage, error) {
-	return s.boardRepository.GetBoardMembers(ctx, boardID, page, limit)
+	return s.boardRepository.GetBoardMembers(ctx, boardID, filters, page, limit)
 }
 
 func (s *BoardMemberService) UpdateBoardMemberRole(

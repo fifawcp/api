@@ -34,7 +34,7 @@ func (h *DebugHandler) RequestTotp(w http.ResponseWriter, r *http.Request) {
 	identifier := chi.URLParam(r, "identifier")
 
 	httpx.RespondWithData(w, http.StatusOK, map[string]any{
-		"otp":       totp.Generate(identifier, h.cfg.JWT.Secret),
-		"expiresIn": totp.WindowExpiresIn(),
+		"otp":        totp.Generate(identifier, h.cfg.JWT.Secret),
+		"expires_in": totp.WindowExpiresIn(),
 	})
 }

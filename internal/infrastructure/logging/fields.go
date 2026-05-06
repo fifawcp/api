@@ -16,7 +16,6 @@ const (
 const (
 	LogName    = "log_name"    // always "audit" — filters audit vs operational logs
 	ActorID    = "actor_id"    // user ID of the admin who performed the action
-	ActorRole  = "actor_role"  // role at time of action
 	Action     = "action"      // dotted action name, e.g. "match.update_result"
 	Resource   = "resource"    // entity type, e.g. "match", "standing"
 	ResourceID = "resource_id" // entity ID the action targeted

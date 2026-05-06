@@ -100,22 +100,22 @@ func computeStandings(matches []*domain.Match) []*domain.GroupStanding {
 
 	// For each match, update the group standing stats for the home and away teams
 	for _, match := range matches {
-		homeTeam := match.HomeTeam.FifaCode
-		awayTeam := match.AwayTeam.FifaCode
+		homeTeam := match.Teams.Home.FifaCode
+		awayTeam := match.Teams.Away.FifaCode
 
 		if _, ok := statsByTeam[homeTeam]; !ok {
-			statsByTeam[homeTeam] = &domain.GroupStanding{Team: *match.HomeTeam}
+			statsByTeam[homeTeam] = &domain.GroupStanding{Team: *match.Teams.Home}
 		}
 
 		if _, ok := statsByTeam[awayTeam]; !ok {
-			statsByTeam[awayTeam] = &domain.GroupStanding{Team: *match.AwayTeam}
+			statsByTeam[awayTeam] = &domain.GroupStanding{Team: *match.Teams.Away}
 		}
 
 		applyMatchToStandings(
 			statsByTeam[homeTeam],
 			statsByTeam[awayTeam],
-			*match.HomeScore,
-			*match.AwayScore,
+			match.Result.HomeScore,
+			match.Result.AwayScore,
 		)
 	}
 
@@ -248,7 +248,7 @@ func matchesBetween(teams []*domain.GroupStanding, allMatches []*domain.Match) [
 
 	var filtered []*domain.Match
 	for _, match := range allMatches {
-		if codes[match.HomeTeam.FifaCode] && codes[match.AwayTeam.FifaCode] {
+		if codes[match.Teams.Home.FifaCode] && codes[match.Teams.Away.FifaCode] {
 			filtered = append(filtered, match)
 		}
 	}

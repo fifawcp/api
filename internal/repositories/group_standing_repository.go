@@ -13,17 +13,20 @@ import (
 )
 
 type GroupStandingRepository struct {
-	db  *sql.DB
-	cfg *config.Config
+	db    *sql.DB
+	cfg   *config.Config
+	teams *domain.TeamLookup
 }
 
 func NewGroupStandingRepository(
 	db *sql.DB,
 	cfg *config.Config,
+	teams *domain.TeamLookup,
 ) *GroupStandingRepository {
 	return &GroupStandingRepository{
-		db:  db,
-		cfg: cfg,
+		db:    db,
+		cfg:   cfg,
+		teams: teams,
 	}
 }
 
@@ -43,12 +46,8 @@ func (r *GroupStandingRepository) GetGroupStandings(ctx context.Context, groupCo
     gs.goals_against,
     gs.goal_difference,
     gs.points,
-    t.fifa_code,
-    t.name_translations,
-    t.flag_url,
-    t.group_code
-	FROM group_standings gs
-	JOIN team_localized t ON gs.fifa_code = t.fifa_code`
+    gs.fifa_code
+	FROM group_standings gs`
 
 	query := baseQuery
 
@@ -80,6 +79,7 @@ func (r *GroupStandingRepository) GetGroupStandings(ctx context.Context, groupCo
 
 	for rows.Next() {
 		var groupStanding domain.GroupStanding
+		var fifaCode string
 		err := rows.Scan(
 			&groupStanding.Position,
 			&groupStanding.MatchesPlayed,
@@ -90,13 +90,14 @@ func (r *GroupStandingRepository) GetGroupStandings(ctx context.Context, groupCo
 			&groupStanding.GoalsAgainst,
 			&groupStanding.GoalDifference,
 			&groupStanding.Points,
-			&groupStanding.Team.FifaCode,
-			&groupStanding.Team.Name,
-			&groupStanding.Team.FlagURL,
-			&groupStanding.Team.GroupCode,
+			&fifaCode,
 		)
 		if err != nil {
 			return nil, handleDBError(err, resourceGroupStanding)
+		}
+
+		if team := r.teams.Get(fifaCode); team != nil {
+			groupStanding.Team = *team
 		}
 
 		groupStandings = append(groupStandings, &groupStanding)

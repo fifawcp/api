@@ -28,20 +28,38 @@ func (s MatchStageCode) IsKnockout() bool {
 	return s != MatchStageCodeGroupStage
 }
 
+type Venue struct {
+	Name string `json:"name"`
+	City string `json:"city"`
+}
+
+type MatchTeams struct {
+	Home *Team `json:"home"`
+	Away *Team `json:"away"`
+}
+
+type Penalties struct {
+	Home int `json:"home"`
+	Away int `json:"away"`
+}
+
+type MatchResult struct {
+	HomeScore          int        `json:"home_score"`
+	AwayScore          int        `json:"away_score"`
+	Penalties          *Penalties `json:"penalties"`
+	WinnerTeamFifaCode *string    `json:"winner_team_fifa_code"`
+}
+
 type Match struct {
-	ID                 int64          `json:"id"`
-	StageCode          MatchStageCode `json:"stage_code"`
-	GroupCode          *string        `json:"group_code"`
-	HomeTeam           *Team          `json:"home_team"`
-	AwayTeam           *Team          `json:"away_team"`
-	KickoffAt          time.Time      `json:"kickoff_at"`
-	Status             MatchStatus    `json:"status"`
-	HomeScore          *int           `json:"home_score"`
-	AwayScore          *int           `json:"away_score"`
-	HomePenaltyScore   *int           `json:"home_penalty_score"`
-	AwayPenaltyScore   *int           `json:"away_penalty_score"`
-	WinnerTeamFifaCode *string        `json:"winner_team_fifa_code"`
-	UpdatedAt          time.Time      `json:"updated_at"`
+	ID        int64          `json:"id"`
+	StageCode MatchStageCode `json:"stage_code"`
+	GroupCode *string        `json:"group_code,omitempty"`
+	Teams     MatchTeams     `json:"teams"`
+	Venue     Venue          `json:"venue"`
+	KickoffAt time.Time      `json:"kickoff_at"`
+	Status    MatchStatus    `json:"status"`
+	Result    *MatchResult   `json:"result"`
+	UpdatedAt time.Time      `json:"-"`
 }
 
 type MatchFilters struct {
