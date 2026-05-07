@@ -5,9 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
-	"strconv"
 	"strings"
 
 	"github.com/fifawcp/api/internal/domain"
@@ -204,20 +204,21 @@ func generateUsernameFromEmail(email string, provider string) string {
 	// Extract and lowercase the local part (everything before @)
 	base := strings.ToLower(strings.SplitN(email, "@", 2)[0])
 
-	// Cap the local part so the final username never exceeds the CHAR(50) column limit.
-	// Overhead: "google-" (7) + "-" (1) + up to 4-digit suffix (4) = 12 chars → max base = 38.
-	const maxBaseLen = 38
+	// Cap the local part so the final username fits in VARCHAR(20).
+	// Format: <provider-letter>(1) + 3-digit suffix(3) + "-"(1) + base → base max = 15.
+	const maxBaseLen = 15
 	if len(base) > maxBaseLen {
 		base = base[:maxBaseLen]
 	}
 
-	// Append a random 0–9999 suffix to reduce username collisions
-	n, err := rand.Int(rand.Reader, big.NewInt(10000))
+	// Random 3-digit suffix to reduce collisions on the same (provider, base) pair
+	n, err := rand.Int(rand.Reader, big.NewInt(1000))
 	if err != nil {
 		return ""
 	}
 
-	return provider + "-" + base + "-" + strconv.FormatInt(n.Int64(), 10)
+	providerLetter := strings.ToUpper(provider[:1])
+	return fmt.Sprintf("%s%03d-%s", providerLetter, n.Int64(), base)
 }
 
 func generateRandomOAuthState() (string, error) {

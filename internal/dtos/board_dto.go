@@ -3,7 +3,7 @@ package dtos
 import "github.com/fifawcp/api/internal/domain"
 
 type CreateBoardDto struct {
-	Name string `json:"name" validate:"required,max=120" example:"League of Dummies"`
+	Name string `json:"name" validate:"required,max=20" example:"League of Dummies"`
 }
 
 type JoinBoardDto struct {
@@ -15,7 +15,7 @@ type JoinBoardResponseDto struct {
 }
 
 type UpdateBoardDto struct {
-	Name string `json:"name" validate:"required,max=120" example:"League of Dummies"`
+	Name string `json:"name" validate:"required,max=20" example:"League of Dummies"`
 }
 
 type UpdateBoardMemberRoleDto struct {

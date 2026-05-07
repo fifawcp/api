@@ -31,8 +31,7 @@ const version = "0.0.1"
 func main() {
 	godotenv.Load()
 
-	// Set timezone to GMT-5 (Eastern Time)
-	time.Local = time.FixedZone("GMT-5", -5*60*60)
+	time.Local = time.UTC
 
 	cfg := config.NewConfig()
 
