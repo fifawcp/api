@@ -108,7 +108,15 @@ func (s *Seeder) generateUsers(amount int) []*domain.User {
 	for i := range amount {
 		firstName := gofakeit.FirstName()
 		lastName := gofakeit.LastName()
-		username := strings.ToLower(firstName) + "_" + strings.ToLower(lastName) + strconv.Itoa(i)
+		indexSuffix := strconv.Itoa(i)
+
+		firstNameLower := strings.ToLower(firstName)
+		maxFirstNameLength := usernameMaxLength - len(indexSuffix)
+		if len(firstNameLower) > maxFirstNameLength {
+			firstNameLower = firstNameLower[:maxFirstNameLength]
+		}
+
+		username := firstNameLower + indexSuffix
 		email := username + "@email.com"
 
 		users[i] = &domain.User{
@@ -128,8 +136,13 @@ func (s *Seeder) seedBoards(ctx context.Context, users []*domain.User) {
 		joinCode := generateJoinCode()
 		ownerID := owner.ID
 
+		name := gofakeit.BuzzWord()
+		if len(name) > boardNameMaxLength {
+			name = name[:boardNameMaxLength]
+		}
+
 		board := &domain.Board{
-			Name:        gofakeit.Company(),
+			Name:        name,
 			OwnerUserID: &ownerID,
 			JoinCode:    &joinCode,
 		}

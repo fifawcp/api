@@ -6,6 +6,8 @@ const (
 	boardMembersMin      = 5
 	boardMembersMax      = 50
 	pickemUserPercentage = 0.60
+	boardNameMaxLength   = 20
+	usernameMaxLength    = 20
 )
 
 var teamsByGroup = map[string][]string{

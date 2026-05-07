@@ -343,7 +343,7 @@ func TestOAuthService_CompleteGoogleLogin(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "test-given-name", authentication.User.FirstName)
 		assert.Equal(t, "test-family-name", authentication.User.LastName)
-		assert.Regexp(t, `^google-test-email-\d{1,4}$`, authentication.User.Username)
+		assert.Regexp(t, `^G\d{3}-test-email$`, authentication.User.Username)
 		assert.Equal(t, "test-email", authentication.User.Email)
 		assert.Equal(t, "test-access-token", authentication.Auth.AccessToken)
 		assert.Equal(t, "test-refresh-token", authentication.Auth.RefreshToken)
@@ -429,7 +429,7 @@ func TestOAuthService_CompleteGoogleLogin(t *testing.T) {
 		assert.Equal(t, "Google", authentication.User.FirstName)
 		assert.Equal(t, "User", authentication.User.LastName)
 		assert.Equal(t, "newuser@example.com", authentication.User.Email)
-		assert.Regexp(t, `^google-newuser-\d{1,4}$`, authentication.User.Username)
+		assert.Regexp(t, `^G\d{3}-newuser$`, authentication.User.Username)
 		assert.Equal(t, "https://return-to.com", redirectURL)
 	})
 
@@ -438,7 +438,7 @@ func TestOAuthService_CompleteGoogleLogin(t *testing.T) {
 
 		longLocal := strings.Repeat("a", 50)
 		email := longLocal + "@example.com"
-		cappedLocal := strings.Repeat("a", 38)
+		cappedLocal := strings.Repeat("a", 15)
 
 		oauthStorage := &mocks.MockOAuthStorage{
 			GetAndDeleteOAuthStateFunc: func(ctx context.Context, state string) (string, error) {
@@ -514,7 +514,7 @@ func TestOAuthService_CompleteGoogleLogin(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, strings.ToLower(email), authentication.User.Email)
-		assert.Regexp(t, `^google-`+cappedLocal+`-\d{1,4}$`, authentication.User.Username)
+		assert.Regexp(t, `^G\d{3}-`+cappedLocal+`$`, authentication.User.Username)
 		assert.Equal(t, "https://return-to.com", redirectURL)
 	})
 
