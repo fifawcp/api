@@ -16,6 +16,7 @@ import (
 	"github.com/fifawcp/api/internal/infrastructure/cache"
 	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/db"
+	"github.com/fifawcp/api/internal/infrastructure/football"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 	"github.com/fifawcp/api/internal/infrastructure/mailer"
 	"github.com/fifawcp/api/internal/infrastructure/oauth"
@@ -49,19 +50,21 @@ type Container struct {
 	OIDCIdentityVerifier domain.IDTokenVerifier
 
 	// repositories
-	userRepository           domain.UserRepository
-	sessionRepository        domain.SessionRepository
-	refreshTokenRepository   domain.RefreshTokenRepository
-	boardRepository          domain.BoardRepository
-	boardMemberRepository    domain.BoardMemberRepository
-	userScoreRepository      domain.UserScoreRepository
-	groupStandingRepository  domain.GroupStandingRepository
-	matchRepository          domain.MatchRepository
-	oauthAccountRepository   domain.OAuthAccountRepository
-	teamRepository           domain.TeamRepository
-	pickemRepository         domain.PickemRepository
-	matchScorePickRepository domain.MatchScorePickRepository
-	scoreEventRepository     domain.ScoreEventRepository
+	userRepository            domain.UserRepository
+	sessionRepository         domain.SessionRepository
+	refreshTokenRepository    domain.RefreshTokenRepository
+	boardRepository           domain.BoardRepository
+	boardMemberRepository     domain.BoardMemberRepository
+	userScoreRepository       domain.UserScoreRepository
+	groupStandingRepository   domain.GroupStandingRepository
+	matchRepository           domain.MatchRepository
+	matchFairPlayRepository   domain.MatchFairPlayRepository
+	matchAPIFixtureRepository domain.MatchAPIFixtureRepository
+	oauthAccountRepository    domain.OAuthAccountRepository
+	teamRepository            domain.TeamRepository
+	pickemRepository          domain.PickemRepository
+	matchScorePickRepository  domain.MatchScorePickRepository
+	scoreEventRepository      domain.ScoreEventRepository
 
 	// startup data loaded once at startup; consumed by services
 	teams        []*domain.Team
@@ -197,6 +200,8 @@ func (c *Container) initRepositories() {
 	c.teamLookup = domain.NewTeamLookup(nil)
 	c.matchRepository = repositories.NewMatchRepository(c.db, c.Config, c.teamLookup)
 	c.groupStandingRepository = repositories.NewGroupStandingRepository(c.db, c.Config, c.teamLookup)
+	c.matchFairPlayRepository = repositories.NewMatchFairPlayRepository(c.db, c.Config)
+	c.matchAPIFixtureRepository = repositories.NewMatchAPIFixtureRepository(c.db, c.Config)
 }
 
 func (c *Container) initStartupData() error {
@@ -230,7 +235,7 @@ func (c *Container) initServices() {
 	c.UserService = services.NewUserService(c.userRepository, c.userStorage, c.Logger)
 	c.boardService = services.NewBoardService(c.boardRepository)
 	c.BoardMemberService = services.NewBoardMemberService(c.boardRepository, c.boardMemberRepository)
-	c.groupStandingService = services.NewGroupStandingService(c.groupStandingRepository, c.matchRepository, c.Logger)
+	c.groupStandingService = services.NewGroupStandingService(c.groupStandingRepository, c.matchRepository, c.matchFairPlayRepository, c.Logger)
 
 	c.pickemScoringService = services.NewScoringService(
 		c.pickemRepository, c.matchScorePickRepository, c.scoreEventRepository,
@@ -274,7 +279,22 @@ func (c *Container) initJobs() {
 			logging.Error, err.Error(),
 		)
 	}
-	if err := c.Scheduler.RegisterJob(c.Config.Cron.SyncMatchResultsSchedule, jobs.NewSyncMatchResultsJob(c.matchService, c.Logger)); err != nil {
+
+	footballClient := football.NewFootballClient(c.Config.FootballAPI)
+	syncMatchResultsJob := jobs.NewSyncMatchResultsJob(
+		c.matchService,
+		footballClient,
+		c.matchFairPlayRepository,
+		c.matchAPIFixtureRepository,
+		c.Logger,
+	)
+
+	// Run once at startup to register timers for upcoming matches and backfill any
+	// matches whose sync window has already passed (e.g. after a server restart)
+	go syncMatchResultsJob.Run(context.Background())
+
+	// Re-run at midnight to pick up newly-assigned knockout teams and re-register timers
+	if err := c.Scheduler.RegisterJob(c.Config.Cron.SyncMatchResultsSchedule, syncMatchResultsJob); err != nil {
 		c.Logger.Error(
 			"failed to register job",
 			"job", "sync:match_results",
@@ -287,6 +307,7 @@ func (c *Container) Cleanup() {
 	if c.db != nil {
 		c.db.Close()
 	}
+
 	if c.redis != nil {
 		c.redis.Close()
 	}

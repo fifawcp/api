@@ -45,6 +45,7 @@ var ErrInvalidSessionLastUsed = errors.New("invalid session last used time")
 // Board
 var ErrBoardNotFound = errors.New("board not found")
 var ErrMatchNotFound = errors.New("match not found")
+var ErrMatchAPIFixtureNotFound = errors.New("match api fixture not found")
 var ErrBoardAlreadyExists = errors.New("board already exists")
 var ErrBoardInvalidJoinCode = errors.New("invalid or expired board join code")
 var ErrBoardUserAlreadyInBoard = errors.New("user is already in this board")

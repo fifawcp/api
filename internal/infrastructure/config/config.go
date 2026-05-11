@@ -18,8 +18,9 @@ type Config struct {
 	Auth       AuthConfig
 	Mailer     MailerConfig
 	Cron       CronConfig
-	RateLimit  RateLimitConfig
-	Scoring    ScoringConfig
+	RateLimit   RateLimitConfig
+	Scoring     ScoringConfig
+	FootballAPI FootballAPIConfig
 }
 
 type ScoringConfig struct {
@@ -102,6 +103,11 @@ type CronConfig struct {
 	SyncMatchResultsSchedule string
 }
 
+type FootballAPIConfig struct {
+	Key     string
+	BaseURL string
+}
+
 type RateLimitConfig struct {
 	Enabled    bool
 	StrictIP   RateLimitTier
@@ -171,8 +177,12 @@ func NewConfig() *Config {
 			FromAddress: env.GetString("MAILER_FROM_ADDRESS", ""),
 		},
 		Cron: CronConfig{
-			CleanupSessionsSchedule:  env.GetString("CRON_CLEANUP_SESSIONS_SCHEDULE", "0 0 * * *"),      // Every day at midnight
-			SyncMatchResultsSchedule: env.GetString("CRON_SYNC_MATCH_RESULTS_SCHEDULE", "*/10 * * * *"), // Every 10 minutes
+			CleanupSessionsSchedule:  env.GetString("CRON_CLEANUP_SESSIONS_SCHEDULE", "0 0 * * *"),  // Every day at midnight
+			SyncMatchResultsSchedule: env.GetString("CRON_SYNC_MATCH_RESULTS_SCHEDULE", "0 0 * * *"), // Every day at midnight (planning-only run)
+		},
+		FootballAPI: FootballAPIConfig{
+			Key:     env.GetString("FOOTBALL_API_KEY", ""),
+			BaseURL: env.GetString("FOOTBALL_API_BASE_URL", "https://v3.football.api-sports.io"),
 		},
 		RateLimit: RateLimitConfig{
 			Enabled: env.GetBool("RATE_LIMIT_ENABLED", true),

@@ -18,6 +18,7 @@ type GroupStanding struct {
 	GoalsAgainst   int  `json:"goals_against"`
 	GoalDifference int  `json:"goal_difference"`
 	Points         int  `json:"points"`
+	FairPlayScore  int  `json:"fair_play_score"`
 }
 
 type ThirdPlaceTeam struct {

@@ -18,19 +18,21 @@ const (
 )
 
 const (
-	resourceUser           resourceType = "user"
-	resourceSession        resourceType = "session"
-	resourceRefreshToken   resourceType = "refresh_token"
-	resourceBoard          resourceType = "board"
-	resourceBoardMember    resourceType = "board_member"
-	resourceUserScore      resourceType = "user_score"
-	resourceGroupStanding  resourceType = "group_standing"
-	resourceMatch          resourceType = "match"
-	resourceOAuthAccount   resourceType = "oauth_account"
-	resourcePickem         resourceType = "pickem"
-	resourceMatchScorePick resourceType = "match_score_pick"
-	resourceScoreEvent     resourceType = "score_event"
-	resourceTeam           resourceType = "team"
+	resourceUser            resourceType = "user"
+	resourceSession         resourceType = "session"
+	resourceRefreshToken    resourceType = "refresh_token"
+	resourceBoard           resourceType = "board"
+	resourceBoardMember     resourceType = "board_member"
+	resourceUserScore       resourceType = "user_score"
+	resourceGroupStanding   resourceType = "group_standing"
+	resourceMatch           resourceType = "match"
+	resourceMatchAPIFixture resourceType = "match_api_fixture"
+	resourceOAuthAccount    resourceType = "oauth_account"
+	resourcePickem          resourceType = "pickem"
+	resourceMatchScorePick  resourceType = "match_score_pick"
+	resourceScoreEvent      resourceType = "score_event"
+	resourceTeam            resourceType = "team"
+	resourceMatchFairPlay   resourceType = "match_fair_play"
 )
 
 func handleDBError(
@@ -76,6 +78,8 @@ func translateSQLNoRowsError(err error, resource resourceType) error {
 		return domain.ErrOAuthAccountNotFound
 	case resourceMatch:
 		return domain.ErrMatchNotFound
+	case resourceMatchAPIFixture:
+		return domain.ErrMatchAPIFixtureNotFound
 	default:
 		return err
 	}
