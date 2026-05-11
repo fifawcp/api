@@ -14,9 +14,10 @@ import (
 func newTestGroupStandingService(
 	gr *mocks.MockGroupStandingRepository,
 	mr *mocks.MockMatchRepository,
+	fp *mocks.MockMatchFairPlayRepository,
 	logger *mocks.MockLogger,
 ) GroupStandingServiceInterface {
-	return NewGroupStandingService(gr, mr, logger)
+	return NewGroupStandingService(gr, mr, fp, logger)
 }
 
 // ---------------------------------------------------------------------------
@@ -39,7 +40,7 @@ func TestGroupStandingService_GetGroupStandings(t *testing.T) {
 			},
 		}
 
-		service := newTestGroupStandingService(gr, nil, nil)
+		service := newTestGroupStandingService(gr, nil, nil, nil)
 
 		groupStandings, err := service.GetGroupStandings(context.Background(), []string{"A"}, nil)
 
@@ -56,7 +57,7 @@ func TestGroupStandingService_GetGroupStandings(t *testing.T) {
 			},
 		}
 
-		service := newTestGroupStandingService(gr, nil, nil)
+		service := newTestGroupStandingService(gr, nil, nil, nil)
 
 		groupStandings, err := service.GetGroupStandings(context.Background(), []string{"A"}, nil)
 
@@ -118,7 +119,13 @@ func TestGroupStandingService_RecalculateStandings(t *testing.T) {
 			},
 		}
 
-		service := newTestGroupStandingService(gr, mr, nil)
+		fp := &mocks.MockMatchFairPlayRepository{
+			GetFairPlayTotalsByGroupFunc: func(_ context.Context, _ string) (map[string]int, error) {
+				return map[string]int{}, nil
+			},
+		}
+
+		service := newTestGroupStandingService(gr, mr, fp, nil)
 
 		err := service.RecalculateStandings(context.Background())
 
@@ -134,7 +141,7 @@ func TestGroupStandingService_RecalculateStandings(t *testing.T) {
 			},
 		}
 
-		service := newTestGroupStandingService(nil, mr, nil)
+		service := newTestGroupStandingService(nil, mr, nil, nil)
 
 		err := service.RecalculateStandings(context.Background())
 
@@ -157,7 +164,13 @@ func TestGroupStandingService_RecalculateStandings(t *testing.T) {
 			},
 		}
 
-		service := newTestGroupStandingService(gr, mr, nil)
+		fp := &mocks.MockMatchFairPlayRepository{
+			GetFairPlayTotalsByGroupFunc: func(_ context.Context, _ string) (map[string]int, error) {
+				return map[string]int{}, nil
+			},
+		}
+
+		service := newTestGroupStandingService(gr, mr, fp, nil)
 
 		err := service.RecalculateStandings(context.Background())
 

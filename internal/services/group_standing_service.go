@@ -18,17 +18,20 @@ type GroupStandingServiceInterface interface {
 type GroupStandingService struct {
 	groupStandingRepository domain.GroupStandingRepository
 	matchRepository         domain.MatchRepository
+	fairPlayRepository      domain.MatchFairPlayRepository
 	logger                  logging.Logger
 }
 
 func NewGroupStandingService(
 	groupStandingRepository domain.GroupStandingRepository,
 	matchRepository domain.MatchRepository,
+	fairPlayRepository domain.MatchFairPlayRepository,
 	logger logging.Logger,
 ) GroupStandingServiceInterface {
 	return &GroupStandingService{
 		groupStandingRepository: groupStandingRepository,
 		matchRepository:         matchRepository,
+		fairPlayRepository:      fairPlayRepository,
 		logger:                  logger,
 	}
 }
@@ -61,7 +64,7 @@ func (s *GroupStandingService) RecalculateStandings(ctx context.Context) error {
 		wg.Add(1)
 		go func(groupCode string) {
 			defer wg.Done()
-			if err := s.recalculateStandingsByGroup(ctx, matchesByGroup[groupCode]); err != nil {
+			if err := s.recalculateStandingsByGroup(ctx, groupCode, matchesByGroup[groupCode]); err != nil {
 				mu.Lock()
 				errs = append(errs, err)
 				mu.Unlock()
@@ -77,8 +80,19 @@ func (s *GroupStandingService) RecalculateStandings(ctx context.Context) error {
 	return nil
 }
 
-func (s *GroupStandingService) recalculateStandingsByGroup(ctx context.Context, groupMatches []*domain.Match) error {
+func (s *GroupStandingService) recalculateStandingsByGroup(ctx context.Context, groupCode string, groupMatches []*domain.Match) error {
 	standings := rankGroup(groupMatches)
+
+	fairPlayTotals, err := s.fairPlayRepository.GetFairPlayTotalsByGroup(ctx, groupCode)
+	if err != nil {
+		return err
+	}
+
+	// Update the fair play score for each team
+	for _, standing := range standings {
+		standing.FairPlayScore = fairPlayTotals[standing.Team.FifaCode]
+	}
+
 	return s.groupStandingRepository.UpdateGroupStandings(ctx, standings)
 }
 
@@ -305,15 +319,10 @@ var (
 		return b.GoalsFor - a.GoalsFor
 	}
 
-	// FIFA rule f (fair play / cards) is not implemented yet. To enable:
-	//   1. Add a FairPlayScore int field on domain.GroupStanding
-	//   2. Populate it inside applyMatchToStandings from card data on domain.Match
-	//   3. Define byFairPlay below and append it to overallSortChain (before byFifaWorldRanking)
-	// No structural changes elsewhere are required
-	//
-	// byFairPlay tiebreaker = func(a, b *domain.GroupStanding) int {
-	//     return b.FairPlayScore - a.FairPlayScore
-	// }
+	// FIFA rule f — fewer disciplinary points = worse rank (scores are negative)
+	byFairPlay tiebreaker = func(a, b *domain.GroupStanding) int {
+		return b.FairPlayScore - a.FairPlayScore
+	}
 
 	// FIFA rule g — most recent published FIFA/Coca-Cola Men's World Ranking
 	byFifaWorldRanking tiebreaker = func(a, b *domain.GroupStanding) int {
@@ -323,9 +332,9 @@ var (
 
 var overallSortChain = []tiebreaker{
 	byPoints,
-	byGoalDifference, // FIFA rule d
-	byGoalsFor,       // FIFA rule e
-	// byFairPlay,      // FIFA rule f - enable when card data exists
+	byGoalDifference,   // FIFA rule d
+	byGoalsFor,         // FIFA rule e
+	byFairPlay,         // FIFA rule f
 	byFifaWorldRanking, // FIFA rule g
 }
 
