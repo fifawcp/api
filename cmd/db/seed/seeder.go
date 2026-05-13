@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/big"
 	mathrand "math/rand"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,6 +28,7 @@ type Seeder struct {
 	pickemRepository      domain.PickemRepository
 	matchRepository       domain.MatchRepository
 	matchService          services.MatchServiceInterface
+	pickemService         services.PickemServiceInterface
 	competitionService    services.CompetitionServiceInterface
 	boardOwners           map[int64]string
 }
@@ -42,6 +42,7 @@ func NewSeeder(
 	pickemRepository domain.PickemRepository,
 	matchRepository domain.MatchRepository,
 	matchService services.MatchServiceInterface,
+	pickemService services.PickemServiceInterface,
 	competitionService services.CompetitionServiceInterface,
 ) *Seeder {
 	return &Seeder{
@@ -53,6 +54,7 @@ func NewSeeder(
 		pickemRepository:      pickemRepository,
 		matchRepository:       matchRepository,
 		matchService:          matchService,
+		pickemService:         pickemService,
 		competitionService:    competitionService,
 		boardOwners:           map[int64]string{},
 	}
@@ -472,115 +474,60 @@ func (s *Seeder) seedCompetitions(ctx context.Context) error {
 	return nil
 }
 
-// seedBracketPicks generates a bracket pick for every knockout match for
-// each pickem user. The picked FIFA code is drawn from the user's own group
-// predictions for the source group(s) feeding that match, so the picks are
-// "plausible" given the user's predicted groups
+var knockoutStages = [][]int64{
+	{73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88}, // round of 32
+	{89, 90, 91, 92, 93, 94, 95, 96},                                 // round of 16
+	{97, 98, 99, 100},                                                // quarter-finals
+	{101, 102},                                                       // semi-finals
+	{103, 104},                                                       // third place + final
+}
+
+// seedBracketPicks generates a bracket pick for every knockout match for each
+// pickem user. Picks are constructed stage-by-stage from the live projection
+// returned by PickemService — each pick is always one of the two teams the
+// projection shows in the slot, so downstream matches resolve cleanly
 func (s *Seeder) seedBracketPicks(ctx context.Context, users []*domain.User) error {
-	knockoutMatchIDs := make([]int64, 0, 32)
-	for matchID := range domain.MatchSlotRules {
-		knockoutMatchIDs = append(knockoutMatchIDs, matchID)
-	}
-	slices.Sort(knockoutMatchIDs)
-
 	for _, user := range users {
-		groupPicks, err := s.pickemRepository.GetGroupPicks(ctx, user.ID)
-		if err != nil {
-			s.logger.Error("Error reading group picks for bracket seed", logging.Error, err.Error(), "user_id", user.ID)
-			continue
-		}
+		accumulatedPicks := make([]*domain.UserBracketPick, 0, 32)
 
-		picksByGroup := make(map[string][]string, 12) // groupCode → ordered FIFA codes by predicted position
-		positionByGroup := make(map[string]map[int]string)
+		for _, stageMatchIDs := range knockoutStages {
+			pickem, err := s.pickemService.GetUserPickem(ctx, user.ID)
+			if err != nil {
+				s.logger.Error("Error projecting bracket for seed", logging.Error, err.Error(), "user_id", user.ID)
+				break
+			}
 
-		for _, pick := range groupPicks {
-			positionByGroup[pick.TeamGroupCode] = orInit(positionByGroup[pick.TeamGroupCode])
-			positionByGroup[pick.TeamGroupCode][pick.PredictedPosition] = pick.TeamFifaCode
-		}
+			slotByMatchID := make(map[int64]*domain.BracketMatchSlot, len(pickem.Bracket))
+			for _, slot := range pickem.Bracket {
+				slotByMatchID[slot.MatchID] = slot
+			}
 
-		for groupCode, positions := range positionByGroup {
-			ordered := make([]string, 0, 4)
-
-			for position := 1; position <= 4; position++ {
-				if code, ok := positions[position]; ok {
-					ordered = append(ordered, code)
+			for _, matchID := range stageMatchIDs {
+				slot, ok := slotByMatchID[matchID]
+				if !ok || slot.HomeTeam == nil || slot.AwayTeam == nil {
+					continue
 				}
+
+				pickedTeam := slot.HomeTeam
+				if mathrand.Intn(2) == 1 {
+					pickedTeam = slot.AwayTeam
+				}
+
+				accumulatedPicks = append(accumulatedPicks, &domain.UserBracketPick{
+					UserID:       user.ID,
+					MatchID:      matchID,
+					TeamFifaCode: pickedTeam.FifaCode,
+				})
 			}
 
-			picksByGroup[groupCode] = ordered
-		}
-
-		bracketPicks := make([]*domain.UserBracketPick, 0, len(knockoutMatchIDs))
-		for _, matchID := range knockoutMatchIDs {
-			candidate := pickBracketTeam(matchID, picksByGroup)
-			if candidate == "" {
-				continue
+			if err := s.pickemRepository.UpsertBracketPicks(ctx, user.ID, accumulatedPicks); err != nil {
+				s.logger.Error("Error seeding bracket picks", logging.Error, err.Error(), "user_id", user.ID)
+				break
 			}
-
-			bracketPicks = append(bracketPicks, &domain.UserBracketPick{
-				UserID:       user.ID,
-				MatchID:      matchID,
-				TeamFifaCode: candidate,
-			})
-		}
-
-		if err := s.pickemRepository.UpsertBracketPicks(ctx, user.ID, bracketPicks); err != nil {
-			s.logger.Error("Error seeding bracket picks", logging.Error, err.Error(), "user_id", user.ID)
 		}
 	}
 
 	return nil
-}
-
-func orInit(m map[int]string) map[int]string {
-	if m == nil {
-		return map[int]string{}
-	}
-
-	return m
-}
-
-// pickBracketTeam walks MatchSlotRules to find a FIFA code from the user's
-// predicted top-2 of the source group feeding the given knockout match. For
-// SourceWinner/SourceLoser sources we recurse through the earlier match
-func pickBracketTeam(matchID int64, picksByGroup map[string][]string) string {
-	candidates := collectBracketCandidates(matchID, picksByGroup, 4)
-	if len(candidates) == 0 {
-		return ""
-	}
-	return candidates[mathrand.Intn(len(candidates))]
-}
-
-func collectBracketCandidates(matchID int64, picksByGroup map[string][]string, depth int) []string {
-	if depth == 0 {
-		return nil
-	}
-
-	rule, ok := domain.MatchSlotRules[matchID]
-	if !ok {
-		return nil
-	}
-
-	var candidates []string
-	for _, source := range []domain.Source{rule.Home, rule.Away} {
-		switch source.Kind {
-		case domain.SourceGroupPosition:
-			ordered := picksByGroup[source.GroupCode]
-			if source.Position >= 1 && source.Position <= len(ordered) {
-				candidates = append(candidates, ordered[source.Position-1])
-			}
-		case domain.SourceBestThird:
-			for _, ordered := range picksByGroup {
-				if len(ordered) >= 3 {
-					candidates = append(candidates, ordered[2])
-				}
-			}
-		case domain.SourceWinner, domain.SourceLoser:
-			candidates = append(candidates, collectBracketCandidates(source.MatchID, picksByGroup, depth-1)...)
-		}
-	}
-
-	return candidates
 }
 
 // applyScenarioResults submits scripted results for the given match IDs via

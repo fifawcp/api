@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"os"
+	"time"
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/infrastructure/config"
@@ -72,11 +73,14 @@ func main() {
 		matchRepository, groupStandingRepository,
 		groupStandingService, scoringService, competitionScoringService, logger,
 	)
+	pickemService := services.NewPickemService(
+		pickemRepository, teams, time.Now().Add(365*24*time.Hour), cfg, logger,
+	)
 
 	seeder := NewSeeder(
 		pgDB, logger,
 		userRepository, boardRepository, boardMemberRepository, pickemRepository,
-		matchRepository, matchService, competitionService,
+		matchRepository, matchService, pickemService, competitionService,
 	)
 
 	flush := flag.Bool("flush", false, "")
