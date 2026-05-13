@@ -8,16 +8,16 @@ import (
 )
 
 type Config struct {
-	APIBaseURL string
-	Server     ServerConfig
-	Port       string
-	Env        string
-	DB         DBConfig
-	Redis      RedisConfig
-	JWT        JWTConfig
-	Auth       AuthConfig
-	Mailer     MailerConfig
-	Cron       CronConfig
+	APIBaseURL  string
+	Server      ServerConfig
+	Port        string
+	Env         string
+	DB          DBConfig
+	Redis       RedisConfig
+	JWT         JWTConfig
+	Auth        AuthConfig
+	Mailer      MailerConfig
+	Cron        CronConfig
 	RateLimit   RateLimitConfig
 	Scoring     ScoringConfig
 	FootballAPI FootballAPIConfig
@@ -177,7 +177,7 @@ func NewConfig() *Config {
 			FromAddress: env.GetString("MAILER_FROM_ADDRESS", ""),
 		},
 		Cron: CronConfig{
-			CleanupSessionsSchedule:  env.GetString("CRON_CLEANUP_SESSIONS_SCHEDULE", "0 0 * * *"),  // Every day at midnight
+			CleanupSessionsSchedule:  env.GetString("CRON_CLEANUP_SESSIONS_SCHEDULE", "0 0 * * *"),   // Every day at midnight
 			SyncMatchResultsSchedule: env.GetString("CRON_SYNC_MATCH_RESULTS_SCHEDULE", "0 0 * * *"), // Every day at midnight (planning-only run)
 		},
 		FootballAPI: FootballAPIConfig{

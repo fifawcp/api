@@ -5,7 +5,7 @@ import (
 )
 
 type MockMatchAPIFixtureRepository struct {
-	GetByMatchIDFunc func(ctx context.Context, matchID int64) (int64, error)
+	GetByMatchIDFunc    func(ctx context.Context, matchID int64) (int64, error)
 	UpsertFixtureIDFunc func(ctx context.Context, matchID, apiFixtureID int64) error
 }
 

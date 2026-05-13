@@ -4,9 +4,9 @@ set -e
 echo "Running migrations..."
 /migrate -path /migrations -database "$DB_ADDRESS" -verbose up
 
-if [ "$SEED_ON_DEPLOY" = "true" ]; then
-  echo "Seeding database..."
-  /seed
+if [ -n "$SEED_SCENARIO" ]; then
+  echo "Seeding database with scenario: $SEED_SCENARIO"
+  /seed -scenario="$SEED_SCENARIO"
 fi
 
 echo "Pre-deploy complete."

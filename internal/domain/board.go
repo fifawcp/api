@@ -10,34 +10,33 @@ type BoardPrivacy string
 const (
 	BoardPrivacyPublic  BoardPrivacy = "public"
 	BoardPrivacyPrivate BoardPrivacy = "private"
+	BoardPrivacyGlobal  BoardPrivacy = "global"
 )
 
 type Board struct {
-	ID          string       `json:"id" example:"123e4567-e89b-12d3-a456-426614174000"`
-	Name        string       `json:"name" example:"My Board"`
-	OwnerUserID *string      `json:"owner_user_id,omitempty" example:"123e4567-e89b-12d3-a456-426614174000"`
-	JoinCode    *string      `json:"join_code,omitempty" example:"ABCD1234"`
-	Privacy     BoardPrivacy `json:"privacy" example:"private"`
-	CreatedAt   time.Time    `json:"created_at" example:"2026-01-15T10:30:00Z"`
+	ID        int64        `json:"id" example:"1"`
+	Name      string       `json:"name" example:"My Board"`
+	JoinCode  *string      `json:"join_code,omitempty" example:"ABCD1234"`
+	Privacy   BoardPrivacy `json:"privacy" example:"private"`
+	CreatedAt time.Time    `json:"created_at" example:"2026-01-15T10:30:00Z"`
 }
 
 type UserBoardListItem struct {
-	ID      string       `json:"id" example:"123e4567-e89b-12d3-a456-426614174000"`
+	ID      int64        `json:"id" example:"1"`
 	Name    string       `json:"name" example:"My Board"`
 	Privacy BoardPrivacy `json:"privacy" example:"private"`
 }
 
 type BoardDetails struct {
 	Board
-	Viewer BoardViewer `json:"viewer"`
+	MemberCount      int         `json:"member_count" example:"12"`
+	CompetitionCount int         `json:"competition_count" example:"2"`
+	Viewer           BoardViewer `json:"viewer"`
 }
 
 type BoardViewer struct {
-	Role        BoardMemberRole `json:"role" example:"member"`
-	IsOwner     bool            `json:"is_owner" example:"false"`
-	JoinedAt    time.Time       `json:"joined_at" example:"2026-01-16T10:30:00Z"`
-	Rank        int             `json:"rank" example:"3"`
-	TotalPoints int             `json:"total_points" example:"150"`
+	Role     BoardMemberRole `json:"role" example:"member"`
+	JoinedAt time.Time       `json:"joined_at" example:"2026-01-16T10:30:00Z"`
 }
 
 type BoardMembersPage struct {
@@ -45,44 +44,26 @@ type BoardMembersPage struct {
 	Pagination Pagination
 }
 
-type BoardMembersSort string
-
-const (
-	BoardMembersSortTotalPoints      BoardMembersSort = "total_points"
-	BoardMembersSortPickemPoints     BoardMembersSort = "pickem_points"
-	BoardMembersSortMatchScorePoints BoardMembersSort = "match_score_points"
-	BoardMembersSortExactHits        BoardMembersSort = "exact_hits"
-	BoardMembersSortCorrectOutcomes  BoardMembersSort = "correct_outcomes"
-)
-
 type BoardMembersFilters struct {
 	Search string
-	Sort   BoardMembersSort
 }
 
 type BoardMemberDetails struct {
-	UserID           string          `json:"user_id" example:"123e4567-e89b-12d3-a456-426614174000"`
-	UserName         string          `json:"username" example:"johndoe"`
-	FirstName        string          `json:"first_name" example:"John"`
-	LastName         string          `json:"last_name" example:"Doe"`
-	Role             BoardMemberRole `json:"role" example:"member"`
-	JoinedAt         time.Time       `json:"joined_at" example:"2026-01-16T10:30:00Z"`
-	Rank             int             `json:"rank" example:"3"`
-	TotalPoints      int             `json:"total_points" example:"100"`
-	PickemPoints     int             `json:"pickem_points" example:"50"`
-	MatchScorePoints int             `json:"match_score_points" example:"50"`
-	ExactHits        int             `json:"exact_hits" example:"5"`
-	CorrectOutcomes  int             `json:"correct_outcomes" example:"10"`
-	UpdatedAt        time.Time       `json:"updated_at" example:"2026-01-20T10:30:00Z"`
+	UserID    string          `json:"user_id" example:"123e4567-e89b-12d3-a456-426614174000"`
+	UserName  string          `json:"username" example:"johndoe"`
+	FirstName string          `json:"first_name" example:"John"`
+	LastName  string          `json:"last_name" example:"Doe"`
+	Role      BoardMemberRole `json:"role" example:"member"`
+	JoinedAt  time.Time       `json:"joined_at" example:"2026-01-16T10:30:00Z"`
 }
 
 type BoardRepository interface {
-	CreateBoardWithOwner(ctx context.Context, board *Board) error
+	CreateBoard(ctx context.Context, board *Board, ownerID string) error
 	GetUserBoards(ctx context.Context, userID string) ([]*UserBoardListItem, error)
-	GetBoardByID(ctx context.Context, boardID string) (*Board, error)
-	GetBoardDetails(ctx context.Context, boardID string, userID string) (*BoardDetails, error)
-	GetBoardMembers(ctx context.Context, boardID string, filters BoardMembersFilters, page, limit int) (*BoardMembersPage, error)
-	UpdateJoinCode(ctx context.Context, boardID string, joinCode string) error
-	UpdateBoard(ctx context.Context, boardID string, board *Board) error
-	DeleteBoard(ctx context.Context, boardID string, userID string) error
+	GetBoardByID(ctx context.Context, boardID int64) (*Board, error)
+	GetBoardDetails(ctx context.Context, boardID int64, userID string) (*BoardDetails, error)
+	GetBoardMembers(ctx context.Context, boardID int64, filters BoardMembersFilters, page, limit int) (*BoardMembersPage, error)
+	UpdateJoinCode(ctx context.Context, boardID int64, joinCode string) error
+	UpdateBoard(ctx context.Context, boardID int64, board *Board) error
+	DeleteBoard(ctx context.Context, boardID int64) error
 }

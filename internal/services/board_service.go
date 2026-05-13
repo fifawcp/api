@@ -13,10 +13,10 @@ import (
 type BoardServiceInterface interface {
 	CreateBoard(ctx context.Context, payload dtos.CreateBoardDto, userID string) (*domain.Board, error)
 	GetUserBoards(ctx context.Context, userID string) ([]*domain.UserBoardListItem, error)
-	GetBoardByID(ctx context.Context, boardID string, userID string) (*domain.BoardDetails, error)
-	RegenerateJoinCode(ctx context.Context, boardID string) (string, error)
-	UpdateBoard(ctx context.Context, boardID string, role domain.BoardMemberRole, payload dtos.UpdateBoardDto) error
-	DeleteBoard(ctx context.Context, boardID string, userID string) error
+	GetBoardByID(ctx context.Context, boardID int64, userID string) (*domain.BoardDetails, error)
+	RegenerateJoinCode(ctx context.Context, boardID int64) (string, error)
+	UpdateBoard(ctx context.Context, boardID int64, role domain.BoardMemberRole, payload dtos.UpdateBoardDto) error
+	DeleteBoard(ctx context.Context, boardID int64, role domain.BoardMemberRole) error
 }
 
 type BoardService struct {
@@ -43,16 +43,14 @@ func (s *BoardService) CreateBoard(
 		joinCode = s.generateJoinCode()
 
 		board := &domain.Board{
-			Name:        payload.Name,
-			OwnerUserID: &userID,
-			JoinCode:    &joinCode,
-			Privacy:     domain.BoardPrivacyPrivate,
+			Name:     payload.Name,
+			JoinCode: &joinCode,
+			Privacy:  domain.BoardPrivacyPrivate,
 		}
 
-		// Single CTE handles board + member + ranking atomically
-		if err := s.boardRepository.CreateBoardWithOwner(ctx, board); err != nil {
+		if err := s.boardRepository.CreateBoard(ctx, board, userID); err != nil {
 			switch {
-			// If error is unique violation, retry with new code
+			// If error is unique violation (duplicate join code), retry with new code
 			case errors.Is(err, domain.ErrBoardAlreadyExists):
 				continue
 			default:
@@ -73,14 +71,14 @@ func (s *BoardService) GetUserBoards(ctx context.Context, userID string) ([]*dom
 
 func (s *BoardService) GetBoardByID(
 	ctx context.Context,
-	boardID string,
+	boardID int64,
 	userID string,
 ) (*domain.BoardDetails, error) {
 	return s.boardRepository.GetBoardDetails(ctx, boardID, userID)
 }
 
-func (s *BoardService) RegenerateJoinCode(ctx context.Context, boardID string) (string, error) {
-	if err := assertPrivateBoard(ctx, s.boardRepository, boardID); err != nil {
+func (s *BoardService) RegenerateJoinCode(ctx context.Context, boardID int64) (string, error) {
+	if err := assertNotGlobalBoard(ctx, s.boardRepository, boardID); err != nil {
 		return "", err
 	}
 
@@ -95,15 +93,15 @@ func (s *BoardService) RegenerateJoinCode(ctx context.Context, boardID string) (
 
 func (s *BoardService) UpdateBoard(
 	ctx context.Context,
-	boardID string,
+	boardID int64,
 	role domain.BoardMemberRole,
 	payload dtos.UpdateBoardDto,
 ) error {
-	if !s.isAdminMember(role) {
+	if !role.CanManage() {
 		return domain.ErrForbidden
 	}
 
-	if err := assertPrivateBoard(ctx, s.boardRepository, boardID); err != nil {
+	if err := assertNotGlobalBoard(ctx, s.boardRepository, boardID); err != nil {
 		return err
 	}
 
@@ -129,26 +127,26 @@ func (s *BoardService) generateJoinCode() string {
 	return string(result)
 }
 
-func (s *BoardService) DeleteBoard(ctx context.Context, boardID string, userID string) error {
-	if err := assertPrivateBoard(ctx, s.boardRepository, boardID); err != nil {
+func (s *BoardService) DeleteBoard(ctx context.Context, boardID int64, role domain.BoardMemberRole) error {
+	if role != domain.BoardMemberRoleOwner {
+		return domain.ErrForbidden
+	}
+
+	if err := assertNotGlobalBoard(ctx, s.boardRepository, boardID); err != nil {
 		return err
 	}
 
-	return s.boardRepository.DeleteBoard(ctx, boardID, userID)
+	return s.boardRepository.DeleteBoard(ctx, boardID)
 }
 
-func (s *BoardService) isAdminMember(role domain.BoardMemberRole) bool {
-	return role == domain.BoardMemberRoleAdmin
-}
-
-func assertPrivateBoard(ctx context.Context, boardRepository domain.BoardRepository, boardID string) error {
+func assertNotGlobalBoard(ctx context.Context, boardRepository domain.BoardRepository, boardID int64) error {
 	board, err := boardRepository.GetBoardByID(ctx, boardID)
 	if err != nil {
 		return err
 	}
 
-	if board.Privacy == domain.BoardPrivacyPublic {
-		return domain.ErrBoardIsPublic
+	if board.Privacy == domain.BoardPrivacyGlobal {
+		return domain.ErrBoardIsGlobal
 	}
 
 	return nil

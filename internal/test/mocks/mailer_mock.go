@@ -15,14 +15,12 @@ func (m *MockMailer) SendOTPEmail(ctx context.Context, to, otp string, purpose d
 	if m.SendOTPEmailFunc != nil {
 		return m.SendOTPEmailFunc(ctx, to, otp, purpose)
 	}
-
-	return nil
+	panic("SendOTPEmail called unexpectedly")
 }
 
 func (m *MockMailer) SendWelcomeEmail(ctx context.Context, to, firstName string) error {
 	if m.SendWelcomeEmailFunc != nil {
 		return m.SendWelcomeEmailFunc(ctx, to, firstName)
 	}
-
-	return nil
+	panic("SendWelcomeEmail called unexpectedly")
 }

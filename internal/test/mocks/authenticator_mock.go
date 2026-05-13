@@ -11,14 +11,12 @@ func (m *MockAuthenticator) GenerateToken(userID string, tokenType auth.TokenTyp
 	if m.GenerateTokenFunc != nil {
 		return m.GenerateTokenFunc(userID, tokenType)
 	}
-
-	return nil, nil
+	panic("GenerateToken called unexpectedly")
 }
 
 func (m *MockAuthenticator) ValidateToken(tokenString string) (*auth.Claims, error) {
 	if m.ValidateTokenFunc != nil {
 		return m.ValidateTokenFunc(tokenString)
 	}
-
-	return nil, nil
+	panic("ValidateToken called unexpectedly")
 }

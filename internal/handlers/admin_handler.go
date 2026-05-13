@@ -15,7 +15,7 @@ import (
 type AdminHandler struct {
 	matchService         services.MatchServiceInterface
 	groupStandingService services.GroupStandingServiceInterface
-	pickemScoringService services.ScoringServiceInterface
+	scoringService       services.ScoringServiceInterface
 	logger               logging.Logger
 	auditLogger          logging.AuditLogger
 	validator            *validator.Validator
@@ -24,7 +24,7 @@ type AdminHandler struct {
 func NewAdminHandler(
 	matchService services.MatchServiceInterface,
 	groupStandingService services.GroupStandingServiceInterface,
-	pickemScoringService services.ScoringServiceInterface,
+	scoringService services.ScoringServiceInterface,
 	logger logging.Logger,
 	auditLogger logging.AuditLogger,
 	validator *validator.Validator,
@@ -32,7 +32,7 @@ func NewAdminHandler(
 	return &AdminHandler{
 		matchService:         matchService,
 		groupStandingService: groupStandingService,
-		pickemScoringService: pickemScoringService,
+		scoringService:       scoringService,
 		logger:               logger,
 		auditLogger:          auditLogger,
 		validator:            validator,
@@ -283,7 +283,7 @@ func (h *AdminHandler) ResolveThirdPlaceConflict(w http.ResponseWriter, r *http.
 func (h *AdminHandler) RescoreMatch(w http.ResponseWriter, r *http.Request) {
 	matchID := httpctx.GetMatchID(r.Context())
 
-	if err := h.pickemScoringService.ScoreMatches(r.Context(), []int64{matchID}); err != nil {
+	if _, err := h.scoringService.ScoreMatches(r.Context(), []int64{matchID}); err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return
 	}
@@ -305,7 +305,7 @@ func (h *AdminHandler) RescoreMatch(w http.ResponseWriter, r *http.Request) {
 //	@Security		BearerAuth
 //	@Router			/admin/pickems/rescore/best-thirds [post]
 func (h *AdminHandler) RescoreBestThirds(w http.ResponseWriter, r *http.Request) {
-	if err := h.pickemScoringService.ScoreBestThirds(r.Context()); err != nil {
+	if _, err := h.scoringService.ScoreBestThirds(r.Context()); err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return
 	}

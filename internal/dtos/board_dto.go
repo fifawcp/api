@@ -11,7 +11,7 @@ type JoinBoardDto struct {
 }
 
 type JoinBoardResponseDto struct {
-	BoardID string `json:"board_id" example:"123e4567-e89b-12d3-a456-426614174000"`
+	BoardID int64 `json:"board_id" example:"1"`
 }
 
 type UpdateBoardDto struct {

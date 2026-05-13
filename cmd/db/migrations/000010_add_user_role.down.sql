@@ -1,2 +1,0 @@
-ALTER TABLE users DROP CONSTRAINT check_user_role;
-ALTER TABLE users DROP COLUMN role;

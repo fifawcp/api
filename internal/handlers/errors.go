@@ -19,16 +19,17 @@ const (
 	codeMatchNotFound        = "MATCH_NOT_FOUND"
 	codeOAuthAccountNotFound = "OAUTH_ACCOUNT_NOT_FOUND"
 	codeMatchesNotFound      = "MATCHES_NOT_FOUND"
+	codeCompetitionNotFound  = "COMPETITION_NOT_FOUND"
 
 	// 409 Conflict
-	codeUserAlreadyExists         = "USER_ALREADY_EXISTS"
-	codeUsernameAlreadyExists     = "USERNAME_ALREADY_EXISTS"
-	codeBoardMemberAlreadyInBoard = "BOARD_MEMBER_ALREADY_IN_BOARD"
-	codeBoardAlreadyExists        = "BOARD_ALREADY_EXISTS"
-	codeBoardUserAlreadyInBoard   = "BOARD_USER_ALREADY_IN_BOARD"
-	codeMaxBoardMembersExceeded   = "MAX_BOARD_MEMBERS_EXCEEDED"
-	codeBoardOwnerCannotLeave     = "BOARD_OWNER_CANNOT_LEAVE"
-	codeBoardIsPublic             = "BOARD_IS_PUBLIC"
+	codeUserAlreadyExists              = "USER_ALREADY_EXISTS"
+	codeUsernameAlreadyExists          = "USERNAME_ALREADY_EXISTS"
+	codeBoardMemberAlreadyInBoard      = "BOARD_MEMBER_ALREADY_IN_BOARD"
+	codeBoardAlreadyExists             = "BOARD_ALREADY_EXISTS"
+	codeBoardUserAlreadyInBoard        = "BOARD_USER_ALREADY_IN_BOARD"
+	codeMaxBoardMembersExceeded        = "MAX_BOARD_MEMBERS_EXCEEDED"
+	codeCompetitionPickemAlreadyExists = "COMPETITION_PICKEM_ALREADY_EXISTS"
+	codeCompetitionNameAlreadyExists   = "COMPETITION_NAME_ALREADY_EXISTS"
 
 	// 401 Unauthorized
 	codeOTPInvalidOrExpired          = "OTP_INVALID_OR_EXPIRED"
@@ -44,6 +45,8 @@ const (
 	// 403 Forbidden
 	codeForbidden               = "FORBIDDEN"
 	codeOAuthAccountNotVerified = "OAUTH_ACCOUNT_NOT_VERIFIED"
+	codeBoardIsGlobal           = "BOARD_IS_GLOBAL"
+	codeCompetitionForbidden    = "COMPETITION_FORBIDDEN"
 
 	// 400 Bad Request
 	codeInvalidWinnerTeam          = "INVALID_WINNER_TEAM"
@@ -61,7 +64,6 @@ const (
 	codePickemLocked               = "PICKEM_LOCKED"
 	codeMatchPickLocked            = "MATCH_PICK_LOCKED"
 	codeMatchTeamsNotAssigned      = "MATCH_TEAMS_NOT_ASSIGNED"
-	codeInvalidBoardMembersSort    = "INVALID_BOARD_MEMBERS_SORT"
 	codePenaltyForbidden           = "PENALTY_FORBIDDEN"
 	codePenaltyRequired            = "PENALTY_REQUIRED"
 	codePenaltyIncomplete          = "PENALTY_INCOMPLETE"
@@ -72,6 +74,7 @@ const (
 	codeInvalidBracketPick         = "INVALID_BRACKET_PICK"
 	codeGroupPicksRequired         = "GROUP_PICKS_REQUIRED"
 	codeTeamGroupMismatch          = "TEAM_GROUP_MISMATCH"
+	codeCannotTransferToSelf       = "CANNOT_TRANSFER_OWNERSHIP_TO_SELF"
 
 	// 502 Bad Gateway
 	codeMissingIDToken = "MISSING_ID_TOKEN"
@@ -106,7 +109,13 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 	case errors.As(err, &matchesNotFoundErr):
 		httpx.NotFound(w, r, codeMatchesNotFound, matchesNotFoundErr.Error())
 
+	// 404 Not Found (competitions)
+	case errors.Is(err, domain.ErrCompetitionNotFound):
+		httpx.NotFound(w, r, codeCompetitionNotFound, domain.ErrCompetitionNotFound.Error())
+
 	// 409 Conflict
+	case errors.Is(err, domain.ErrCompetitionPickemAlreadyExists):
+		httpx.Conflict(w, r, codeCompetitionPickemAlreadyExists, domain.ErrCompetitionPickemAlreadyExists.Error())
 	case errors.Is(err, domain.ErrUserAlreadyExists):
 		httpx.Conflict(w, r, codeUserAlreadyExists, domain.ErrUserAlreadyExists.Error())
 	case errors.Is(err, domain.ErrUsernameAlreadyExists):
@@ -119,8 +128,6 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.Conflict(w, r, codeBoardUserAlreadyInBoard, domain.ErrBoardUserAlreadyInBoard.Error())
 	case errors.Is(err, domain.ErrMaxBoardMembersExceeded):
 		httpx.Conflict(w, r, codeMaxBoardMembersExceeded, domain.ErrMaxBoardMembersExceeded.Error())
-	case errors.Is(err, domain.ErrBoardOwnerCannotLeaveWithMembers):
-		httpx.Conflict(w, r, codeBoardOwnerCannotLeave, domain.ErrBoardOwnerCannotLeaveWithMembers.Error())
 
 	// 401 Unauthorized
 	case errors.Is(err, domain.ErrOTPInvalidOrExpired):
@@ -145,8 +152,10 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.Forbidden(w, r, codeForbidden, domain.ErrForbidden.Error())
 	case errors.Is(err, domain.ErrOAuthAccountNotVerified):
 		httpx.Forbidden(w, r, codeOAuthAccountNotVerified, domain.ErrOAuthAccountNotVerified.Error())
-	case errors.Is(err, domain.ErrBoardIsPublic):
-		httpx.Forbidden(w, r, codeBoardIsPublic, domain.ErrBoardIsPublic.Error())
+	case errors.Is(err, domain.ErrBoardIsGlobal):
+		httpx.Forbidden(w, r, codeBoardIsGlobal, domain.ErrBoardIsGlobal.Error())
+	case errors.Is(err, domain.ErrCompetitionForbidden):
+		httpx.Forbidden(w, r, codeCompetitionForbidden, domain.ErrCompetitionForbidden.Error())
 
 	// 400 Bad Request
 	case errors.Is(err, domain.ErrInvalidWinnerTeam):
@@ -179,8 +188,6 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.BadRequest(w, r, codeMatchPickLocked, domain.ErrMatchPickLocked.Error())
 	case errors.Is(err, domain.ErrMatchTeamsNotAssigned):
 		httpx.BadRequest(w, r, codeMatchTeamsNotAssigned, domain.ErrMatchTeamsNotAssigned.Error())
-	case errors.Is(err, domain.ErrInvalidBoardMembersSort):
-		httpx.BadRequest(w, r, codeInvalidBoardMembersSort, domain.ErrInvalidBoardMembersSort.Error())
 	case errors.Is(err, domain.ErrPenaltyForbidden):
 		httpx.BadRequest(w, r, codePenaltyForbidden, domain.ErrPenaltyForbidden.Error())
 	case errors.Is(err, domain.ErrPenaltyRequired):
@@ -201,6 +208,10 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.BadRequest(w, r, codeTeamGroupMismatch, domain.ErrTeamGroupMismatch.Error())
 	case errors.Is(err, domain.ErrBestThirdsNotScoreable):
 		httpx.BadRequest(w, r, codeBestThirdsNotScoreable, domain.ErrBestThirdsNotScoreable.Error())
+	case errors.Is(err, domain.ErrCannotTransferOwnershipToSelf):
+		httpx.BadRequest(w, r, codeCannotTransferToSelf, domain.ErrCannotTransferOwnershipToSelf.Error())
+	case errors.Is(err, domain.ErrCompetitionNameAlreadyExists):
+		httpx.Conflict(w, r, codeCompetitionNameAlreadyExists, domain.ErrCompetitionNameAlreadyExists.Error())
 
 	// 502 Bad Gateway
 	case errors.Is(err, domain.ErrMissingIDToken):

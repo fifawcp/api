@@ -86,13 +86,15 @@ db-test-migrate-down-inner:
 
 # ==================== Database Seeding ====================
 
+SCENARIOS := pre_tournament group_stage_done r32_done r16_done qf_done sf_done final_done
+
 .PHONY: db-seed
 db-seed:
-	@docker compose exec server make db-seed-inner
+	@docker compose exec server make db-seed-inner SCENARIO=$(filter $(SCENARIOS),$(MAKECMDGOALS))
 
 .PHONY: db-seed-inner
 db-seed-inner:
-	@go run ./cmd/db/seed
+	@go run ./cmd/db/seed $(if $(SCENARIO),-scenario=$(SCENARIO))
 
 .PHONY: db-flush
 db-flush:
@@ -101,6 +103,10 @@ db-flush:
 .PHONY: db-flush-inner
 db-flush-inner:
 	@go run ./cmd/db/seed -flush
+
+.PHONY: $(SCENARIOS)
+$(SCENARIOS):
+	@:
  
 # ==================== Cache ====================
 
@@ -143,8 +149,10 @@ help:
 	@echo "  make test-coverage           - Run tests with coverage (wrapper)"
 	@echo ""
 	@echo "💾 Database Seeding:"
-	@echo "  make db-seed                - Seed database with test data (wrapper)"
-	@echo "  make db-flush               - Remove all data from database (wrapper)"
+	@echo "  make db-seed <scenario>     - Seed a tournament snapshot (e.g. qf_done)"
+	@echo "                                  Scenarios: pre_tournament, group_stage_done,"
+	@echo "                                  r32_done, r16_done, qf_done, sf_done, final_done"
+	@echo "  make db-flush               - Reset DB to post-migration baseline"
 	@echo ""
 	@echo "🔄 Database Migrations:"
 	@echo "  make db-migrate-create      - Create new migration file (wrapper)"

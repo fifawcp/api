@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS board_members;
+DROP TABLE IF EXISTS boards;

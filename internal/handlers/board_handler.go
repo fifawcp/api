@@ -158,11 +158,9 @@ func (h *BoardHandler) GetBoardByID(w http.ResponseWriter, r *http.Request) {
 
 // GetBoardMembers godoc
 //
-//	@Summary		Get board members (paginated leaderboard)
-//	@Description	Returns the board's members with their ranking, paginated by `page` and `limit` query params (defaults: page=1, limit=20, max limit=100).
+//	@Summary		Get board members
+//	@Description	Returns the board's members ordered by join date (newest first), paginated by `page` and `limit` query params (defaults: page=1, limit=20, max limit=100).
 //	@Description	`search` filters by case-insensitive substring match across first_name, last_name, and username.
-//	@Description	`sort` reorders the displayed list (always DESC); allowed values: total_points (default), pickem_points, match_score_points, exact_hits, correct_outcomes.
-//	@Description	The `rank` field always reflects the leaderboard position by total_points and is unaffected by `sort`.
 //	@Description	Requires authentication and board membership.
 //	@Tags			boards
 //	@Produce		json
@@ -170,9 +168,8 @@ func (h *BoardHandler) GetBoardByID(w http.ResponseWriter, r *http.Request) {
 //	@Param			page	query		int					false	"Page number (1-indexed, default 1)"
 //	@Param			limit	query		int					false	"Page size (default 20, max 100)"
 //	@Param			search	query		string				false	"Search by first_name, last_name, or username (case-insensitive substring)"
-//	@Param			sort	query		string				false	"Sort column (total_points | pickem_points | match_score_points | exact_hits | correct_outcomes)"
 //	@Success		200		{object}	httpx.Response		"Board members page retrieved successfully"
-//	@Failure		400		{object}	httpx.ErrorResponse	"Invalid pagination or sort param"
+//	@Failure		400		{object}	httpx.ErrorResponse	"Invalid pagination params"
 //	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized"
 //	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board"
 //	@Failure		404		{object}	httpx.ErrorResponse	"Board not found"
@@ -200,16 +197,8 @@ func (h *BoardHandler) GetBoardMembers(w http.ResponseWriter, r *http.Request) {
 }
 
 func parseBoardMembersFilters(r *http.Request) (domain.BoardMembersFilters, error) {
-	search := strings.TrimSpace(r.URL.Query().Get("search"))
-
-	sort := r.URL.Query().Get("sort")
-	if sort != "" && !validator.IsValidBoardMembersSort(sort) {
-		return domain.BoardMembersFilters{}, domain.ErrInvalidBoardMembersSort
-	}
-
 	return domain.BoardMembersFilters{
-		Search: search,
-		Sort:   domain.BoardMembersSort(sort),
+		Search: strings.TrimSpace(r.URL.Query().Get("search")),
 	}, nil
 }
 
@@ -317,10 +306,10 @@ func (h *BoardHandler) UpdateBoard(w http.ResponseWriter, r *http.Request) {
 //	@Security		BearerAuth
 //	@Router			/boards/{boardId} [delete]
 func (h *BoardHandler) DeleteBoard(w http.ResponseWriter, r *http.Request) {
-	user := httpctx.GetAuthenticatedUser(r.Context())
 	boardID := httpctx.GetBoardID(r.Context())
+	boardMemberRole := httpctx.GetBoardMemberRole(r.Context())
 
-	if err := h.boardService.DeleteBoard(r.Context(), boardID, user.ID); err != nil {
+	if err := h.boardService.DeleteBoard(r.Context(), boardID, boardMemberRole); err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return
 	}
@@ -388,6 +377,37 @@ func (h *BoardHandler) RemoveBoardMember(w http.ResponseWriter, r *http.Request)
 	boardMemberRole := httpctx.GetBoardMemberRole(r.Context())
 
 	if err := h.boardMemberService.RemoveBoardMember(r.Context(), boardID, userID, boardMemberRole); err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
+}
+
+// TransferOwnership godoc
+//
+//	@Summary		Transfer board ownership
+//	@Description	Hands ownership of a private board to another member. The caller (current owner) becomes admin; the target member becomes owner. Requires authentication, board membership, and owner role.
+//	@Tags			boards
+//	@Produce		json
+//	@Param			boardId	path	string	true	"Board ID"
+//	@Param			userId	path	string	true	"Target user ID"
+//	@Success		204		"Ownership transferred successfully"
+//	@Failure		400		{object}	httpx.ErrorResponse	"Cannot transfer ownership to yourself"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Not a member of this board or insufficient permissions"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Operation not allowed on global board"
+//	@Failure		404		{object}	httpx.ErrorResponse	"Target board member not found"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
+//	@Security		BearerAuth
+//	@Router			/boards/{boardId}/members/{userId}/transfer-ownership [post]
+func (h *BoardHandler) TransferOwnership(w http.ResponseWriter, r *http.Request) {
+	boardID := httpctx.GetBoardID(r.Context())
+	targetUserID := httpctx.GetUserID(r.Context())
+	callerUserID := httpctx.GetAuthenticatedUser(r.Context()).ID
+	callerRole := httpctx.GetBoardMemberRole(r.Context())
+
+	if err := h.boardMemberService.TransferOwnership(r.Context(), boardID, callerUserID, targetUserID, callerRole); err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return
 	}

@@ -12,15 +12,14 @@ import (
 var bestThirdSlotMatchIDs = []int64{74, 77, 79, 80, 81, 82, 85, 87}
 
 type ScoringServiceInterface interface {
-	ScoreMatches(ctx context.Context, matchIDs []int64) error
-	ScoreBestThirds(ctx context.Context) error
+	ScoreMatches(ctx context.Context, matchIDs []int64) (*domain.ScoreMatchesResult, error)
+	ScoreBestThirds(ctx context.Context) ([]string, error)
 }
 
 type ScoringService struct {
 	pickemRepository         domain.PickemRepository
 	matchScorePickRepository domain.MatchScorePickRepository
 	scoreEventRepository     domain.ScoreEventRepository
-	userScoreRepository      domain.UserScoreRepository
 	matchRepository          domain.MatchRepository
 	groupStandingRepository  domain.GroupStandingRepository
 	cfg                      *config.Config
@@ -31,7 +30,6 @@ func NewScoringService(
 	pickemRepository domain.PickemRepository,
 	matchScorePickRepository domain.MatchScorePickRepository,
 	scoreEventRepository domain.ScoreEventRepository,
-	userScoreRepository domain.UserScoreRepository,
 	matchRepository domain.MatchRepository,
 	groupStandingRepository domain.GroupStandingRepository,
 	cfg *config.Config,
@@ -41,7 +39,6 @@ func NewScoringService(
 		pickemRepository:         pickemRepository,
 		matchScorePickRepository: matchScorePickRepository,
 		scoreEventRepository:     scoreEventRepository,
-		userScoreRepository:      userScoreRepository,
 		matchRepository:          matchRepository,
 		groupStandingRepository:  groupStandingRepository,
 		cfg:                      cfg,
@@ -49,9 +46,9 @@ func NewScoringService(
 	}
 }
 
-func (s *ScoringService) ScoreMatches(ctx context.Context, matchIDs []int64) error {
+func (s *ScoringService) ScoreMatches(ctx context.Context, matchIDs []int64) (*domain.ScoreMatchesResult, error) {
 	if len(matchIDs) == 0 {
-		return nil
+		return &domain.ScoreMatchesResult{}, nil
 	}
 
 	matches, err := s.matchRepository.GetMatches(ctx, domain.MatchFilters{
@@ -63,27 +60,30 @@ func (s *ScoringService) ScoreMatches(ctx context.Context, matchIDs []int64) err
 			logging.Error, err.Error(),
 			"match_ids", matchIDs,
 		)
-		return err
+		return nil, err
 	}
 
 	var allScoreEvents []*domain.ScoreEvent
 	// Set of user IDs that were affected by the scoring run
 	affectedUserIDs := make(map[string]struct{})
+	scoredMatchIDs := make([]int64, 0, len(matches))
 	seenGroups := make(map[string]struct{})
+	pickemAffected := false
 
 	for _, match := range matches {
-		// Match score picks (every finished match, group or knockout)
+		// Match score picks (every finished match, group or bracket)
 		matchScoreEvents, matchScoreUserIDs, err := s.scoreMatchScorePicks(ctx, match)
 		if err != nil {
 			s.logger.Error("failed to score match score picks",
 				logging.Error, err.Error(),
 				"match_id", match.ID,
 			)
-			return err
+			return nil, err
 		}
 
 		allScoreEvents = append(allScoreEvents, matchScoreEvents...)
 		addUserIDsToSet(affectedUserIDs, matchScoreUserIDs)
+		scoredMatchIDs = append(scoredMatchIDs, match.ID)
 
 		// Group stage picks
 		if match.StageCode == domain.MatchStageCodeGroupStage {
@@ -102,7 +102,7 @@ func (s *ScoringService) ScoreMatches(ctx context.Context, matchIDs []int64) err
 					"group_code", groupCode,
 					"match_id", match.ID,
 				)
-				return err
+				return nil, err
 			}
 
 			if isGroupFinished {
@@ -113,11 +113,12 @@ func (s *ScoringService) ScoreMatches(ctx context.Context, matchIDs []int64) err
 						"group_code", groupCode,
 						"match_id", match.ID,
 					)
-					return err
+					return nil, err
 				}
 
 				allScoreEvents = append(allScoreEvents, groupScoreEvents...)
 				addUserIDsToSet(affectedUserIDs, groupScoreUserIDs)
+				pickemAffected = true
 			}
 
 			continue
@@ -130,32 +131,26 @@ func (s *ScoringService) ScoreMatches(ctx context.Context, matchIDs []int64) err
 				logging.Error, err.Error(),
 				"match_id", match.ID,
 			)
-			return err
+			return nil, err
 		}
 
 		allScoreEvents = append(allScoreEvents, bracketEvents...)
 		addUserIDsToSet(affectedUserIDs, bracketUserIDs)
+		if len(bracketEvents) > 0 {
+			pickemAffected = true
+		}
 	}
 
-	// Single batched score_events upsert
 	if err := s.scoreEventRepository.BatchUpsertScoreEvents(ctx, allScoreEvents); err != nil {
 		s.logger.Error("failed to upsert score events",
 			logging.Error, err.Error(),
 			"score_events_count", len(allScoreEvents),
 			"affected_user_count", len(affectedUserIDs),
 		)
-		return err
+		return nil, err
 	}
 
-	// Single batched user_scores update
 	userIDs := userIDSetToSlice(affectedUserIDs)
-	if err := s.userScoreRepository.BatchUpdateUserScores(ctx, userIDs, s.cfg.Scoring.MatchScoreExact); err != nil {
-		s.logger.Error("failed to update user scores",
-			logging.Error, err.Error(),
-			"affected_user_count", len(affectedUserIDs),
-		)
-		return err
-	}
 
 	s.logger.Info(
 		"scoring run completed for match score picks and group standing picks",
@@ -163,23 +158,26 @@ func (s *ScoringService) ScoreMatches(ctx context.Context, matchIDs []int64) err
 		"affected_user_count", len(affectedUserIDs),
 	)
 
-	return nil
+	return &domain.ScoreMatchesResult{
+		AffectedUserIDs: userIDs,
+		ScoredMatchIDs:  scoredMatchIDs,
+		PickemAffected:  pickemAffected,
+	}, nil
 }
 
-func (s *ScoringService) ScoreBestThirds(ctx context.Context) error {
-	// Derive the 8 actual advancing thirds from the populated R32 best-third slots.
+func (s *ScoringService) ScoreBestThirds(ctx context.Context) ([]string, error) {
+	// Derive the 8 actual advancing thirds from the populated R32 best-third slots
 	r32Matches, err := s.matchRepository.GetMatches(ctx, domain.MatchFilters{MatchIDs: bestThirdSlotMatchIDs})
 	if err != nil {
 		s.logger.Error("failed to get best third slot matches",
 			logging.Error, err.Error(),
 			"match_ids", bestThirdSlotMatchIDs,
 		)
-		return err
+		return nil, err
 	}
 
 	// Actual third teams that made it to the round of 32
 	actualThirdTeams := make([]string, 0, 8)
-
 	for _, match := range r32Matches {
 		if match.Teams.Away != nil {
 			actualThirdTeams = append(actualThirdTeams, match.Teams.Away.FifaCode)
@@ -191,7 +189,7 @@ func (s *ScoringService) ScoreBestThirds(ctx context.Context) error {
 			logging.Error, domain.ErrBestThirdsNotScoreable.Error(),
 			"actual_third_teams_count", len(actualThirdTeams),
 		)
-		return domain.ErrBestThirdsNotScoreable
+		return nil, domain.ErrBestThirdsNotScoreable
 	}
 
 	// Get users who picked the actual third teams
@@ -201,7 +199,7 @@ func (s *ScoringService) ScoreBestThirds(ctx context.Context) error {
 			logging.Error, err.Error(),
 			"actual_third_teams_count", len(actualThirdTeams),
 		)
-		return err
+		return nil, err
 	}
 
 	var bestThirdScoreEvents []*domain.ScoreEvent
@@ -216,36 +214,26 @@ func (s *ScoringService) ScoreBestThirds(ctx context.Context) error {
 			SourceRef:  pick.TeamFifaCode,
 			Points:     s.cfg.Scoring.BestThird,
 		})
-
 		affectedUserIDs[pick.UserID] = struct{}{}
 	}
 
-	// Single batched score_events upsert
 	if err := s.scoreEventRepository.BatchUpsertScoreEvents(ctx, bestThirdScoreEvents); err != nil {
 		s.logger.Error("failed to upsert best third score events",
 			logging.Error, err.Error(),
 			"best_third_score_events_count", len(bestThirdScoreEvents),
 			"affected_user_count", len(affectedUserIDs),
 		)
-		return err
+		return nil, err
 	}
 
-	// Single batched user_scores update
 	userIDs := userIDSetToSlice(affectedUserIDs)
-	if err := s.userScoreRepository.BatchUpdateUserScores(ctx, userIDs, s.cfg.Scoring.MatchScoreExact); err != nil {
-		s.logger.Error("failed to update user scores for best third picks",
-			logging.Error, err.Error(),
-			"affected_user_count", len(affectedUserIDs),
-		)
-		return err
-	}
 
 	s.logger.Info(
 		"scoring run completed for best third picks",
 		"affected_user_count", len(affectedUserIDs),
 	)
 
-	return nil
+	return userIDs, nil
 }
 
 func (s *ScoringService) scoreMatchScorePicks(ctx context.Context, match *domain.Match) ([]*domain.ScoreEvent, map[string]struct{}, error) {

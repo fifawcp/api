@@ -18,21 +18,22 @@ const (
 )
 
 const (
-	resourceUser            resourceType = "user"
-	resourceSession         resourceType = "session"
-	resourceRefreshToken    resourceType = "refresh_token"
-	resourceBoard           resourceType = "board"
-	resourceBoardMember     resourceType = "board_member"
-	resourceUserScore       resourceType = "user_score"
-	resourceGroupStanding   resourceType = "group_standing"
-	resourceMatch           resourceType = "match"
-	resourceMatchAPIFixture resourceType = "match_api_fixture"
-	resourceOAuthAccount    resourceType = "oauth_account"
-	resourcePickem          resourceType = "pickem"
-	resourceMatchScorePick  resourceType = "match_score_pick"
-	resourceScoreEvent      resourceType = "score_event"
-	resourceTeam            resourceType = "team"
-	resourceMatchFairPlay   resourceType = "match_fair_play"
+	resourceUser             resourceType = "user"
+	resourceSession          resourceType = "session"
+	resourceRefreshToken     resourceType = "refresh_token"
+	resourceBoard            resourceType = "board"
+	resourceBoardMember      resourceType = "board_member"
+	resourceGroupStanding    resourceType = "group_standing"
+	resourceMatch            resourceType = "match"
+	resourceMatchAPIFixture  resourceType = "match_api_fixture"
+	resourceOAuthAccount     resourceType = "oauth_account"
+	resourcePickem           resourceType = "pickem"
+	resourceMatchScorePick   resourceType = "match_score_pick"
+	resourceScoreEvent       resourceType = "score_event"
+	resourceTeam             resourceType = "team"
+	resourceMatchFairPlay    resourceType = "match_fair_play"
+	resourceCompetition      resourceType = "competition"
+	resourceCompetitionScore resourceType = "competition_score"
 )
 
 func handleDBError(
@@ -80,6 +81,8 @@ func translateSQLNoRowsError(err error, resource resourceType) error {
 		return domain.ErrMatchNotFound
 	case resourceMatchAPIFixture:
 		return domain.ErrMatchAPIFixtureNotFound
+	case resourceCompetition:
+		return domain.ErrCompetitionNotFound
 	default:
 		return err
 	}
@@ -88,7 +91,6 @@ func translateSQLNoRowsError(err error, resource resourceType) error {
 func translateForeignKeyViolation(pqErr *pq.Error) error {
 	switch pqErr.Constraint {
 	case
-		"boards_owner_user_id_fkey",
 		"board_members_board_id_fkey",
 		"board_members_user_id_fkey":
 		return domain.ErrUserNotFound
@@ -107,6 +109,10 @@ func translateUniqueViolation(pqErr *pq.Error) error {
 		return domain.ErrBoardAlreadyExists
 	case "board_members_pkey":
 		return domain.ErrBoardMemberAlreadyInBoard
+	case "idx_competitions_one_pickem_per_board":
+		return domain.ErrCompetitionPickemAlreadyExists
+	case "competitions_board_id_name_key":
+		return domain.ErrCompetitionNameAlreadyExists
 	default:
 		return buildErrorFromPQError(pqErr)
 	}

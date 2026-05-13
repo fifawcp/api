@@ -58,17 +58,41 @@ func (r *UserRepository) CreateUser(
 		return handleDBError(err, resourceUser)
 	}
 
-	if _, err := tx.ExecContext(ctx, `INSERT INTO user_scores (user_id) VALUES ($1)`, user.ID); err != nil {
-		return handleDBError(err, resourceUserScore)
+	var globalBoardID int64
+	if err := tx.QueryRowContext(
+		ctx,
+		`SELECT id FROM boards WHERE privacy = 'global'`,
+	).Scan(&globalBoardID); err != nil {
+		return handleDBError(err, resourceBoard)
 	}
 
-	joinGlobalBoardQuery := `
-		INSERT INTO board_members (board_id, user_id, role)
-		SELECT id, $1, 'member' FROM boards WHERE privacy = 'public' AND name = 'Global'
-		ON CONFLICT (board_id, user_id) DO NOTHING`
-
-	if _, err := tx.ExecContext(ctx, joinGlobalBoardQuery, user.ID); err != nil {
+	if _, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO board_members (board_id, user_id, role) VALUES ($1, $2, 'member')`,
+		globalBoardID,
+		user.ID,
+	); err != nil {
 		return handleDBError(err, resourceBoardMember)
+	}
+
+	if _, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO competition_pickem_scores (competition_id, user_id)
+		 SELECT id, $1 FROM competitions WHERE board_id = $2 AND type = 'pickem'`,
+		user.ID,
+		globalBoardID,
+	); err != nil {
+		return handleDBError(err, resourceCompetitionScore)
+	}
+
+	if _, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO competition_match_scores (competition_id, user_id)
+		 SELECT id, $1 FROM competitions WHERE board_id = $2 AND type = 'match'`,
+		user.ID,
+		globalBoardID,
+	); err != nil {
+		return handleDBError(err, resourceCompetitionScore)
 	}
 
 	return tx.Commit()

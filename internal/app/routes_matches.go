@@ -16,7 +16,7 @@ func matchRoutes(c *Container) chi.Router {
 	r.Group(func(r chi.Router) {
 		r.Use(middlewares.Auth(c.Authenticator, c.UserService, c.Logger))
 
-		r.With(middlewares.RequireValidMatchID).
+		r.With(middlewares.ParseMatchID).
 			Put("/{id}/pick", c.MatchHandler.SaveMatchScorePick)
 	})
 
