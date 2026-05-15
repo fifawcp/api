@@ -9,7 +9,6 @@ import (
 
 // Generic
 var ErrInvalidCredentials = errors.New("invalid credentials")
-var ErrRegistrationFailed = errors.New("registration failed")
 var ErrForbidden = errors.New("insufficient permissions")
 
 // OTP
@@ -50,13 +49,12 @@ var ErrBoardAlreadyExists = errors.New("board already exists")
 var ErrBoardInvalidJoinCode = errors.New("invalid or expired board join code")
 var ErrBoardUserAlreadyInBoard = errors.New("user is already in this board")
 var ErrMaxBoardMembersExceeded = errors.New("maximum board members exceeded")
-var ErrBoardOwnerCannotLeaveWithMembers = errors.New("board owner cannot leave while other members remain")
-var ErrBoardIsPublic = errors.New("operation not allowed on public board")
+var ErrBoardIsGlobal = errors.New("operation not allowed on global board")
 
 // Board Member
 var ErrBoardMemberNotFound = errors.New("board member not found")
 var ErrBoardMemberAlreadyInBoard = errors.New("user is already a member of this board")
-var ErrInvalidBoardMembersSort = errors.New("invalid sort field for board members")
+var ErrCannotTransferOwnershipToSelf = errors.New("cannot transfer ownership to yourself")
 
 // Group Standings
 var ErrInvalidGroupCode = errors.New("invalid group code")
@@ -104,6 +102,12 @@ var ErrOAuthStateNotFound = errors.New("oauth state not found")
 var ErrMissingIDToken = errors.New("missing identity token")
 var ErrOAuthAccountNotFound = errors.New("oauth account not found")
 var ErrOAuthAccountNotVerified = errors.New("oauth account not verified")
+
+// Competition
+var ErrCompetitionNotFound = errors.New("competition not found")
+var ErrCompetitionForbidden = errors.New("only board owner or admins can manage competitions")
+var ErrCompetitionPickemAlreadyExists = errors.New("a tournament pick'em competition already exists on this board")
+var ErrCompetitionNameAlreadyExists = errors.New("a competition with this name already exists on this board")
 
 // Pickem
 var ErrPickemLocked = errors.New("pickem is locked: tournament has started")

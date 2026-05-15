@@ -10,6 +10,7 @@ import (
 type MockMatchRepository struct {
 	GetMatchesFunc                     func(ctx context.Context, filters domain.MatchFilters) ([]*domain.Match, error)
 	GetFirstGroupStageMatchKickoffFunc func(ctx context.Context) (time.Time, error)
+	GetNextScheduledMatchFunc          func(ctx context.Context) (*domain.Match, error)
 	UpdateMatchesResultFunc            func(ctx context.Context, updates []domain.MatchResultUpdate) error
 	UpdateMatchTeamsFunc               func(ctx context.Context, updates []domain.MatchTeamUpdate) error
 	ResetMatchResultFunc               func(ctx context.Context, matchID int64) error
@@ -29,6 +30,13 @@ func (m *MockMatchRepository) GetFirstGroupStageMatchKickoff(ctx context.Context
 		return m.GetFirstGroupStageMatchKickoffFunc(ctx)
 	}
 	panic("GetFirstGroupStageMatchKickoff called unexpectedly")
+}
+
+func (m *MockMatchRepository) GetNextScheduledMatch(ctx context.Context) (*domain.Match, error) {
+	if m.GetNextScheduledMatchFunc != nil {
+		return m.GetNextScheduledMatchFunc(ctx)
+	}
+	panic("GetNextScheduledMatch called unexpectedly")
 }
 
 func (m *MockMatchRepository) UpdateMatchTeams(ctx context.Context, updates []domain.MatchTeamUpdate) error {

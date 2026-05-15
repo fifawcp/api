@@ -43,6 +43,10 @@ func NewValidator() *Validator {
 		validateUpdateMatchResult,
 		dtos.UpdateMatchResultDto{},
 	)
+	v.validate.RegisterStructValidation(
+		validateCreateCompetition,
+		dtos.CreateCompetitionDto{},
+	)
 	v.validate.RegisterValidation("min_array_len", validateMinArrayLen)
 	v.validate.RegisterValidation("fifa_code", func(fl validator.FieldLevel) bool {
 		return IsValidFifaCode(fl.Field().String())
@@ -109,6 +113,10 @@ func formatFieldError(err validator.FieldError) ValidationField {
 		return ValidationField{Code: "LEN", Message: "must have " + param + " elements", Params: map[string]any{"len": parseParamInt(param)}}
 	case "fifa_code":
 		return ValidationField{Code: "INVALID_FIFA_CODE", Message: "must be a valid FIFA team code"}
+	case "scope_forbidden":
+		return ValidationField{Code: "SCOPE_FORBIDDEN", Message: "scope is not allowed for this competition type"}
+	case "scope_required":
+		return ValidationField{Code: "SCOPE_REQUIRED", Message: "scope with at least one stage is required for this competition type"}
 	case "penalty_incomplete":
 		return ValidationField{Code: "PENALTY_INCOMPLETE", Message: "penalty score must include both home and away values"}
 	case "penalty_tied":
@@ -149,6 +157,21 @@ func validateUpdateMatchResult(sl validator.StructLevel) {
 	if homeSet && awaySet && *input.HomePenaltyScore == *input.AwayPenaltyScore {
 		sl.ReportError(input.HomePenaltyScore, "home_penalty_score", "HomePenaltyScore", "penalty_tied", "")
 		sl.ReportError(input.AwayPenaltyScore, "away_penalty_score", "AwayPenaltyScore", "penalty_tied", "")
+	}
+}
+
+func validateCreateCompetition(sl validator.StructLevel) {
+	input := sl.Current().Interface().(dtos.CreateCompetitionDto)
+
+	switch input.Type {
+	case domain.CompetitionTypePickem:
+		if input.Scope != nil {
+			sl.ReportError(input.Scope, "scope", "Scope", "scope_forbidden", "")
+		}
+	case domain.CompetitionTypeMatch:
+		if input.Scope == nil || len(input.Scope.Stages) == 0 {
+			sl.ReportError(input.Scope, "scope", "Scope", "scope_required", "")
+		}
 	}
 }
 

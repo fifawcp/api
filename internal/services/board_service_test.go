@@ -27,10 +27,10 @@ func TestBoardService_CreateBoard(t *testing.T) {
 
 		payload := dtos.CreateBoardDto{Name: "Test Board"}
 		userID := gofakeit.UUID()
-		expectedID := gofakeit.UUID()
+		expectedID := gofakeit.Int64()
 
 		br := &mocks.MockBoardRepository{
-			CreateBoardWithOwnerFunc: func(ctx context.Context, board *domain.Board) error {
+			CreateBoardFunc: func(ctx context.Context, board *domain.Board, ownerUserID string) error {
 				board.ID = expectedID
 				return nil
 			},
@@ -42,8 +42,6 @@ func TestBoardService_CreateBoard(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, payload.Name, result.Name)
-		assert.NotNil(t, result.OwnerUserID)
-		assert.Equal(t, userID, *result.OwnerUserID)
 		assert.NotNil(t, result.JoinCode)
 		assert.Len(t, *result.JoinCode, 8)
 		assert.Equal(t, domain.BoardPrivacyPrivate, result.Privacy)
@@ -57,7 +55,7 @@ func TestBoardService_CreateBoard(t *testing.T) {
 
 		attemptCount := 0
 		br := &mocks.MockBoardRepository{
-			CreateBoardWithOwnerFunc: func(ctx context.Context, board *domain.Board) error {
+			CreateBoardFunc: func(ctx context.Context, board *domain.Board, ownerUserID string) error {
 				attemptCount++
 				return domain.ErrBoardAlreadyExists
 			},
@@ -79,7 +77,7 @@ func TestBoardService_CreateBoard(t *testing.T) {
 		userID := gofakeit.UUID()
 
 		br := &mocks.MockBoardRepository{
-			CreateBoardWithOwnerFunc: func(ctx context.Context, board *domain.Board) error {
+			CreateBoardFunc: func(ctx context.Context, board *domain.Board, ownerUserID string) error {
 				return errors.New("database error")
 			},
 		}
@@ -105,8 +103,8 @@ func TestBoardService_GetUserBoards(t *testing.T) {
 
 		userID := gofakeit.UUID()
 		expectedBoards := []*domain.UserBoardListItem{
-			{ID: gofakeit.UUID(), Name: "Board 1"},
-			{ID: gofakeit.UUID(), Name: "Board 2"},
+			{ID: gofakeit.Int64(), Name: "Board 1"},
+			{ID: gofakeit.Int64(), Name: "Board 2"},
 		}
 
 		br := &mocks.MockBoardRepository{
@@ -154,7 +152,7 @@ func TestBoardService_GetBoardByID(t *testing.T) {
 	t.Run("returns board metadata + requesting user's rank/joined_at on success", func(t *testing.T) {
 		t.Parallel()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		userID := gofakeit.UUID()
 		joinedAt := gofakeit.Date()
 
@@ -166,14 +164,12 @@ func TestBoardService_GetBoardByID(t *testing.T) {
 			},
 			Viewer: domain.BoardViewer{
 				Role:     domain.BoardMemberRoleAdmin,
-				IsOwner:  true,
 				JoinedAt: joinedAt,
-				Rank:     3,
 			},
 		}
 
 		br := &mocks.MockBoardRepository{
-			GetBoardDetailsFunc: func(ctx context.Context, bid string, uid string) (*domain.BoardDetails, error) {
+			GetBoardDetailsFunc: func(ctx context.Context, bid int64, uid string) (*domain.BoardDetails, error) {
 				assert.Equal(t, boardID, bid)
 				assert.Equal(t, userID, uid)
 				return repoBoard, nil
@@ -187,19 +183,17 @@ func TestBoardService_GetBoardByID(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, domain.BoardPrivacyPrivate, result.Privacy)
 		assert.Equal(t, domain.BoardMemberRoleAdmin, result.Viewer.Role)
-		assert.True(t, result.Viewer.IsOwner)
-		assert.Equal(t, 3, result.Viewer.Rank)
 		assert.Equal(t, joinedAt, result.Viewer.JoinedAt)
 	})
 
 	t.Run("propagates board repository error", func(t *testing.T) {
 		t.Parallel()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		userID := gofakeit.UUID()
 
 		br := &mocks.MockBoardRepository{
-			GetBoardDetailsFunc: func(ctx context.Context, bid string, uid string) (*domain.BoardDetails, error) {
+			GetBoardDetailsFunc: func(ctx context.Context, bid int64, uid string) (*domain.BoardDetails, error) {
 				return nil, domain.ErrBoardNotFound
 			},
 		}
@@ -223,13 +217,13 @@ func TestBoardService_RegenerateJoinCode(t *testing.T) {
 	t.Run("returns new join code on success", func(t *testing.T) {
 		t.Parallel()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 
 		br := &mocks.MockBoardRepository{
-			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
 				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPrivate}, nil
 			},
-			UpdateJoinCodeFunc: func(ctx context.Context, bid string, joinCode string) error {
+			UpdateJoinCodeFunc: func(ctx context.Context, bid int64, joinCode string) error {
 				assert.Equal(t, boardID, bid)
 				assert.NotEmpty(t, joinCode)
 				assert.Len(t, joinCode, 8)
@@ -246,14 +240,14 @@ func TestBoardService_RegenerateJoinCode(t *testing.T) {
 		assert.Len(t, result, 8)
 	})
 
-	t.Run("rejects public board", func(t *testing.T) {
+	t.Run("rejects global board", func(t *testing.T) {
 		t.Parallel()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 
 		br := &mocks.MockBoardRepository{
-			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
-				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPublic}, nil
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
+				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyGlobal}, nil
 			},
 		}
 
@@ -261,20 +255,20 @@ func TestBoardService_RegenerateJoinCode(t *testing.T) {
 
 		result, err := service.RegenerateJoinCode(context.Background(), boardID)
 
-		assert.ErrorIs(t, err, domain.ErrBoardIsPublic)
+		assert.ErrorIs(t, err, domain.ErrBoardIsGlobal)
 		assert.Empty(t, result)
 	})
 
 	t.Run("propagates board repository error", func(t *testing.T) {
 		t.Parallel()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 
 		br := &mocks.MockBoardRepository{
-			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
 				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPrivate}, nil
 			},
-			UpdateJoinCodeFunc: func(ctx context.Context, bid string, joinCode string) error {
+			UpdateJoinCodeFunc: func(ctx context.Context, bid int64, joinCode string) error {
 				return errors.New("database error")
 			},
 		}
@@ -298,14 +292,14 @@ func TestBoardService_UpdateBoard(t *testing.T) {
 	t.Run("returns nil on success for admin", func(t *testing.T) {
 		t.Parallel()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		payload := dtos.UpdateBoardDto{Name: "Updated Board"}
 
 		br := &mocks.MockBoardRepository{
-			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
 				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPrivate}, nil
 			},
-			UpdateBoardFunc: func(ctx context.Context, bid string, board *domain.Board) error {
+			UpdateBoardFunc: func(ctx context.Context, bid int64, board *domain.Board) error {
 				assert.Equal(t, boardID, bid)
 				assert.Equal(t, payload.Name, board.Name)
 				return nil
@@ -322,7 +316,7 @@ func TestBoardService_UpdateBoard(t *testing.T) {
 	t.Run("returns forbidden for non-admin", func(t *testing.T) {
 		t.Parallel()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		payload := dtos.UpdateBoardDto{Name: "Updated Board"}
 
 		service := newTestBoardService(nil)
@@ -333,15 +327,15 @@ func TestBoardService_UpdateBoard(t *testing.T) {
 		assert.Equal(t, domain.ErrForbidden, err)
 	})
 
-	t.Run("rejects public board", func(t *testing.T) {
+	t.Run("rejects global board", func(t *testing.T) {
 		t.Parallel()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		payload := dtos.UpdateBoardDto{Name: "Updated Board"}
 
 		br := &mocks.MockBoardRepository{
-			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
-				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPublic}, nil
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
+				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyGlobal}, nil
 			},
 		}
 
@@ -349,20 +343,20 @@ func TestBoardService_UpdateBoard(t *testing.T) {
 
 		err := service.UpdateBoard(context.Background(), boardID, domain.BoardMemberRoleAdmin, payload)
 
-		assert.ErrorIs(t, err, domain.ErrBoardIsPublic)
+		assert.ErrorIs(t, err, domain.ErrBoardIsGlobal)
 	})
 
 	t.Run("propagates board repository error", func(t *testing.T) {
 		t.Parallel()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		payload := dtos.UpdateBoardDto{Name: "Updated Board"}
 
 		br := &mocks.MockBoardRepository{
-			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
 				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPrivate}, nil
 			},
-			UpdateBoardFunc: func(ctx context.Context, bid string, board *domain.Board) error {
+			UpdateBoardFunc: func(ctx context.Context, bid int64, board *domain.Board) error {
 				return errors.New("database error")
 			},
 		}
@@ -378,11 +372,11 @@ func TestBoardService_UpdateBoard(t *testing.T) {
 	t.Run("propagates assert private board error", func(t *testing.T) {
 		t.Parallel()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		payload := dtos.UpdateBoardDto{Name: "Updated Board"}
 
 		br := &mocks.MockBoardRepository{
-			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
 				return nil, errors.New("database error")
 			},
 		}
@@ -405,92 +399,63 @@ func TestBoardService_DeleteBoard(t *testing.T) {
 	t.Run("returns nil on success", func(t *testing.T) {
 		t.Parallel()
 
-		boardID := gofakeit.UUID()
-		userID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 
 		br := &mocks.MockBoardRepository{
-			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
 				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPrivate}, nil
 			},
-			DeleteBoardFunc: func(ctx context.Context, bid string, uid string) error {
+			DeleteBoardFunc: func(ctx context.Context, bid int64) error {
 				assert.Equal(t, boardID, bid)
-				assert.Equal(t, userID, uid)
 				return nil
 			},
 		}
 
 		service := newTestBoardService(br)
 
-		err := service.DeleteBoard(context.Background(), boardID, userID)
+		err := service.DeleteBoard(context.Background(), boardID, domain.BoardMemberRoleOwner)
 
 		assert.NoError(t, err)
 	})
 
-	t.Run("rejects public board", func(t *testing.T) {
+	t.Run("rejects global board", func(t *testing.T) {
 		t.Parallel()
 
-		boardID := gofakeit.UUID()
-		userID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 
 		br := &mocks.MockBoardRepository{
-			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
-				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPublic}, nil
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
+				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyGlobal}, nil
 			},
 		}
 
 		service := newTestBoardService(br)
 
-		err := service.DeleteBoard(context.Background(), boardID, userID)
+		err := service.DeleteBoard(context.Background(), boardID, domain.BoardMemberRoleOwner)
 
-		assert.ErrorIs(t, err, domain.ErrBoardIsPublic)
+		assert.ErrorIs(t, err, domain.ErrBoardIsGlobal)
 	})
 
 	t.Run("propagates board repository error", func(t *testing.T) {
 		t.Parallel()
 
-		boardID := gofakeit.UUID()
-		userID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 
 		br := &mocks.MockBoardRepository{
-			GetBoardByIDFunc: func(ctx context.Context, bid string) (*domain.Board, error) {
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
 				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPrivate}, nil
 			},
-			DeleteBoardFunc: func(ctx context.Context, bid string, uid string) error {
+			DeleteBoardFunc: func(ctx context.Context, bid int64) error {
 				return errors.New("database error")
 			},
 		}
 
 		service := newTestBoardService(br)
 
-		err := service.DeleteBoard(context.Background(), boardID, userID)
+		err := service.DeleteBoard(context.Background(), boardID, domain.BoardMemberRoleOwner)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "database error")
-	})
-}
-
-// ---------------------------------------------------------------------------
-// TestBoardService_isAdminMember
-// ---------------------------------------------------------------------------
-func TestBoardService_isAdminMember(t *testing.T) {
-	t.Parallel()
-
-	service := NewBoardService(nil).(*BoardService)
-
-	t.Run("returns true for admin role", func(t *testing.T) {
-		t.Parallel()
-
-		result := service.isAdminMember(domain.BoardMemberRoleAdmin)
-
-		assert.True(t, result)
-	})
-
-	t.Run("returns false for member role", func(t *testing.T) {
-		t.Parallel()
-
-		result := service.isAdminMember(domain.BoardMemberRoleMember)
-
-		assert.False(t, result)
 	})
 }
 

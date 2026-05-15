@@ -24,8 +24,24 @@ func boardsRoutes(c *Container) chi.Router {
 
 		r.Route("/members", func(r chi.Router) {
 			r.Get("/", c.BoardHandler.GetBoardMembers)
-			r.With(middlewares.RequireValidUserID).Patch("/{userId}/role", c.BoardHandler.UpdateBoardMemberRole)
-			r.With(middlewares.RequireValidUserID).Delete("/{userId}", c.BoardHandler.RemoveBoardMember)
+
+			r.Route("/{userId}", func(r chi.Router) {
+				r.Use(middlewares.ParseUserID)
+				r.Patch("/role", c.BoardHandler.UpdateBoardMemberRole)
+				r.Delete("/", c.BoardHandler.RemoveBoardMember)
+				r.Post("/transfer-ownership", c.BoardHandler.TransferOwnership)
+			})
+		})
+
+		r.Route("/competitions", func(r chi.Router) {
+			r.Get("/", c.CompetitionHandler.GetBoardCompetitions)
+			r.Post("/", c.CompetitionHandler.CreateCompetition)
+
+			r.Route("/{competitionId}", func(r chi.Router) {
+				r.Use(middlewares.ParseCompetitionID)
+				r.Delete("/", c.CompetitionHandler.DeleteCompetition)
+				r.Get("/leaderboard", c.CompetitionHandler.GetLeaderboard)
+			})
 		})
 	})
 

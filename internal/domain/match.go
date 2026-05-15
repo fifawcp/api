@@ -253,6 +253,7 @@ var MatchSlotRules = map[int64]MatchSlotRule{
 type MatchRepository interface {
 	GetMatches(ctx context.Context, filters MatchFilters) ([]*Match, error)
 	GetFirstGroupStageMatchKickoff(ctx context.Context) (time.Time, error)
+	GetNextScheduledMatch(ctx context.Context) (*Match, error)
 	UpdateMatchesResult(ctx context.Context, updates []MatchResultUpdate) error
 	UpdateMatchTeams(ctx context.Context, updates []MatchTeamUpdate) error
 	ResetMatchResult(ctx context.Context, matchID int64) error

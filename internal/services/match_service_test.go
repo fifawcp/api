@@ -16,6 +16,7 @@ func newTestMatchService(
 	groupStandingRepository *mocks.MockGroupStandingRepository,
 	groupStandingService *mocks.MockGroupStandingService,
 	scoringService *mocks.MockScoringService,
+	competitionScoringService *mocks.MockCompetitionScoringService,
 	logger *mocks.MockLogger,
 ) MatchServiceInterface {
 	return NewMatchService(
@@ -23,6 +24,7 @@ func newTestMatchService(
 		groupStandingRepository,
 		groupStandingService,
 		scoringService,
+		competitionScoringService,
 		logger,
 	)
 }
@@ -93,7 +95,7 @@ func TestMatchService_GetMatches(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, nil, nil, nil, nil)
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
 
 		matches, err := service.GetMatches(context.Background(), domain.MatchFilters{MatchIDs: []int64{1}})
 
@@ -112,7 +114,7 @@ func TestMatchService_GetMatches(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, nil, nil, nil, nil)
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
 
 		matches, err := service.GetMatches(context.Background(), domain.MatchFilters{MatchIDs: []int64{1}})
 
@@ -227,11 +229,11 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 		}
 
 		ss := &mocks.MockScoringService{
-			ScoreMatchesFunc: func(ctx context.Context, matchIDs []int64) error {
-				return nil
+			ScoreMatchesFunc: func(ctx context.Context, matchIDs []int64) (*domain.ScoreMatchesResult, error) {
+				return &domain.ScoreMatchesResult{}, nil
 			},
-			ScoreBestThirdsFunc: func(ctx context.Context) error {
-				return nil
+			ScoreBestThirdsFunc: func(ctx context.Context) ([]string, error) {
+				return nil, nil
 			},
 		}
 
@@ -254,7 +256,10 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, gsr, gss, ss, nil)
+		service := newTestMatchService(mr, gsr, gss, ss, &mocks.MockCompetitionScoringService{
+			RecomputeForMatchesFunc:    func(ctx context.Context, result *domain.ScoreMatchesResult) error { return nil },
+			RecomputeForBestThirdsFunc: func(ctx context.Context, affectedUserIDs []string) error { return nil },
+		}, nil)
 
 		home, away := 1, 0
 		syncGroupStageOutcomes, err := service.UpdateMatchResult(context.Background(), 1, dtos.UpdateMatchResultDto{
@@ -302,12 +307,15 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 		}
 
 		ss := &mocks.MockScoringService{
-			ScoreMatchesFunc: func(ctx context.Context, matchIDs []int64) error {
-				return nil
+			ScoreMatchesFunc: func(ctx context.Context, matchIDs []int64) (*domain.ScoreMatchesResult, error) {
+				return &domain.ScoreMatchesResult{}, nil
 			},
 		}
 
-		service := newTestMatchService(mr, nil, gss, ss, nil)
+		service := newTestMatchService(mr, nil, gss, ss, &mocks.MockCompetitionScoringService{
+			RecomputeForMatchesFunc:    func(ctx context.Context, result *domain.ScoreMatchesResult) error { return nil },
+			RecomputeForBestThirdsFunc: func(ctx context.Context, affectedUserIDs []string) error { return nil },
+		}, nil)
 
 		home, away := 1, 0
 		syncGroupStageOutcomes, err := service.UpdateMatchResult(context.Background(), 1, dtos.UpdateMatchResultDto{
@@ -330,7 +338,7 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, nil, nil, nil, nil)
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
 
 		home, away := 1, 0
 		outcomes, err := service.UpdateMatchResult(context.Background(), 99, dtos.UpdateMatchResultDto{
@@ -351,7 +359,7 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, nil, nil, nil, nil)
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
 
 		home, away, homePenalty := 1, 0, 5
 		outcomes, err := service.UpdateMatchResult(context.Background(), 1, dtos.UpdateMatchResultDto{
@@ -380,7 +388,7 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, nil, nil, nil, nil)
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
 
 		home, away, homePenalty, awayPenalty := 0, 0, 1, 2
 		outcomes, err := service.UpdateMatchResult(context.Background(), 79, dtos.UpdateMatchResultDto{
@@ -406,7 +414,7 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, nil, nil, nil, nil)
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
 
 		home, away := 1, 0
 		outcomes, err := service.UpdateMatchResult(context.Background(), 1, dtos.UpdateMatchResultDto{
@@ -449,10 +457,15 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 		}
 
 		ss := &mocks.MockScoringService{
-			ScoreMatchesFunc: func(ctx context.Context, matchIDs []int64) error { return nil },
+			ScoreMatchesFunc: func(ctx context.Context, matchIDs []int64) (*domain.ScoreMatchesResult, error) {
+				return &domain.ScoreMatchesResult{}, nil
+			},
 		}
 
-		service := newTestMatchService(mr, nil, gss, ss, nil)
+		service := newTestMatchService(mr, nil, gss, ss, &mocks.MockCompetitionScoringService{
+			RecomputeForMatchesFunc:    func(ctx context.Context, result *domain.ScoreMatchesResult) error { return nil },
+			RecomputeForBestThirdsFunc: func(ctx context.Context, affectedUserIDs []string) error { return nil },
+		}, nil)
 
 		home, away := 1, 0
 		outcomes, err := service.UpdateMatchResultsBulk(context.Background(), dtos.BulkUpdateMatchesResultDto{
@@ -491,8 +504,10 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 		}
 
 		ss := &mocks.MockScoringService{
-			ScoreMatchesFunc:    func(ctx context.Context, matchIDs []int64) error { return nil },
-			ScoreBestThirdsFunc: func(ctx context.Context) error { return nil },
+			ScoreMatchesFunc: func(ctx context.Context, matchIDs []int64) (*domain.ScoreMatchesResult, error) {
+				return &domain.ScoreMatchesResult{}, nil
+			},
+			ScoreBestThirdsFunc: func(ctx context.Context) ([]string, error) { return nil, nil },
 		}
 
 		gsr := &mocks.MockGroupStandingRepository{
@@ -501,7 +516,10 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, gsr, gss, ss, nil)
+		service := newTestMatchService(mr, gsr, gss, ss, &mocks.MockCompetitionScoringService{
+			RecomputeForMatchesFunc:    func(ctx context.Context, result *domain.ScoreMatchesResult) error { return nil },
+			RecomputeForBestThirdsFunc: func(ctx context.Context, affectedUserIDs []string) error { return nil },
+		}, nil)
 
 		home, away := 1, 0
 		outcomes, err := service.UpdateMatchResultsBulk(context.Background(), dtos.BulkUpdateMatchesResultDto{
@@ -524,7 +542,7 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, nil, nil, nil, nil)
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
 
 		home, away := 1, 0
 		outcomes, err := service.UpdateMatchResultsBulk(context.Background(), dtos.BulkUpdateMatchesResultDto{
@@ -547,7 +565,7 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, nil, nil, nil, nil)
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
 
 		home, away, homePenalty := 1, 0, 5
 		outcomes, err := service.UpdateMatchResultsBulk(context.Background(), dtos.BulkUpdateMatchesResultDto{
@@ -580,7 +598,7 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, nil, nil, nil, nil)
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
 
 		home, away, homePenalty, awayPenalty := 0, 0, 1, 2
 		outcomes, err := service.UpdateMatchResultsBulk(context.Background(), dtos.BulkUpdateMatchesResultDto{
@@ -610,7 +628,7 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, nil, nil, nil, nil)
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
 
 		home, away := 1, 0
 		outcomes, err := service.UpdateMatchResultsBulk(context.Background(), dtos.BulkUpdateMatchesResultDto{
@@ -652,7 +670,7 @@ func TestMatchService_ResetMatchResult(t *testing.T) {
 
 		// No scoring mocks set — any call to ScoreMatches/ScoreBestThirds would panic,
 		// confirming that reset does not trigger pick'em scoring.
-		service := newTestMatchService(mr, nil, gss, nil, nil)
+		service := newTestMatchService(mr, nil, gss, nil, nil, nil)
 
 		outcomes, err := service.ResetMatchResult(context.Background(), 1)
 
@@ -669,7 +687,7 @@ func TestMatchService_ResetMatchResult(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, nil, nil, nil, nil)
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
 
 		outcomes, err := service.ResetMatchResult(context.Background(), 1)
 
@@ -707,7 +725,7 @@ func TestMatchService_ResolveThirdPlaceConflict(t *testing.T) {
 		}
 
 		ss := &mocks.MockScoringService{
-			ScoreBestThirdsFunc: func(ctx context.Context) error { return nil },
+			ScoreBestThirdsFunc: func(ctx context.Context) ([]string, error) { return nil, nil },
 		}
 
 		gsr := &mocks.MockGroupStandingRepository{
@@ -716,7 +734,10 @@ func TestMatchService_ResolveThirdPlaceConflict(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(mr, gsr, gss, ss, nil)
+		service := newTestMatchService(mr, gsr, gss, ss, &mocks.MockCompetitionScoringService{
+			RecomputeForMatchesFunc:    func(ctx context.Context, result *domain.ScoreMatchesResult) error { return nil },
+			RecomputeForBestThirdsFunc: func(ctx context.Context, affectedUserIDs []string) error { return nil },
+		}, nil)
 
 		// Select POR (group I) over NED (group A) from the tied pair — both are valid candidates.
 		outcomes, err := service.ResolveThirdPlaceConflict(context.Background(), dtos.ResolveThirdPlaceConflictDto{
@@ -736,7 +757,7 @@ func TestMatchService_ResolveThirdPlaceConflict(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(nil, gsr, nil, nil, nil)
+		service := newTestMatchService(nil, gsr, nil, nil, nil, nil)
 
 		outcomes, err := service.ResolveThirdPlaceConflict(context.Background(), dtos.ResolveThirdPlaceConflictDto{
 			TeamFifaCodes: []string{"BRA", "GER", "FRA", "ESP", "ARG", "MEX", "USA", "CAN"},
@@ -755,7 +776,7 @@ func TestMatchService_ResolveThirdPlaceConflict(t *testing.T) {
 			},
 		}
 
-		service := newTestMatchService(nil, gsr, nil, nil, nil)
+		service := newTestMatchService(nil, gsr, nil, nil, nil, nil)
 
 		// QAT is not among the 12 third-place teams
 		outcomes, err := service.ResolveThirdPlaceConflict(context.Background(), dtos.ResolveThirdPlaceConflictDto{
@@ -769,7 +790,7 @@ func TestMatchService_ResolveThirdPlaceConflict(t *testing.T) {
 	t.Run("returns ErrThirdPlaceInvalidSelection for duplicate codes", func(t *testing.T) {
 		t.Parallel()
 
-		service := newTestMatchService(nil, nil, nil, nil, nil)
+		service := newTestMatchService(nil, nil, nil, nil, nil, nil)
 
 		outcomes, err := service.ResolveThirdPlaceConflict(context.Background(), dtos.ResolveThirdPlaceConflictDto{
 			TeamFifaCodes: []string{"BRA", "GER", "FRA", "ESP", "ARG", "MEX", "ENG", "BRA"},
@@ -782,7 +803,7 @@ func TestMatchService_ResolveThirdPlaceConflict(t *testing.T) {
 	t.Run("returns ErrThirdPlaceInvalidSelection when payload does not contain exactly 8 codes", func(t *testing.T) {
 		t.Parallel()
 
-		service := newTestMatchService(nil, nil, nil, nil, nil)
+		service := newTestMatchService(nil, nil, nil, nil, nil, nil)
 
 		outcomes, err := service.ResolveThirdPlaceConflict(context.Background(), dtos.ResolveThirdPlaceConflictDto{
 			TeamFifaCodes: []string{"BRA", "GER", "FRA", "ESP", "ARG", "MEX", "ENG"},

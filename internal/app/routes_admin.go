@@ -14,7 +14,7 @@ func adminRoutes(c *Container) chi.Router {
 		r.Post("/results", c.AdminHandler.BulkUpdateMatchResults)
 
 		r.Route("/{id}", func(r chi.Router) {
-			r.Use(middlewares.RequireValidMatchID)
+			r.Use(middlewares.ParseMatchID)
 			r.Post("/result", c.AdminHandler.UpdateMatchResult)
 			r.Delete("/result", c.AdminHandler.ResetMatchResult)
 		})
@@ -32,7 +32,7 @@ func adminRoutes(c *Container) chi.Router {
 		r.Post("/rescore/best-thirds", c.AdminHandler.RescoreBestThirds)
 
 		r.Route("/rescore/match/{id}", func(r chi.Router) {
-			r.Use(middlewares.RequireValidMatchID)
+			r.Use(middlewares.ParseMatchID)
 			r.Post("/", c.AdminHandler.RescoreMatch)
 		})
 	})

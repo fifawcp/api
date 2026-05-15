@@ -86,6 +86,21 @@ func (r *MatchScorePickRepository) GetMatchScorePicksByUser(ctx context.Context,
 	return picks, rows.Err()
 }
 
+func (r *MatchScorePickRepository) CountMatchScorePicksByUser(ctx context.Context, userID string) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	var count int
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM user_match_score_picks WHERE user_id = $1`,
+		userID,
+	).Scan(&count); err != nil {
+		return 0, handleDBError(err, resourceMatchScorePick)
+	}
+
+	return count, nil
+}
+
 func (r *MatchScorePickRepository) GetMatchScorePicksByMatch(ctx context.Context, matchID int64) ([]*domain.UserMatchScorePick, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()

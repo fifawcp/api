@@ -26,11 +26,15 @@ func newTestContainer(t *testing.T, cfg *config.Config) *Container {
 		Config:        cfg,
 		Logger:        &mocks.MockLogger{},
 		Authenticator: &mocks.MockAuthenticator{},
-		Scheduler:     &mocks.MockScheduler{},
-		db:            &sql.DB{},
-		redis:         &redis.Client{},
-		validator:     &validator.Validator{},
-		mailer:        &mocks.MockMailer{},
+		Scheduler: &mocks.MockScheduler{
+			RegisterJobFunc: func(spec string, job domain.Job) error { return nil },
+			StartFunc:       func() {},
+			StopFunc:        func() {},
+		},
+		db:        &sql.DB{},
+		redis:     &redis.Client{},
+		validator: &validator.Validator{},
+		mailer:    &mocks.MockMailer{},
 	}
 
 	c.initRepositories()
@@ -87,6 +91,8 @@ func TestAppContainer_NewAppContainer(t *testing.T) {
 				RegisterJobFunc: func(spec string, job domain.Job) error {
 					return errors.New("job registration failed")
 				},
+				StartFunc: func() {},
+				StopFunc:  func() {},
 			},
 			db:        &sql.DB{},
 			redis:     &redis.Client{},

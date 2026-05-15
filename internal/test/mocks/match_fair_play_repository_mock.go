@@ -8,7 +8,7 @@ import (
 
 type MockMatchFairPlayRepository struct {
 	UpsertFunc                   func(ctx context.Context, records []domain.MatchFairPlay) error
-	GetFairPlayTotalsByGroupFunc  func(ctx context.Context, groupCode string) (map[string]int, error)
+	GetFairPlayTotalsByGroupFunc func(ctx context.Context, groupCode string) (map[string]int, error)
 }
 
 func (m *MockMatchFairPlayRepository) Upsert(ctx context.Context, records []domain.MatchFairPlay) error {

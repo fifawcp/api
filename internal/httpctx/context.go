@@ -16,6 +16,7 @@ const (
 	BoardMemberRoleContextKey   ContextKey = "board_member_role"
 	UserIDContextKey            ContextKey = "user_id"
 	MatchIDContextKey           ContextKey = "match_id"
+	CompetitionIDContextKey     ContextKey = "competition_id"
 	ReturnToContextKey          ContextKey = "return_to"
 	OAuthStateContextKey        ContextKey = "oauth_state"
 	OAuthCodeContextKey         ContextKey = "oauth_code"
@@ -52,10 +53,10 @@ func GetAuthenticatedUser(ctx context.Context) *domain.User {
 	return user
 }
 
-func GetBoardID(ctx context.Context) string {
-	boardID, ok := ctx.Value(BoardIDContextKey).(string)
+func GetBoardID(ctx context.Context) int64 {
+	boardID, ok := ctx.Value(BoardIDContextKey).(int64)
 	if !ok {
-		return ""
+		return 0
 	}
 	return boardID
 }
@@ -74,6 +75,14 @@ func GetUserID(ctx context.Context) string {
 		return ""
 	}
 	return userID
+}
+
+func GetCompetitionID(ctx context.Context) int64 {
+	competitionID, ok := ctx.Value(CompetitionIDContextKey).(int64)
+	if !ok {
+		return 0
+	}
+	return competitionID
 }
 
 func GetMatchID(ctx context.Context) int64 {

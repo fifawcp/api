@@ -63,7 +63,7 @@ func WithAuthUser(user *domain.User) RequestOption {
 	}
 }
 
-func WithBoardID(boardID string) RequestOption {
+func WithBoardID(boardID int64) RequestOption {
 	return func(r *http.Request) *http.Request {
 		ctx := context.WithValue(r.Context(), httpctx.BoardIDContextKey, boardID)
 		return r.WithContext(ctx)

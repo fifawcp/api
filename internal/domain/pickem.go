@@ -26,10 +26,19 @@ type PickemProgress struct {
 	Bracket    StepProgress `json:"bracket"`
 }
 
+type PickemProgressCounts struct {
+	Groups     int
+	BestThirds int
+	Bracket    int
+}
+
 type StepProgress struct {
-	Completed  int  `json:"completed"`
-	Total      int  `json:"total"`
-	IsComplete bool `json:"is_complete"`
+	Completed int `json:"completed"`
+	Total     int `json:"total"`
+}
+
+func (s StepProgress) IsComplete() bool {
+	return s.Completed == s.Total
 }
 
 type UserGroupPick struct {
@@ -66,9 +75,9 @@ type PickemRepository interface {
 	UpsertBestThirds(ctx context.Context, userID string, bestThirds []*UserBestThirdPick) error
 	GetBestThirdPicks(ctx context.Context, userID string) ([]*UserBestThirdPick, error)
 	GetBestThirdPicksByTeams(ctx context.Context, teamFifaCodes []string) ([]*UserBestThirdPick, error) // for ScoreBestThirds
-
-	// Bracket picks (full replace per user)
 	UpsertBracketPicks(ctx context.Context, userID string, picks []*UserBracketPick) error
 	GetBracketPicks(ctx context.Context, userID string) ([]*UserBracketPick, error)
 	GetBracketPicksByMatch(ctx context.Context, matchID int64) ([]*UserBracketPick, error) // for scoring
+	GetChampionPick(ctx context.Context, userID string) (*string, error)
+	GetUserProgressCounts(ctx context.Context, userID string) (PickemProgressCounts, error)
 }

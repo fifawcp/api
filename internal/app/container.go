@@ -50,26 +50,29 @@ type Container struct {
 	OIDCIdentityVerifier domain.IDTokenVerifier
 
 	// repositories
-	userRepository            domain.UserRepository
-	sessionRepository         domain.SessionRepository
-	refreshTokenRepository    domain.RefreshTokenRepository
-	boardRepository           domain.BoardRepository
-	boardMemberRepository     domain.BoardMemberRepository
-	userScoreRepository       domain.UserScoreRepository
-	groupStandingRepository   domain.GroupStandingRepository
-	matchRepository           domain.MatchRepository
-	matchFairPlayRepository   domain.MatchFairPlayRepository
-	matchAPIFixtureRepository domain.MatchAPIFixtureRepository
-	oauthAccountRepository    domain.OAuthAccountRepository
-	teamRepository            domain.TeamRepository
-	pickemRepository          domain.PickemRepository
-	matchScorePickRepository  domain.MatchScorePickRepository
-	scoreEventRepository      domain.ScoreEventRepository
+	userRepository             domain.UserRepository
+	sessionRepository          domain.SessionRepository
+	refreshTokenRepository     domain.RefreshTokenRepository
+	boardRepository            domain.BoardRepository
+	boardMemberRepository      domain.BoardMemberRepository
+	groupStandingRepository    domain.GroupStandingRepository
+	matchRepository            domain.MatchRepository
+	matchFairPlayRepository    domain.MatchFairPlayRepository
+	matchAPIFixtureRepository  domain.MatchAPIFixtureRepository
+	oauthAccountRepository     domain.OAuthAccountRepository
+	teamRepository             domain.TeamRepository
+	pickemRepository           domain.PickemRepository
+	matchScorePickRepository   domain.MatchScorePickRepository
+	scoreEventRepository       domain.ScoreEventRepository
+	competitionRepository      domain.CompetitionRepository
+	competitionScoreRepository domain.CompetitionScoreRepository
 
 	// startup data loaded once at startup; consumed by services
-	teams        []*domain.Team
-	teamLookup   *domain.TeamLookup
-	firstKickoff time.Time
+	teams                   []*domain.Team
+	teamLookup              *domain.TeamLookup
+	firstKickoff            time.Time
+	globalPickemCompetition *domain.Competition
+	globalMatchCompetition  *domain.Competition
 
 	// storages
 	otpStorage        *storage.OTPStorage
@@ -77,27 +80,32 @@ type Container struct {
 	oauthStateStorage *storage.OAuthStorage
 
 	// services
-	authService           services.AuthServiceInterface
-	boardService          services.BoardServiceInterface
-	groupStandingService  services.GroupStandingServiceInterface
-	matchService          services.MatchServiceInterface
-	matchScorePickService services.MatchScorePickServiceInterface
-	oauthService          services.OAuthServiceInterface
-	UserService           services.UserServiceInterface
-	BoardMemberService    services.BoardMemberServiceInterface
-	pickemService         services.PickemServiceInterface
-	pickemScoringService  services.ScoringServiceInterface
+	authService               services.AuthServiceInterface
+	boardService              services.BoardServiceInterface
+	groupStandingService      services.GroupStandingServiceInterface
+	matchService              services.MatchServiceInterface
+	matchScorePickService     services.MatchScorePickServiceInterface
+	oauthService              services.OAuthServiceInterface
+	UserService               services.UserServiceInterface
+	BoardMemberService        services.BoardMemberServiceInterface
+	pickemService             services.PickemServiceInterface
+	pickemScoringService      services.ScoringServiceInterface
+	competitionService        services.CompetitionServiceInterface
+	competitionScoringService services.CompetitionScoringServiceInterface
+	dashboardService          services.DashboardServiceInterface
 
 	// handlers
-	RateLimiters  *RateLimiters
-	AuthHandler   *handlers.AuthHandler
-	OAuthHandler  *handlers.OAuthHandler
-	UserHandler   *handlers.UserHandler
-	BoardHandler  *handlers.BoardHandler
-	GroupHandler  *handlers.GroupStandingHandler
-	MatchHandler  *handlers.MatchHandler
-	AdminHandler  *handlers.AdminHandler
-	PickemHandler *handlers.PickemHandler
+	RateLimiters       *RateLimiters
+	AuthHandler        *handlers.AuthHandler
+	OAuthHandler       *handlers.OAuthHandler
+	UserHandler        *handlers.UserHandler
+	BoardHandler       *handlers.BoardHandler
+	GroupHandler       *handlers.GroupStandingHandler
+	MatchHandler       *handlers.MatchHandler
+	AdminHandler       *handlers.AdminHandler
+	PickemHandler      *handlers.PickemHandler
+	CompetitionHandler *handlers.CompetitionHandler
+	DashboardHandler   *handlers.DashboardHandler
 }
 
 func NewContainer(cfg *config.Config) (*Container, error) {
@@ -190,7 +198,6 @@ func (c *Container) initRepositories() {
 	c.refreshTokenRepository = repositories.NewRefreshTokenRepository(c.db, c.Config)
 	c.boardRepository = repositories.NewBoardRepository(c.db, c.Config)
 	c.boardMemberRepository = repositories.NewBoardMemberRepository(c.db, c.Config)
-	c.userScoreRepository = repositories.NewUserScoreRepository(c.db, c.Config)
 	c.oauthAccountRepository = repositories.NewOAuthAccountRepository(c.db, c.Config)
 	c.teamRepository = repositories.NewTeamRepository(c.db, c.Config)
 	c.pickemRepository = repositories.NewPickemRepository(c.db, c.Config)
@@ -202,6 +209,8 @@ func (c *Container) initRepositories() {
 	c.groupStandingRepository = repositories.NewGroupStandingRepository(c.db, c.Config, c.teamLookup)
 	c.matchFairPlayRepository = repositories.NewMatchFairPlayRepository(c.db, c.Config)
 	c.matchAPIFixtureRepository = repositories.NewMatchAPIFixtureRepository(c.db, c.Config)
+	c.competitionRepository = repositories.NewCompetitionRepository(c.db, c.Config)
+	c.competitionScoreRepository = repositories.NewCompetitionScoreRepository(c.db, c.Config)
 }
 
 func (c *Container) initStartupData() error {
@@ -217,6 +226,13 @@ func (c *Container) initStartupData() error {
 		return fmt.Errorf("loading first group stage match kickoff: %w", err)
 	}
 	c.firstKickoff = firstKickoff
+
+	globalPickemCompetition, globalMatchCompetition, err := c.competitionRepository.GetGlobalCompetitions(context.Background())
+	if err != nil {
+		return fmt.Errorf("loading global competitions: %w", err)
+	}
+	c.globalPickemCompetition = globalPickemCompetition
+	c.globalMatchCompetition = globalMatchCompetition
 
 	return nil
 }
@@ -234,29 +250,46 @@ func (c *Container) initServices() {
 	)
 	c.UserService = services.NewUserService(c.userRepository, c.userStorage, c.Logger)
 	c.boardService = services.NewBoardService(c.boardRepository)
-	c.BoardMemberService = services.NewBoardMemberService(c.boardRepository, c.boardMemberRepository)
-	c.groupStandingService = services.NewGroupStandingService(c.groupStandingRepository, c.matchRepository, c.matchFairPlayRepository, c.Logger)
-
+	c.BoardMemberService = services.NewBoardMemberService(
+		c.boardRepository, c.boardMemberRepository,
+	)
+	c.groupStandingService = services.NewGroupStandingService(
+		c.groupStandingRepository, c.matchRepository, c.matchFairPlayRepository, c.Logger,
+	)
 	c.pickemScoringService = services.NewScoringService(
 		c.pickemRepository, c.matchScorePickRepository, c.scoreEventRepository,
-		c.userScoreRepository, c.matchRepository, c.groupStandingRepository,
+		c.matchRepository, c.groupStandingRepository,
 		c.Config, c.Logger,
 	)
 	c.pickemService = services.NewPickemService(
-		c.pickemRepository,
-		c.teams, c.firstKickoff, c.Config, c.Logger,
+		c.pickemRepository, c.teams, c.firstKickoff, c.Config, c.Logger,
 	)
 	c.matchScorePickService = services.NewMatchScorePickService(
 		c.matchScorePickRepository, c.matchRepository,
 	)
 
+	c.competitionScoringService = services.NewCompetitionScoringService(
+		c.competitionRepository, c.competitionScoreRepository, c.Config, c.Logger,
+	)
+	c.competitionService = services.NewCompetitionService(
+		c.boardRepository, c.competitionRepository, c.competitionScoreRepository,
+	)
+
 	c.matchService = services.NewMatchService(
 		c.matchRepository, c.groupStandingRepository,
-		c.groupStandingService, c.pickemScoringService, c.Logger,
+		c.groupStandingService, c.pickemScoringService, c.competitionScoringService, c.Logger,
 	)
 	c.oauthService = services.NewOAuthService(
 		c.oauthStateStorage, c.GoogleOauthConfig, c.OIDCIdentityVerifier,
 		c.oauthAccountRepository, c.userRepository, c.authService,
+	)
+	c.dashboardService = services.NewDashboardService(
+		c.pickemService,
+		c.matchScorePickRepository,
+		c.matchRepository,
+		c.competitionScoreRepository,
+		c.globalPickemCompetition,
+		c.globalMatchCompetition,
 	)
 }
 
@@ -269,6 +302,8 @@ func (c *Container) initHandlers() {
 	c.AdminHandler = handlers.NewAdminHandler(c.matchService, c.groupStandingService, c.pickemScoringService, c.Logger, c.AuditLogger, c.validator)
 	c.OAuthHandler = handlers.NewOAuthHandler(c.oauthService, c.Logger, c.Config)
 	c.PickemHandler = handlers.NewPickemHandler(c.pickemService, c.Logger, c.validator)
+	c.CompetitionHandler = handlers.NewCompetitionHandler(c.competitionService, c.Config, c.validator, c.Logger)
+	c.DashboardHandler = handlers.NewDashboardHandler(c.dashboardService, c.Logger)
 }
 
 func (c *Container) initJobs() {

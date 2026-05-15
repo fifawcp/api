@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -67,7 +68,7 @@ func TestBoardHandler_CreateBoard(t *testing.T) {
 				userID string,
 			) (*domain.Board, error) {
 				return &domain.Board{
-					ID:   "test-board-id",
+					ID:   1,
 					Name: payload.Name,
 				}, nil
 			},
@@ -92,7 +93,7 @@ func TestBoardHandler_CreateBoard(t *testing.T) {
 
 		testutils.ParseJSONResponse(t, w, &resp)
 
-		assert.Equal(t, "test-board-id", resp.Data.ID)
+		assert.Equal(t, int64(1), resp.Data.ID)
 		assert.Equal(t, "Test Board", resp.Data.Name)
 	})
 
@@ -196,8 +197,8 @@ func TestBoardHandler_GetUserBoards(t *testing.T) {
 		t.Parallel()
 
 		boards := []*domain.UserBoardListItem{
-			{ID: "board-1", Name: "Test Board 1"},
-			{ID: "board-2", Name: "Test Board 2"},
+			{ID: int64(1), Name: "Test Board 1"},
+			{ID: int64(2), Name: "Test Board 2"},
 		}
 
 		bs := &mocks.MockBoardService{
@@ -224,7 +225,7 @@ func TestBoardHandler_GetUserBoards(t *testing.T) {
 
 		testutils.ParseJSONResponse(t, w, &resp)
 		assert.Len(t, resp.Data, 2)
-		assert.Equal(t, "board-1", resp.Data[0].ID)
+		assert.Equal(t, int64(1), resp.Data[0].ID)
 		assert.Equal(t, "Test Board 1", resp.Data[0].Name)
 	})
 
@@ -274,10 +275,10 @@ func TestBoardHandler_JoinBoard(t *testing.T) {
 		body := dtos.JoinBoardDto{
 			JoinCode: "ABCD1234",
 		}
-		expectedBoardID := gofakeit.UUID()
+		expectedBoardID := gofakeit.Int64()
 
 		bms := &mocks.MockBoardMemberService{
-			JoinBoardFunc: func(ctx context.Context, joinCode string, userID string) (string, error) {
+			JoinBoardFunc: func(ctx context.Context, joinCode string, userID string) (int64, error) {
 				return expectedBoardID, nil
 			},
 		}
@@ -364,8 +365,8 @@ func TestBoardHandler_JoinBoard(t *testing.T) {
 		}
 
 		bms := &mocks.MockBoardMemberService{
-			JoinBoardFunc: func(ctx context.Context, joinCode string, userID string) (string, error) {
-				return "", errors.New("db error")
+			JoinBoardFunc: func(ctx context.Context, joinCode string, userID string) (int64, error) {
+				return 0, errors.New("db error")
 			},
 		}
 
@@ -390,10 +391,10 @@ func TestBoardHandler_GetBoardByID(t *testing.T) {
 	makeGetBoardByIDReq := func(t *testing.T) *http.Request {
 		t.Helper()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		user := testutils.CreateTestUser()
 		req := testutils.MakeJSONRequest(
-			t, http.MethodGet, "/boards/"+boardID, nil,
+			t, http.MethodGet, "/boards/"+strconv.FormatInt(boardID, 10), nil,
 			testutils.WithBoardID(boardID),
 			testutils.WithAuthUser(user),
 		)
@@ -406,7 +407,7 @@ func TestBoardHandler_GetBoardByID(t *testing.T) {
 
 		joinCode := "ABCD1234"
 		bs := &mocks.MockBoardService{
-			GetBoardByIDFunc: func(ctx context.Context, boardID string, userID string) (*domain.BoardDetails, error) {
+			GetBoardByIDFunc: func(ctx context.Context, boardID int64, userID string) (*domain.BoardDetails, error) {
 				return &domain.BoardDetails{
 					Board: domain.Board{
 						ID:       boardID,
@@ -416,9 +417,7 @@ func TestBoardHandler_GetBoardByID(t *testing.T) {
 					},
 					Viewer: domain.BoardViewer{
 						Role:     domain.BoardMemberRoleAdmin,
-						IsOwner:  true,
 						JoinedAt: time.Now(),
-						Rank:     5,
 					},
 				}, nil
 			},
@@ -441,16 +440,14 @@ func TestBoardHandler_GetBoardByID(t *testing.T) {
 		assert.Equal(t, "Test Board", resp.Data.Name)
 		assert.NotNil(t, resp.Data.JoinCode)
 		assert.Equal(t, joinCode, *resp.Data.JoinCode)
-		assert.Equal(t, 5, resp.Data.Viewer.Rank)
 		assert.Equal(t, domain.BoardMemberRoleAdmin, resp.Data.Viewer.Role)
-		assert.True(t, resp.Data.Viewer.IsOwner)
 	})
 
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
 		bs := &mocks.MockBoardService{
-			GetBoardByIDFunc: func(ctx context.Context, boardID string, userID string) (*domain.BoardDetails, error) {
+			GetBoardByIDFunc: func(ctx context.Context, boardID int64, userID string) (*domain.BoardDetails, error) {
 				return nil, errors.New("db error")
 			},
 		}
@@ -475,9 +472,9 @@ func TestBoardHandler_GetBoardMembers(t *testing.T) {
 	makeReq := func(t *testing.T, query string) *http.Request {
 		t.Helper()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		user := testutils.CreateTestUser()
-		path := "/boards/" + boardID + "/members"
+		path := "/boards/" + strconv.FormatInt(boardID, 10) + "/members"
 		if query != "" {
 			path += "?" + query
 		}
@@ -492,11 +489,11 @@ func TestBoardHandler_GetBoardMembers(t *testing.T) {
 		t.Parallel()
 
 		bms := &mocks.MockBoardMemberService{
-			GetBoardMembersFunc: func(ctx context.Context, boardID string, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {
+			GetBoardMembersFunc: func(ctx context.Context, boardID int64, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {
 				return &domain.BoardMembersPage{
 					Members: []*domain.BoardMemberDetails{
-						{UserID: gofakeit.UUID(), UserName: "alice", Rank: 1},
-						{UserID: gofakeit.UUID(), UserName: "bob", Rank: 2},
+						{UserID: gofakeit.UUID(), UserName: "alice"},
+						{UserID: gofakeit.UUID(), UserName: "bob"},
 					},
 					Pagination: domain.Pagination{Page: page, Limit: limit, Total: 2, HasMore: false},
 				}, nil
@@ -529,7 +526,7 @@ func TestBoardHandler_GetBoardMembers(t *testing.T) {
 		var capturedPage, capturedLimit int
 
 		bms := &mocks.MockBoardMemberService{
-			GetBoardMembersFunc: func(ctx context.Context, boardID string, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {
+			GetBoardMembersFunc: func(ctx context.Context, boardID int64, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {
 				capturedPage = page
 				capturedLimit = limit
 				return &domain.BoardMembersPage{Members: []*domain.BoardMemberDetails{}}, nil
@@ -547,48 +544,33 @@ func TestBoardHandler_GetBoardMembers(t *testing.T) {
 		assert.Equal(t, httpx.DefaultPageLimit, capturedLimit)
 	})
 
-	t.Run("forwards search and sort filters to service", func(t *testing.T) {
+	t.Run("forwards search filter to service", func(t *testing.T) {
 		t.Parallel()
 
 		var captured domain.BoardMembersFilters
 
 		bms := &mocks.MockBoardMemberService{
-			GetBoardMembersFunc: func(ctx context.Context, boardID string, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {
+			GetBoardMembersFunc: func(ctx context.Context, boardID int64, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {
 				captured = filters
 				return &domain.BoardMembersPage{Members: []*domain.BoardMemberDetails{}}, nil
 			},
 		}
 
 		h := newTestBoardHandler(nil, bms)
-		req := makeReq(t, "search=alice&sort=match_score_points")
+		req := makeReq(t, "search=alice")
 		w := httptest.NewRecorder()
 
 		h.GetBoardMembers(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "alice", captured.Search)
-		assert.Equal(t, domain.BoardMembersSortMatchScorePoints, captured.Sort)
-	})
-
-	t.Run("returns 400 for invalid sort value", func(t *testing.T) {
-		t.Parallel()
-
-		bms := &mocks.MockBoardMemberService{}
-
-		h := newTestBoardHandler(nil, bms)
-		req := makeReq(t, "sort=email")
-		w := httptest.NewRecorder()
-
-		h.GetBoardMembers(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 
 		bms := &mocks.MockBoardMemberService{
-			GetBoardMembersFunc: func(ctx context.Context, boardID string, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {
+			GetBoardMembersFunc: func(ctx context.Context, boardID int64, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {
 				return nil, errors.New("db error")
 			},
 		}
@@ -612,9 +594,9 @@ func TestBoardHandler_RegenerateJoinCode(t *testing.T) {
 	makeRegenerateJoinCodeReq := func(t *testing.T) *http.Request {
 		t.Helper()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		req := testutils.MakeJSONRequest(
-			t, http.MethodPost, "/boards/"+boardID+"/regenerate-join-code", nil,
+			t, http.MethodPost, "/boards/"+strconv.FormatInt(boardID, 10)+"/regenerate-join-code", nil,
 			testutils.WithBoardID(boardID),
 		)
 
@@ -627,7 +609,7 @@ func TestBoardHandler_RegenerateJoinCode(t *testing.T) {
 		newJoinCode := "NEWCODE1"
 
 		bs := &mocks.MockBoardService{
-			RegenerateJoinCodeFunc: func(ctx context.Context, boardID string) (string, error) {
+			RegenerateJoinCodeFunc: func(ctx context.Context, boardID int64) (string, error) {
 				return newJoinCode, nil
 			},
 		}
@@ -653,7 +635,7 @@ func TestBoardHandler_RegenerateJoinCode(t *testing.T) {
 		t.Parallel()
 
 		bs := &mocks.MockBoardService{
-			RegenerateJoinCodeFunc: func(ctx context.Context, boardID string) (string, error) {
+			RegenerateJoinCodeFunc: func(ctx context.Context, boardID int64) (string, error) {
 				return "", errors.New("db error")
 			},
 		}
@@ -678,9 +660,9 @@ func TestBoardHandler_UpdateBoard(t *testing.T) {
 	makeUpdateBoardReq := func(t *testing.T, body any) *http.Request {
 		t.Helper()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		req := testutils.MakeJSONRequest(
-			t, http.MethodPatch, "/boards/"+boardID, body,
+			t, http.MethodPatch, "/boards/"+strconv.FormatInt(boardID, 10), body,
 			testutils.WithBoardID(boardID),
 			testutils.WithBoardMemberRole(domain.BoardMemberRoleAdmin),
 		)
@@ -694,7 +676,7 @@ func TestBoardHandler_UpdateBoard(t *testing.T) {
 		bs := &mocks.MockBoardService{
 			UpdateBoardFunc: func(
 				ctx context.Context,
-				boardID string,
+				boardID int64,
 				boardMemberRole domain.BoardMemberRole,
 				body dtos.UpdateBoardDto,
 			) error {
@@ -773,7 +755,7 @@ func TestBoardHandler_UpdateBoard(t *testing.T) {
 		bs := &mocks.MockBoardService{
 			UpdateBoardFunc: func(
 				ctx context.Context,
-				boardID string,
+				boardID int64,
 				boardMemberRole domain.BoardMemberRole,
 				body dtos.UpdateBoardDto,
 			) error {
@@ -806,9 +788,9 @@ func TestBoardHandler_DeleteBoard(t *testing.T) {
 		t.Helper()
 
 		user := testutils.CreateTestUser()
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		req := testutils.MakeJSONRequest(
-			t, http.MethodDelete, "/boards/"+boardID, nil,
+			t, http.MethodDelete, "/boards/"+strconv.FormatInt(boardID, 10), nil,
 			testutils.WithAuthUser(user),
 			testutils.WithBoardID(boardID),
 		)
@@ -820,7 +802,7 @@ func TestBoardHandler_DeleteBoard(t *testing.T) {
 		t.Parallel()
 
 		bs := &mocks.MockBoardService{
-			DeleteBoardFunc: func(ctx context.Context, boardID string, userID string) error {
+			DeleteBoardFunc: func(ctx context.Context, boardID int64, role domain.BoardMemberRole) error {
 				return nil
 			},
 		}
@@ -839,7 +821,7 @@ func TestBoardHandler_DeleteBoard(t *testing.T) {
 		t.Parallel()
 
 		bs := &mocks.MockBoardService{
-			DeleteBoardFunc: func(ctx context.Context, boardID string, userID string) error {
+			DeleteBoardFunc: func(ctx context.Context, boardID int64, role domain.BoardMemberRole) error {
 				return errors.New("db error")
 			},
 		}
@@ -864,10 +846,10 @@ func TestBoardHandler_UpdateBoardMemberRole(t *testing.T) {
 	makeUpdateBoardMemberRoleReq := func(t *testing.T, body any) *http.Request {
 		t.Helper()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		userID := gofakeit.UUID()
 		req := testutils.MakeJSONRequest(
-			t, http.MethodPatch, "/boards/"+boardID+"/members/"+userID+"/role", body,
+			t, http.MethodPatch, "/boards/"+strconv.FormatInt(boardID, 10)+"/members/"+userID+"/role", body,
 			testutils.WithBoardID(boardID),
 			testutils.WithUserID(userID),
 			testutils.WithBoardMemberRole(domain.BoardMemberRoleAdmin),
@@ -882,7 +864,7 @@ func TestBoardHandler_UpdateBoardMemberRole(t *testing.T) {
 		bms := &mocks.MockBoardMemberService{
 			UpdateBoardMemberRoleFunc: func(
 				ctx context.Context,
-				boardID string,
+				boardID int64,
 				userID string,
 				boardMemberRole domain.BoardMemberRole,
 				body dtos.UpdateBoardMemberRoleDto,
@@ -962,7 +944,7 @@ func TestBoardHandler_UpdateBoardMemberRole(t *testing.T) {
 		bms := &mocks.MockBoardMemberService{
 			UpdateBoardMemberRoleFunc: func(
 				ctx context.Context,
-				boardID string,
+				boardID int64,
 				userID string,
 				boardMemberRole domain.BoardMemberRole,
 				body dtos.UpdateBoardMemberRoleDto,
@@ -995,10 +977,10 @@ func TestBoardHandler_RemoveBoardMember(t *testing.T) {
 	makeRemoveBoardMemberReq := func(t *testing.T) *http.Request {
 		t.Helper()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		userID := gofakeit.UUID()
 		req := testutils.MakeJSONRequest(
-			t, http.MethodDelete, "/boards/"+boardID+"/members/"+userID, nil,
+			t, http.MethodDelete, "/boards/"+strconv.FormatInt(boardID, 10)+"/members/"+userID, nil,
 			testutils.WithBoardID(boardID),
 			testutils.WithUserID(userID),
 			testutils.WithBoardMemberRole(domain.BoardMemberRoleAdmin),
@@ -1013,7 +995,7 @@ func TestBoardHandler_RemoveBoardMember(t *testing.T) {
 		bms := &mocks.MockBoardMemberService{
 			RemoveBoardMemberFunc: func(
 				ctx context.Context,
-				boardID string,
+				boardID int64,
 				userID string,
 				boardMemberRole domain.BoardMemberRole,
 			) error {
@@ -1037,7 +1019,7 @@ func TestBoardHandler_RemoveBoardMember(t *testing.T) {
 		bms := &mocks.MockBoardMemberService{
 			RemoveBoardMemberFunc: func(
 				ctx context.Context,
-				boardID string,
+				boardID int64,
 				userID string,
 				boardMemberRole domain.BoardMemberRole,
 			) error {
@@ -1065,10 +1047,10 @@ func TestBoardHandler_LeaveBoard(t *testing.T) {
 	makeLeaveBoardReq := func(t *testing.T) *http.Request {
 		t.Helper()
 
-		boardID := gofakeit.UUID()
+		boardID := gofakeit.Int64()
 		user := testutils.CreateTestUser()
 		req := testutils.MakeJSONRequest(
-			t, http.MethodDelete, "/boards/"+boardID+"/leave", nil,
+			t, http.MethodDelete, "/boards/"+strconv.FormatInt(boardID, 10)+"/leave", nil,
 			testutils.WithAuthUser(user),
 			testutils.WithBoardID(boardID),
 		)
@@ -1080,7 +1062,7 @@ func TestBoardHandler_LeaveBoard(t *testing.T) {
 		t.Parallel()
 
 		bms := &mocks.MockBoardMemberService{
-			LeaveBoardFunc: func(ctx context.Context, boardID string, userID string) error {
+			LeaveBoardFunc: func(ctx context.Context, boardID int64, userID string) error {
 				assert.NotEmpty(t, boardID)
 				assert.NotEmpty(t, userID)
 				return nil
@@ -1101,7 +1083,7 @@ func TestBoardHandler_LeaveBoard(t *testing.T) {
 		t.Parallel()
 
 		bms := &mocks.MockBoardMemberService{
-			LeaveBoardFunc: func(ctx context.Context, boardID string, userID string) error {
+			LeaveBoardFunc: func(ctx context.Context, boardID int64, userID string) error {
 				return domain.ErrForbidden
 			},
 		}
@@ -1114,5 +1096,83 @@ func TestBoardHandler_LeaveBoard(t *testing.T) {
 		h.LeaveBoard(w, req)
 
 		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestBoardHandler_TransferOwnership
+// ---------------------------------------------------------------------------
+func TestBoardHandler_TransferOwnership(t *testing.T) {
+	t.Parallel()
+
+	makeTransferOwnershipReq := func(t *testing.T) *http.Request {
+		t.Helper()
+
+		boardID := gofakeit.Int64()
+		caller := testutils.CreateTestUser()
+		targetUserID := gofakeit.UUID()
+		req := testutils.MakeJSONRequest(
+			t, http.MethodPost,
+			"/boards/"+strconv.FormatInt(boardID, 10)+"/members/"+targetUserID+"/transfer-ownership",
+			nil,
+			testutils.WithAuthUser(caller),
+			testutils.WithBoardID(boardID),
+			testutils.WithUserID(targetUserID),
+			testutils.WithBoardMemberRole(domain.BoardMemberRoleOwner),
+		)
+
+		return req
+	}
+
+	t.Run("returns 204 on success", func(t *testing.T) {
+		t.Parallel()
+
+		bms := &mocks.MockBoardMemberService{
+			TransferOwnershipFunc: func(
+				ctx context.Context,
+				boardID int64,
+				callerUserID, targetUserID string,
+				callerRole domain.BoardMemberRole,
+			) error {
+				assert.NotEmpty(t, boardID)
+				assert.NotEmpty(t, callerUserID)
+				assert.NotEmpty(t, targetUserID)
+				assert.Equal(t, domain.BoardMemberRoleOwner, callerRole)
+				return nil
+			},
+		}
+
+		h := newTestBoardHandler(nil, bms)
+
+		req := makeTransferOwnershipReq(t)
+		w := httptest.NewRecorder()
+
+		h.TransferOwnership(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+	})
+
+	t.Run("propagates service error", func(t *testing.T) {
+		t.Parallel()
+
+		bms := &mocks.MockBoardMemberService{
+			TransferOwnershipFunc: func(
+				ctx context.Context,
+				boardID int64,
+				callerUserID, targetUserID string,
+				callerRole domain.BoardMemberRole,
+			) error {
+				return domain.ErrCannotTransferOwnershipToSelf
+			},
+		}
+
+		h := newTestBoardHandler(nil, bms)
+
+		req := makeTransferOwnershipReq(t)
+		w := httptest.NewRecorder()
+
+		h.TransferOwnership(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }

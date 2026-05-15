@@ -102,10 +102,6 @@ func (r *OAuthAccountRepository) CreateUserWithOAuthAccount(
 
 	account.UserID = user.ID
 
-	if _, err := tx.ExecContext(ctx, `INSERT INTO user_scores (user_id) VALUES ($1)`, user.ID); err != nil {
-		return handleDBError(err, resourceUserScore)
-	}
-
 	joinGlobalBoardQuery := `
 		INSERT INTO board_members (board_id, user_id, role)
 		SELECT id, $1, 'member' FROM boards WHERE privacy = 'public' AND name = 'Global'

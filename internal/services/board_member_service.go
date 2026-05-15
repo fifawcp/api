@@ -8,12 +8,13 @@ import (
 )
 
 type BoardMemberServiceInterface interface {
-	JoinBoard(ctx context.Context, joinCode string, userID string) (string, error)
-	GetBoardMember(ctx context.Context, boardID string, userID string) (*domain.BoardMember, error)
-	GetBoardMembers(ctx context.Context, boardID string, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error)
-	UpdateBoardMemberRole(ctx context.Context, boardID string, userID string, role domain.BoardMemberRole, payload dtos.UpdateBoardMemberRoleDto) error
-	RemoveBoardMember(ctx context.Context, boardID string, userID string, role domain.BoardMemberRole) error
-	LeaveBoard(ctx context.Context, boardID string, userID string) error
+	JoinBoard(ctx context.Context, joinCode string, userID string) (int64, error)
+	GetBoardMember(ctx context.Context, boardID int64, userID string) (*domain.BoardMember, error)
+	GetBoardMembers(ctx context.Context, boardID int64, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error)
+	UpdateBoardMemberRole(ctx context.Context, boardID int64, userID string, role domain.BoardMemberRole, payload dtos.UpdateBoardMemberRoleDto) error
+	RemoveBoardMember(ctx context.Context, boardID int64, userID string, role domain.BoardMemberRole) error
+	LeaveBoard(ctx context.Context, boardID int64, userID string) error
+	TransferOwnership(ctx context.Context, boardID int64, callerUserID, targetUserID string, callerRole domain.BoardMemberRole) error
 }
 
 type BoardMemberService struct {
@@ -35,13 +36,13 @@ func (s *BoardMemberService) JoinBoard(
 	ctx context.Context,
 	joinCode string,
 	userID string,
-) (string, error) {
+) (int64, error) {
 	return s.boardMemberRepository.CreateBoardMember(ctx, joinCode, userID)
 }
 
 func (s *BoardMemberService) GetBoardMember(
 	ctx context.Context,
-	boardID string,
+	boardID int64,
 	userID string,
 ) (*domain.BoardMember, error) {
 	if _, err := s.boardRepository.GetBoardByID(ctx, boardID); err != nil {
@@ -53,7 +54,7 @@ func (s *BoardMemberService) GetBoardMember(
 
 func (s *BoardMemberService) GetBoardMembers(
 	ctx context.Context,
-	boardID string,
+	boardID int64,
 	filters domain.BoardMembersFilters,
 	page, limit int,
 ) (*domain.BoardMembersPage, error) {
@@ -62,16 +63,16 @@ func (s *BoardMemberService) GetBoardMembers(
 
 func (s *BoardMemberService) UpdateBoardMemberRole(
 	ctx context.Context,
-	boardID string,
+	boardID int64,
 	userID string,
 	role domain.BoardMemberRole,
 	payload dtos.UpdateBoardMemberRoleDto,
 ) error {
-	if !s.isAdminMember(role) {
+	if !role.CanManage() {
 		return domain.ErrForbidden
 	}
 
-	if err := assertPrivateBoard(ctx, s.boardRepository, boardID); err != nil {
+	if err := assertNotGlobalBoard(ctx, s.boardRepository, boardID); err != nil {
 		return err
 	}
 
@@ -80,15 +81,15 @@ func (s *BoardMemberService) UpdateBoardMemberRole(
 
 func (s *BoardMemberService) RemoveBoardMember(
 	ctx context.Context,
-	boardID string,
+	boardID int64,
 	userID string,
 	role domain.BoardMemberRole,
 ) error {
-	if !s.isAdminMember(role) {
+	if !role.CanManage() {
 		return domain.ErrForbidden
 	}
 
-	if err := assertPrivateBoard(ctx, s.boardRepository, boardID); err != nil {
+	if err := assertNotGlobalBoard(ctx, s.boardRepository, boardID); err != nil {
 		return err
 	}
 
@@ -97,16 +98,33 @@ func (s *BoardMemberService) RemoveBoardMember(
 
 func (s *BoardMemberService) LeaveBoard(
 	ctx context.Context,
-	boardID string,
+	boardID int64,
 	userID string,
 ) error {
-	if err := assertPrivateBoard(ctx, s.boardRepository, boardID); err != nil {
+	if err := assertNotGlobalBoard(ctx, s.boardRepository, boardID); err != nil {
 		return err
 	}
 
 	return s.boardMemberRepository.LeaveBoard(ctx, boardID, userID)
 }
 
-func (s *BoardMemberService) isAdminMember(role domain.BoardMemberRole) bool {
-	return role == domain.BoardMemberRoleAdmin
+func (s *BoardMemberService) TransferOwnership(
+	ctx context.Context,
+	boardID int64,
+	callerUserID, targetUserID string,
+	callerRole domain.BoardMemberRole,
+) error {
+	if callerRole != domain.BoardMemberRoleOwner {
+		return domain.ErrForbidden
+	}
+
+	if err := assertNotGlobalBoard(ctx, s.boardRepository, boardID); err != nil {
+		return err
+	}
+
+	if callerUserID == targetUserID {
+		return domain.ErrCannotTransferOwnershipToSelf
+	}
+
+	return s.boardMemberRepository.TransferOwnership(ctx, boardID, callerUserID, targetUserID)
 }

@@ -22,18 +22,20 @@ type MatchServiceInterface interface {
 	GetMatches(ctx context.Context, filters domain.MatchFilters) ([]*domain.Match, error)
 	UpdateMatchResult(ctx context.Context, matchID int64, payload dtos.UpdateMatchResultDto) (*domain.SyncGroupStageOutcomes, error)
 	UpdateMatchResultsBulk(ctx context.Context, payload dtos.BulkUpdateMatchesResultDto) (*domain.SyncGroupStageOutcomes, error)
+	UpdateMatchResultsBulkSync(ctx context.Context, payload dtos.BulkUpdateMatchesResultDto) (*domain.SyncGroupStageOutcomes, error)
 	ResetMatchResult(ctx context.Context, matchID int64) (*domain.SyncGroupStageOutcomes, error)
 	SyncGroupStageOutcomes(ctx context.Context) (*domain.SyncGroupStageOutcomes, error)
 	ResolveThirdPlaceConflict(ctx context.Context, payload dtos.ResolveThirdPlaceConflictDto) (*domain.SyncGroupStageOutcomes, error)
 }
 
 type MatchService struct {
-	matchRepository         domain.MatchRepository
-	groupStandingRepository domain.GroupStandingRepository
-	groupStandingService    GroupStandingServiceInterface
-	scoringService          ScoringServiceInterface
-	logger                  logging.Logger
-	combinations            []domain.ThirdPlaceCombination
+	matchRepository           domain.MatchRepository
+	groupStandingRepository   domain.GroupStandingRepository
+	groupStandingService      GroupStandingServiceInterface
+	scoringService            ScoringServiceInterface
+	competitionScoringService CompetitionScoringServiceInterface
+	logger                    logging.Logger
+	combinations              []domain.ThirdPlaceCombination
 }
 
 func NewMatchService(
@@ -41,15 +43,17 @@ func NewMatchService(
 	groupStandingRepository domain.GroupStandingRepository,
 	groupStandingService GroupStandingServiceInterface,
 	scoringService ScoringServiceInterface,
+	competitionScoringService CompetitionScoringServiceInterface,
 	logger logging.Logger,
 ) *MatchService {
 	return &MatchService{
-		matchRepository:         matchRepository,
-		groupStandingRepository: groupStandingRepository,
-		groupStandingService:    groupStandingService,
-		scoringService:          scoringService,
-		logger:                  logger,
-		combinations:            loadThirdPlaceCombinations(),
+		matchRepository:           matchRepository,
+		groupStandingRepository:   groupStandingRepository,
+		groupStandingService:      groupStandingService,
+		scoringService:            scoringService,
+		competitionScoringService: competitionScoringService,
+		logger:                    logger,
+		combinations:              loadThirdPlaceCombinations(),
 	}
 }
 
@@ -96,6 +100,33 @@ func (s *MatchService) UpdateMatchResult(ctx context.Context, matchID int64, pay
 }
 
 func (s *MatchService) UpdateMatchResultsBulk(ctx context.Context, payload dtos.BulkUpdateMatchesResultDto) (*domain.SyncGroupStageOutcomes, error) {
+	matchIDs, outcomes, err := s.prepareBulkUpdate(ctx, payload)
+	if err != nil {
+		return nil, err
+	}
+
+	s.asyncScoreMatches(outcomes, matchIDs)
+	return outcomes, nil
+}
+
+// UpdateMatchResultsBulkSync mirrors UpdateMatchResultsBulk but blocks until
+// the scoring chain (pickem + competition recompute, plus best-thirds when
+// applicable) finishes. Intended for offline tools (seeders, replay scripts)
+// that need deterministic ordering across multiple stage transitions in a row.
+func (s *MatchService) UpdateMatchResultsBulkSync(ctx context.Context, payload dtos.BulkUpdateMatchesResultDto) (*domain.SyncGroupStageOutcomes, error) {
+	matchIDs, outcomes, err := s.prepareBulkUpdate(ctx, payload)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.scoreMatchOutcomes(ctx, outcomes, matchIDs); err != nil {
+		return nil, err
+	}
+
+	return outcomes, nil
+}
+
+func (s *MatchService) prepareBulkUpdate(ctx context.Context, payload dtos.BulkUpdateMatchesResultDto) ([]int64, *domain.SyncGroupStageOutcomes, error) {
 	matchIDs := make([]int64, 0, len(payload.Matches))
 	for _, match := range payload.Matches {
 		matchIDs = append(matchIDs, match.ID)
@@ -103,7 +134,7 @@ func (s *MatchService) UpdateMatchResultsBulk(ctx context.Context, payload dtos.
 
 	existingMatches, err := s.matchRepository.GetMatches(ctx, domain.MatchFilters{MatchIDs: matchIDs})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	matchByID := make(map[int64]*domain.Match, len(existingMatches))
@@ -115,13 +146,13 @@ func (s *MatchService) UpdateMatchResultsBulk(ctx context.Context, payload dtos.
 	for _, match := range payload.Matches {
 		existing, ok := matchByID[match.ID]
 		if !ok {
-			return nil, domain.ErrMatchesNotFound([]int64{match.ID})
+			return nil, nil, domain.ErrMatchesNotFound([]int64{match.ID})
 		}
 		if existing.Teams.Home == nil || existing.Teams.Away == nil {
-			return nil, domain.ErrMatchTeamsNotAssigned
+			return nil, nil, domain.ErrMatchTeamsNotAssigned
 		}
 		if err := validateMatchResultForStage(existing.StageCode, match.UpdateMatchResultDto); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		updates = append(updates, domain.MatchResultUpdate{
 			MatchID:          match.ID,
@@ -134,16 +165,15 @@ func (s *MatchService) UpdateMatchResultsBulk(ctx context.Context, payload dtos.
 	}
 
 	if err := s.matchRepository.UpdateMatchesResult(ctx, updates); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	outcomes, err := s.SyncGroupStageOutcomes(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	s.asyncScoreMatches(outcomes, matchIDs)
-	return outcomes, nil
+	return matchIDs, outcomes, nil
 }
 
 func (s *MatchService) ResetMatchResult(ctx context.Context, matchID int64) (*domain.SyncGroupStageOutcomes, error) {
@@ -157,26 +187,52 @@ func (s *MatchService) ResetMatchResult(ctx context.Context, matchID int64) (*do
 	// rescore after correcting and re-finalizing the match result
 }
 
+// scoreMatchOutcomes runs the post-result scoring chain synchronously: pickem
+// scoring, competition match-score recompute, and best-thirds when group stage
+// just completed. The HTTP request path wraps it in a goroutine via
+// asyncScoreMatches; CLI tools that need deterministic ordering call it directly
+func (s *MatchService) scoreMatchOutcomes(ctx context.Context, outcomes *domain.SyncGroupStageOutcomes, matchIDs []int64) error {
+	result, err := s.scoringService.ScoreMatches(ctx, matchIDs)
+	if err != nil {
+		s.logger.Error("pickem scoring failed",
+			logging.Error, err.Error(),
+			"match_ids", matchIDs,
+		)
+		return err
+	}
+
+	if err := s.competitionScoringService.RecomputeForMatches(ctx, result); err != nil {
+		s.logger.Error("competition scoring recompute failed",
+			logging.Error, err.Error(),
+			"match_ids", matchIDs,
+		)
+		return err
+	}
+
+	if outcomes != nil && outcomes.PromotionOutcome != nil &&
+		outcomes.PromotionOutcome.Status == domain.PromotionStatusCompleted {
+		bestThirdUserIDs, err := s.scoringService.ScoreBestThirds(ctx)
+		if err != nil {
+			s.logger.Error("pickem best-thirds scoring failed",
+				logging.Error, err.Error(),
+			)
+			return err
+		}
+
+		if err := s.competitionScoringService.RecomputeForBestThirds(ctx, bestThirdUserIDs); err != nil {
+			s.logger.Error("competition scoring recompute for best-thirds failed",
+				logging.Error, err.Error(),
+			)
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (s *MatchService) asyncScoreMatches(outcomes *domain.SyncGroupStageOutcomes, matchIDs []int64) {
 	go func() {
-		bgCtx := context.Background()
-
-		if err := s.scoringService.ScoreMatches(bgCtx, matchIDs); err != nil {
-			s.logger.Error("pickem scoring failed",
-				logging.Error, err.Error(),
-				"match_ids", matchIDs,
-			)
-		}
-
-		// If third-place auto-promotion just completed, run best-thirds scoring too
-		if outcomes != nil && outcomes.PromotionOutcome != nil &&
-			outcomes.PromotionOutcome.Status == domain.PromotionStatusCompleted {
-			if err := s.scoringService.ScoreBestThirds(bgCtx); err != nil {
-				s.logger.Error("pickem best-thirds scoring failed",
-					logging.Error, err.Error(),
-				)
-			}
-		}
+		_ = s.scoreMatchOutcomes(context.Background(), outcomes, matchIDs)
 	}()
 }
 
@@ -277,8 +333,16 @@ func (s *MatchService) ResolveThirdPlaceConflict(ctx context.Context, payload dt
 
 	// Third-place qualifiers are now resolved -> best_third_pick events can be scored
 	go func() {
-		if err := s.scoringService.ScoreBestThirds(context.Background()); err != nil {
+		bestThirdUserIDs, err := s.scoringService.ScoreBestThirds(context.Background())
+		if err != nil {
 			s.logger.Error("pickem best-thirds scoring failed (post conflict resolve)",
+				logging.Error, err.Error(),
+			)
+			return
+		}
+
+		if err := s.competitionScoringService.RecomputeForBestThirds(context.Background(), bestThirdUserIDs); err != nil {
+			s.logger.Error("competition scoring recompute for best-thirds failed (post conflict resolve)",
 				logging.Error, err.Error(),
 			)
 		}
