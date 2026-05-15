@@ -11,6 +11,8 @@ type MockCompetitionScoreRepository struct {
 	BatchUpsertMatchScoresFunc         func(ctx context.Context, competitionID int64, userIDs []string, exactScorePts int) error
 	BatchUpsertPickemScoresFunc        func(ctx context.Context, competitionIDs []int64, userIDs []string) error
 	GetLeaderboardFunc                 func(ctx context.Context, competitionID int64, page, limit int) (*domain.CompetitionLeaderboardPage, error)
+	GetUserPickemStatsFunc             func(ctx context.Context, competitionID int64, userID string) (domain.CompetitionUserStats, error)
+	GetUserMatchStatsFunc              func(ctx context.Context, competitionID int64, userID string) (domain.CompetitionUserStats, error)
 }
 
 func (m *MockCompetitionScoreRepository) FindMatchCompetitionsByMatches(ctx context.Context, matchIDs []int64) ([]int64, error) {
@@ -39,4 +41,18 @@ func (m *MockCompetitionScoreRepository) GetLeaderboard(ctx context.Context, com
 		return m.GetLeaderboardFunc(ctx, competitionID, page, limit)
 	}
 	panic("GetLeaderboard called unexpectedly")
+}
+
+func (m *MockCompetitionScoreRepository) GetUserPickemStats(ctx context.Context, competitionID int64, userID string) (domain.CompetitionUserStats, error) {
+	if m.GetUserPickemStatsFunc != nil {
+		return m.GetUserPickemStatsFunc(ctx, competitionID, userID)
+	}
+	panic("GetUserPickemStats called unexpectedly")
+}
+
+func (m *MockCompetitionScoreRepository) GetUserMatchStats(ctx context.Context, competitionID int64, userID string) (domain.CompetitionUserStats, error) {
+	if m.GetUserMatchStatsFunc != nil {
+		return m.GetUserMatchStatsFunc(ctx, competitionID, userID)
+	}
+	panic("GetUserMatchStats called unexpectedly")
 }

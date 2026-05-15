@@ -78,4 +78,5 @@ type CompetitionRepository interface {
 	DeleteCompetition(ctx context.Context, boardID, competitionID int64) error
 	GetAllPickemIDs(ctx context.Context) ([]int64, error)
 	FindMatchCompetitionsByMatches(ctx context.Context, matchIDs []int64) ([]int64, error)
+	GetGlobalCompetitions(ctx context.Context) (pickem *Competition, match *Competition, err error)
 }

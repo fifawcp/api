@@ -413,6 +413,65 @@ func (r *CompetitionRepository) GetAllPickemIDs(ctx context.Context) ([]int64, e
 	return ids, rows.Err()
 }
 
+func (r *CompetitionRepository) GetGlobalCompetitions(
+	ctx context.Context,
+) (*domain.Competition, *domain.Competition, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	query := `
+		SELECT id, board_id, type, name, created_by, created_at
+		FROM competitions
+		WHERE board_id = (SELECT id FROM boards WHERE privacy = 'global')
+		ORDER BY created_at ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, nil, handleDBError(err, resourceCompetition)
+	}
+	defer rows.Close()
+
+	var pickemCompetition, matchCompetition *domain.Competition
+
+	for rows.Next() {
+		competition := &domain.Competition{}
+		var createdBy sql.NullString
+
+		if err := rows.Scan(
+			&competition.ID,
+			&competition.BoardID,
+			&competition.Type,
+			&competition.Name,
+			&createdBy,
+			&competition.CreatedAt,
+		); err != nil {
+			return nil, nil, handleDBError(err, resourceCompetition)
+		}
+
+		if createdBy.Valid {
+			competition.CreatedBy = &createdBy.String
+		}
+
+		switch competition.Type {
+		case domain.CompetitionTypePickem:
+			pickemCompetition = competition
+		case domain.CompetitionTypeMatch:
+			matchCompetition = competition
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, nil, handleDBError(err, resourceCompetition)
+	}
+
+	if pickemCompetition == nil || matchCompetition == nil {
+		return nil, nil, domain.ErrCompetitionNotFound
+	}
+
+	return pickemCompetition, matchCompetition, nil
+}
+
 // FindMatchCompetitionsByMatches returns competition IDs whose scope
 // includes at least one of the given match IDs
 func (r *CompetitionRepository) FindMatchCompetitionsByMatches(ctx context.Context, matchIDs []int64) ([]int64, error) {

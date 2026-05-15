@@ -325,6 +325,94 @@ func (r *CompetitionScoreRepository) getPickemLeaderboard(
 	return leaderboard, nil
 }
 
+func (r *CompetitionScoreRepository) GetUserPickemStats(
+	ctx context.Context,
+	competitionID int64,
+	userID string,
+) (domain.CompetitionUserStats, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	query := `
+		WITH ranked AS (
+			SELECT
+				cps.user_id,
+				cps.total_points,
+				RANK() OVER (
+					ORDER BY
+						cps.total_points          DESC,
+						cps.bracket_hits          DESC,
+						cps.best_third_hits       DESC,
+						cps.group_exact_positions DESC,
+						cps.group_qualifier_hits  DESC,
+						bm.created_at ASC,
+						cps.user_id ASC
+				) AS rank
+			FROM competition_pickem_scores cps
+			INNER JOIN competitions comp ON comp.id = cps.competition_id
+			INNER JOIN board_members bm  ON bm.board_id = comp.board_id AND bm.user_id = cps.user_id
+			WHERE cps.competition_id = $1
+		)
+		SELECT rank, total_points
+		FROM ranked
+		WHERE user_id = $2
+	`
+
+	var stats domain.CompetitionUserStats
+	err := r.db.QueryRowContext(ctx, query, competitionID, userID).Scan(&stats.Rank, &stats.Points)
+	if err == sql.ErrNoRows {
+		return domain.CompetitionUserStats{}, nil
+	}
+	if err != nil {
+		return domain.CompetitionUserStats{}, handleDBError(err, resourceCompetitionScore)
+	}
+
+	return stats, nil
+}
+
+func (r *CompetitionScoreRepository) GetUserMatchStats(
+	ctx context.Context,
+	competitionID int64,
+	userID string,
+) (domain.CompetitionUserStats, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	query := `
+		WITH ranked AS (
+			SELECT
+				cms.user_id,
+				cms.total_points,
+				RANK() OVER (
+					ORDER BY
+						cms.total_points     DESC,
+						cms.exact_hits       DESC,
+						cms.correct_outcomes DESC,
+						bm.created_at ASC,
+						cms.user_id ASC
+				) AS rank
+			FROM competition_match_scores cms
+			INNER JOIN competitions comp ON comp.id = cms.competition_id
+			INNER JOIN board_members bm  ON bm.board_id = comp.board_id AND bm.user_id = cms.user_id
+			WHERE cms.competition_id = $1
+		)
+		SELECT rank, total_points
+		FROM ranked
+		WHERE user_id = $2
+	`
+
+	var stats domain.CompetitionUserStats
+	err := r.db.QueryRowContext(ctx, query, competitionID, userID).Scan(&stats.Rank, &stats.Points)
+	if err == sql.ErrNoRows {
+		return domain.CompetitionUserStats{}, nil
+	}
+	if err != nil {
+		return domain.CompetitionUserStats{}, handleDBError(err, resourceCompetitionScore)
+	}
+
+	return stats, nil
+}
+
 func (r *CompetitionScoreRepository) getMatchLeaderboard(
 	ctx context.Context,
 	competitionID int64,

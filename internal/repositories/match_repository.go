@@ -154,6 +154,69 @@ func (r *MatchRepository) GetMatches(ctx context.Context, filters domain.MatchFi
 	return matches, nil
 }
 
+func (r *MatchRepository) GetNextScheduledMatch(ctx context.Context) (*domain.Match, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	query := `SELECT
+		m.id,
+		m.stage_code,
+		m.group_code,
+		m.venue_name,
+		m.venue_city,
+		m.home_team_fifa_code,
+		m.away_team_fifa_code,
+		m.kickoff_at,
+		m.status,
+		m.home_score,
+		m.away_score,
+		m.home_penalty_score,
+		m.away_penalty_score,
+		m.winner_team_fifa_code,
+		m.updated_at
+	FROM matches m
+	WHERE m.status = 'scheduled'
+	ORDER BY m.kickoff_at ASC
+	LIMIT 1`
+
+	var match domain.Match
+	var homeFifa, awayFifa sql.NullString
+	var homeScore, awayScore, homePenaltyScore, awayPenaltyScore sql.NullInt64
+	var winnerFifaCode sql.NullString
+
+	err := r.db.QueryRowContext(ctx, query).Scan(
+		&match.ID,
+		&match.StageCode,
+		&match.GroupCode,
+		&match.Venue.Name,
+		&match.Venue.City,
+		&homeFifa,
+		&awayFifa,
+		&match.KickoffAt,
+		&match.Status,
+		&homeScore,
+		&awayScore,
+		&homePenaltyScore,
+		&awayPenaltyScore,
+		&winnerFifaCode,
+		&match.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, handleDBError(err, resourceMatch)
+	}
+
+	match.Teams = domain.MatchTeams{
+		Home: r.teams.Get(homeFifa.String),
+		Away: r.teams.Get(awayFifa.String),
+	}
+	match.Result = buildMatchResult(homeScore, awayScore, homePenaltyScore, awayPenaltyScore, winnerFifaCode)
+
+	return &match, nil
+}
+
 func (r *MatchRepository) GetFirstGroupStageMatchKickoff(ctx context.Context) (time.Time, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()

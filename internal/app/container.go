@@ -68,9 +68,11 @@ type Container struct {
 	competitionScoreRepository domain.CompetitionScoreRepository
 
 	// startup data loaded once at startup; consumed by services
-	teams        []*domain.Team
-	teamLookup   *domain.TeamLookup
-	firstKickoff time.Time
+	teams                   []*domain.Team
+	teamLookup              *domain.TeamLookup
+	firstKickoff            time.Time
+	globalPickemCompetition *domain.Competition
+	globalMatchCompetition  *domain.Competition
 
 	// storages
 	otpStorage        *storage.OTPStorage
@@ -90,6 +92,7 @@ type Container struct {
 	pickemScoringService      services.ScoringServiceInterface
 	competitionService        services.CompetitionServiceInterface
 	competitionScoringService services.CompetitionScoringServiceInterface
+	dashboardService          services.DashboardServiceInterface
 
 	// handlers
 	RateLimiters       *RateLimiters
@@ -102,6 +105,7 @@ type Container struct {
 	AdminHandler       *handlers.AdminHandler
 	PickemHandler      *handlers.PickemHandler
 	CompetitionHandler *handlers.CompetitionHandler
+	DashboardHandler   *handlers.DashboardHandler
 }
 
 func NewContainer(cfg *config.Config) (*Container, error) {
@@ -223,6 +227,13 @@ func (c *Container) initStartupData() error {
 	}
 	c.firstKickoff = firstKickoff
 
+	globalPickemCompetition, globalMatchCompetition, err := c.competitionRepository.GetGlobalCompetitions(context.Background())
+	if err != nil {
+		return fmt.Errorf("loading global competitions: %w", err)
+	}
+	c.globalPickemCompetition = globalPickemCompetition
+	c.globalMatchCompetition = globalMatchCompetition
+
 	return nil
 }
 
@@ -245,7 +256,6 @@ func (c *Container) initServices() {
 	c.groupStandingService = services.NewGroupStandingService(
 		c.groupStandingRepository, c.matchRepository, c.matchFairPlayRepository, c.Logger,
 	)
-
 	c.pickemScoringService = services.NewScoringService(
 		c.pickemRepository, c.matchScorePickRepository, c.scoreEventRepository,
 		c.matchRepository, c.groupStandingRepository,
@@ -273,6 +283,14 @@ func (c *Container) initServices() {
 		c.oauthStateStorage, c.GoogleOauthConfig, c.OIDCIdentityVerifier,
 		c.oauthAccountRepository, c.userRepository, c.authService,
 	)
+	c.dashboardService = services.NewDashboardService(
+		c.pickemService,
+		c.matchScorePickRepository,
+		c.matchRepository,
+		c.competitionScoreRepository,
+		c.globalPickemCompetition,
+		c.globalMatchCompetition,
+	)
 }
 
 func (c *Container) initHandlers() {
@@ -285,6 +303,7 @@ func (c *Container) initHandlers() {
 	c.OAuthHandler = handlers.NewOAuthHandler(c.oauthService, c.Logger, c.Config)
 	c.PickemHandler = handlers.NewPickemHandler(c.pickemService, c.Logger, c.validator)
 	c.CompetitionHandler = handlers.NewCompetitionHandler(c.competitionService, c.Config, c.validator, c.Logger)
+	c.DashboardHandler = handlers.NewDashboardHandler(c.dashboardService, c.Logger)
 }
 
 func (c *Container) initJobs() {

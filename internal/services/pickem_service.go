@@ -16,6 +16,8 @@ var allKnockoutMatchIDs = []int64{73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84
 
 type PickemServiceInterface interface {
 	GetUserPickem(ctx context.Context, userID string) (*domain.UserPickem, error)
+	GetChampionPick(ctx context.Context, userID string) (*domain.Team, error)
+	GetUserPickemProgress(ctx context.Context, userID string) (*domain.PickemProgress, error)
 	SaveGroupPicks(ctx context.Context, userID string, picks []*domain.UserGroupPick) error
 	SaveBestThirds(ctx context.Context, userID string, teamFifaCodes []string) error
 	SaveBracketPicks(ctx context.Context, userID string, picks []*domain.UserBracketPick) error
@@ -89,6 +91,32 @@ func (s *PickemService) GetUserPickem(ctx context.Context, userID string) (*doma
 	}, nil
 }
 
+func (s *PickemService) GetChampionPick(ctx context.Context, userID string) (*domain.Team, error) {
+	fifaCode, err := s.pickemRepo.GetChampionPick(ctx, userID)
+	if err != nil || fifaCode == nil {
+		return nil, err
+	}
+
+	return s.teamLookup[*fifaCode], nil
+}
+
+func (s *PickemService) GetUserPickemProgress(ctx context.Context, userID string) (*domain.PickemProgress, error) {
+	counts, err := s.pickemRepo.GetUserProgressCounts(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &domain.PickemProgress{
+		Groups:     stepProgress(counts.Groups, 12),
+		BestThirds: stepProgress(counts.BestThirds, 8),
+		Bracket:    stepProgress(counts.Bracket, 32),
+	}, nil
+}
+
+func stepProgress(completed, total int) domain.StepProgress {
+	return domain.StepProgress{Completed: completed, Total: total}
+}
+
 func (s *PickemService) SaveGroupPicks(
 	ctx context.Context,
 	userID string,
@@ -124,7 +152,7 @@ func (s *PickemService) SaveBestThirds(ctx context.Context, userID string, teamF
 
 	groupPicksByGroup := groupPicksByGroupCode(groupPicks)
 
-	if !computeGroupsProgress(groupPicksByGroup).IsComplete {
+	if !computeGroupsProgress(groupPicksByGroup).IsComplete() {
 		return domain.ErrGroupPicksRequired
 	}
 
@@ -186,7 +214,7 @@ func (s *PickemService) SaveBracketPicks(ctx context.Context, userID string, bra
 	groupPicksByGroup := groupPicksByGroupCode(groupPicks)
 
 	// Check if all 12 groups and 8 best-thirds are complete before bracket picks are accepted
-	groupsAndThirdsComplete := computeGroupsProgress(groupPicksByGroup).IsComplete && len(bestThirds) == 8
+	groupsAndThirdsComplete := computeGroupsProgress(groupPicksByGroup).IsComplete() && len(bestThirds) == 8
 	if !groupsAndThirdsComplete {
 		return domain.ErrGroupPicksRequired
 	}
@@ -221,27 +249,15 @@ func computeGroupsProgress(groupPicks map[string][]*domain.UserGroupPick) domain
 		}
 	}
 
-	return domain.StepProgress{
-		Completed:  completed,
-		Total:      12,
-		IsComplete: completed == 12,
-	}
+	return stepProgress(completed, 12)
 }
 
 func computeBestThirdsProgress(bestThirds []*domain.UserBestThirdPick) domain.StepProgress {
-	return domain.StepProgress{
-		Completed:  len(bestThirds),
-		Total:      8,
-		IsComplete: len(bestThirds) == 8,
-	}
+	return stepProgress(len(bestThirds), 8)
 }
 
 func computeBracketProgress(bracketPicks []*domain.UserBracketPick) domain.StepProgress {
-	return domain.StepProgress{
-		Completed:  len(bracketPicks),
-		Total:      32,
-		IsComplete: len(bracketPicks) == 32,
-	}
+	return stepProgress(len(bracketPicks), 32)
 }
 
 func sameGroupPicks(existing, incoming []*domain.UserGroupPick) bool {

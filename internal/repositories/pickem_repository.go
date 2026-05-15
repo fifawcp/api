@@ -321,6 +321,54 @@ func (r *PickemRepository) GetBracketPicks(ctx context.Context, userID string) (
 	return picks, rows.Err()
 }
 
+func (r *PickemRepository) GetChampionPick(ctx context.Context, userID string) (*string, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	query := `SELECT team_fifa_code
+		FROM user_bracket_picks
+		WHERE user_id = $1
+		  AND match_id = (SELECT id FROM matches WHERE stage_code = 'final')
+		  AND (SELECT COUNT(*) FROM user_bracket_picks WHERE user_id = $1) = 32`
+
+	var fifaCode string
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(&fifaCode)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, handleDBError(err, resourcePickem)
+	}
+
+	return &fifaCode, nil
+}
+
+func (r *PickemRepository) GetUserProgressCounts(ctx context.Context, userID string) (domain.PickemProgressCounts, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	query := `
+		SELECT
+			(SELECT COUNT(*) FROM (
+				SELECT 1 FROM user_group_picks
+				WHERE user_id = $1
+				GROUP BY team_group_code
+				HAVING COUNT(*) = 4
+			) g) AS groups_completed,
+			(SELECT COUNT(*) FROM user_best_third_picks WHERE user_id = $1) AS best_thirds_completed,
+			(SELECT COUNT(*) FROM user_bracket_picks WHERE user_id = $1) AS bracket_completed
+	`
+
+	var counts domain.PickemProgressCounts
+	if err := r.db.QueryRowContext(ctx, query, userID).Scan(
+		&counts.Groups, &counts.BestThirds, &counts.Bracket,
+	); err != nil {
+		return domain.PickemProgressCounts{}, handleDBError(err, resourcePickem)
+	}
+
+	return counts, nil
+}
+
 func (r *PickemRepository) GetBracketPicksByMatch(ctx context.Context, matchID int64) ([]*domain.UserBracketPick, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()

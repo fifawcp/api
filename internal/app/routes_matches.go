@@ -13,12 +13,9 @@ func matchRoutes(c *Container) chi.Router {
 	r.With(middlewares.OptionalAuth(c.Authenticator, c.UserService, c.Logger)).
 		Get("/", c.MatchHandler.GetMatches)
 
-	r.Group(func(r chi.Router) {
-		r.Use(middlewares.Auth(c.Authenticator, c.UserService, c.Logger))
-
-		r.With(middlewares.ParseMatchID).
-			Put("/{id}/pick", c.MatchHandler.SaveMatchScorePick)
-	})
+	r.With(middlewares.Auth(c.Authenticator, c.UserService, c.Logger)).
+		With(middlewares.ParseMatchID).
+		Put("/{id}/pick", c.MatchHandler.SaveMatchScorePick)
 
 	return r
 }
