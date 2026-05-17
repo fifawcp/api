@@ -2,9 +2,9 @@ package domain
 
 type Dashboard struct {
 	PickedChampion *Team                `json:"picked_champion"`
-	Stats          DashboardStats       `json:"stats"`
+	Stats          *DashboardStats      `json:"stats"`
 	NextMatch      *Match               `json:"next_match"`
-	Progress       DashboardProgress    `json:"progress"`
+	Progress       *DashboardProgress   `json:"progress"`
 	Leaderboard    DashboardLeaderboard `json:"leaderboard"`
 }
 
