@@ -41,40 +41,24 @@ func NewDashboardService(
 
 func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*domain.Dashboard, error) {
 	var (
+		// public — always fetched
+		nextMatch  *domain.Match
+		pickemPage *domain.CompetitionLeaderboardPage
+		matchPage  *domain.CompetitionLeaderboardPage
+
+		// per-user — fetched only when authenticated
 		champion       *domain.Team
 		pickemStats    domain.CompetitionUserStats
 		matchStats     domain.CompetitionUserStats
-		nextMatch      *domain.Match
 		matchPicksMade int
 		pickemProgress *domain.PickemProgress
-		pickemPage     *domain.CompetitionLeaderboardPage
-		matchPage      *domain.CompetitionLeaderboardPage
 	)
 
 	eg, egCtx := errgroup.WithContext(ctx)
 
-	eg.Go(func() (err error) {
-		champion, err = s.pickemService.GetChampionPick(egCtx, userID)
-		return
-	})
-	eg.Go(func() (err error) {
-		pickemStats, err = s.competitionScoreRepo.GetUserPickemStats(egCtx, s.globalPickemCompetition.ID, userID)
-		return
-	})
-	eg.Go(func() (err error) {
-		matchStats, err = s.competitionScoreRepo.GetUserMatchStats(egCtx, s.globalMatchCompetition.ID, userID)
-		return
-	})
+	// public data: always fan out
 	eg.Go(func() (err error) {
 		nextMatch, err = s.matchRepository.GetNextScheduledMatch(egCtx)
-		return
-	})
-	eg.Go(func() (err error) {
-		matchPicksMade, err = s.matchScorePickRepository.CountMatchScorePicksByUser(egCtx, userID)
-		return
-	})
-	eg.Go(func() (err error) {
-		pickemProgress, err = s.pickemService.GetUserPickemProgress(egCtx, userID)
 		return
 	})
 	eg.Go(func() (err error) {
@@ -86,21 +70,36 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 		return
 	})
 
+	// per-user data: only fan out for authenticated callers
+	if userID != "" {
+		eg.Go(func() (err error) {
+			champion, err = s.pickemService.GetChampionPick(egCtx, userID)
+			return
+		})
+		eg.Go(func() (err error) {
+			pickemStats, err = s.competitionScoreRepo.GetUserPickemStats(egCtx, s.globalPickemCompetition.ID, userID)
+			return
+		})
+		eg.Go(func() (err error) {
+			matchStats, err = s.competitionScoreRepo.GetUserMatchStats(egCtx, s.globalMatchCompetition.ID, userID)
+			return
+		})
+		eg.Go(func() (err error) {
+			matchPicksMade, err = s.matchScorePickRepository.CountMatchScorePicksByUser(egCtx, userID)
+			return
+		})
+		eg.Go(func() (err error) {
+			pickemProgress, err = s.pickemService.GetUserPickemProgress(egCtx, userID)
+			return
+		})
+	}
+
 	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
 
-	return &domain.Dashboard{
-		PickedChampion: champion,
-		Stats: domain.DashboardStats{
-			Pickem: pickemStats,
-			Match:  matchStats,
-		},
+	dashboard := &domain.Dashboard{
 		NextMatch: nextMatch,
-		Progress: domain.DashboardProgress{
-			MatchPicks: stepProgress(matchPicksMade, 104),
-			Pickem:     *pickemProgress,
-		},
 		Leaderboard: domain.DashboardLeaderboard{
 			Pickem: domain.CompetitionTop{
 				CompetitionName: s.globalPickemCompetition.Name,
@@ -111,7 +110,21 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 				Entries:         buildLeaderEntries(matchPage),
 			},
 		},
-	}, nil
+	}
+
+	if userID != "" {
+		dashboard.PickedChampion = champion
+		dashboard.Stats = &domain.DashboardStats{
+			Pickem: pickemStats,
+			Match:  matchStats,
+		}
+		dashboard.Progress = &domain.DashboardProgress{
+			MatchPicks: stepProgress(matchPicksMade, 104),
+			Pickem:     *pickemProgress,
+		}
+	}
+
+	return dashboard, nil
 }
 
 func buildLeaderEntries(page *domain.CompetitionLeaderboardPage) []domain.DashboardLeaderEntry {

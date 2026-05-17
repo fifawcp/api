@@ -7,7 +7,7 @@ import (
 
 func dashboardRoutes(c *Container) chi.Router {
 	r := chi.NewRouter()
-	r.Use(middlewares.Auth(c.Authenticator, c.UserService, c.Logger))
+	r.Use(middlewares.OptionalAuth(c.Authenticator, c.UserService, c.Logger))
 
 	r.Get("/", c.DashboardHandler.GetDashboard)
 

@@ -118,6 +118,7 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, dashboard.PickedChampion)
 		assert.Equal(t, "ARG", dashboard.PickedChampion.FifaCode)
+		assert.NotNil(t, dashboard.Stats)
 		assert.Equal(t, 3, dashboard.Stats.Pickem.Rank)
 		assert.Equal(t, 150, dashboard.Stats.Pickem.Points)
 		assert.Equal(t, 5, dashboard.Stats.Match.Rank)
@@ -187,14 +188,58 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Nil(t, dashboard.PickedChampion)
+		assert.NotNil(t, dashboard.Stats)
 		assert.Equal(t, 0, dashboard.Stats.Pickem.Rank)
 		assert.Equal(t, 0, dashboard.Stats.Match.Rank)
 		assert.Nil(t, dashboard.NextMatch)
+		assert.NotNil(t, dashboard.Progress)
 		assert.Equal(t, 0, dashboard.Progress.MatchPicks.Completed)
 		assert.Equal(t, 104, dashboard.Progress.MatchPicks.Total)
 		assert.Equal(t, 5, dashboard.Progress.Pickem.Groups.Completed)
 		assert.False(t, dashboard.Progress.Pickem.Bracket.IsComplete())
 		assert.Empty(t, dashboard.Leaderboard.Pickem.Entries)
 		assert.Empty(t, dashboard.Leaderboard.Match.Entries)
+	})
+
+	t.Run("returns public-only dashboard for guest (empty userID)", func(t *testing.T) {
+		t.Parallel()
+
+		// Per-user mock funcs are left unset — they panic if called, proving the
+		// service does not fan out user-specific queries for guests.
+		pickemSvc := &mocks.MockPickemService{}
+		matchScorePickRepo := &mocks.MockMatchScorePickRepository{}
+
+		kickoffTime := time.Date(2026, 6, 11, 18, 0, 0, 0, time.UTC)
+		matchRepo := &mocks.MockMatchRepository{
+			GetNextScheduledMatchFunc: func(ctx context.Context) (*domain.Match, error) {
+				return &domain.Match{ID: 1, KickoffAt: kickoffTime}, nil
+			},
+		}
+
+		competitionScoreRepo := &mocks.MockCompetitionScoreRepository{
+			GetLeaderboardFunc: func(ctx context.Context, competitionID int64, page, limit int) (*domain.CompetitionLeaderboardPage, error) {
+				return &domain.CompetitionLeaderboardPage{
+					Members: []*domain.CompetitionLeaderboardEntry{
+						{Rank: 1, Member: domain.CompetitionLeaderboardMember{UserID: "u1", UserName: "alice"}, Score: &domain.PickemScore{Total: 100}},
+					},
+				}, nil
+			},
+		}
+
+		pickemComp, matchComp := makeGlobalCompetitions()
+		service := newTestDashboardService(pickemSvc, matchScorePickRepo, matchRepo, competitionScoreRepo, pickemComp, matchComp)
+
+		dashboard, err := service.GetDashboard(context.Background(), "")
+
+		assert.NoError(t, err)
+		assert.Nil(t, dashboard.PickedChampion)
+		assert.Nil(t, dashboard.Stats)
+		assert.Nil(t, dashboard.Progress)
+		assert.NotNil(t, dashboard.NextMatch)
+		assert.Equal(t, int64(1), dashboard.NextMatch.ID)
+		assert.Len(t, dashboard.Leaderboard.Pickem.Entries, 1)
+		assert.Equal(t, "Pick'em", dashboard.Leaderboard.Pickem.CompetitionName)
+		assert.Len(t, dashboard.Leaderboard.Match.Entries, 1)
+		assert.Equal(t, "All Matches", dashboard.Leaderboard.Match.CompetitionName)
 	})
 }
