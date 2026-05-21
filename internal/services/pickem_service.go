@@ -19,6 +19,7 @@ type PickemServiceInterface interface {
 	GetChampionPick(ctx context.Context, userID string) (*domain.Team, error)
 	GetUserPickemProgress(ctx context.Context, userID string) (*domain.PickemProgress, error)
 	SaveGroupPicks(ctx context.Context, userID string, picks []*domain.UserGroupPick) error
+	SetGroupLock(ctx context.Context, userID, groupCode string, locked bool, picks []*domain.UserGroupPick) error
 	SaveBestThirds(ctx context.Context, userID string, teamFifaCodes []string) error
 	SaveBracketPicks(ctx context.Context, userID string, picks []*domain.UserBracketPick) error
 }
@@ -63,6 +64,7 @@ func (s *PickemService) GetUserPickem(ctx context.Context, userID string) (*doma
 		groupPicks   []*domain.UserGroupPick
 		bestThirds   []*domain.UserBestThirdPick
 		bracketPicks []*domain.UserBracketPick
+		lockedCodes  []string
 	)
 
 	eg, egCtx := errgroup.WithContext(ctx)
@@ -70,20 +72,25 @@ func (s *PickemService) GetUserPickem(ctx context.Context, userID string) (*doma
 	eg.Go(func() (err error) { groupPicks, err = s.pickemRepo.GetGroupPicks(egCtx, userID); return })
 	eg.Go(func() (err error) { bestThirds, err = s.pickemRepo.GetBestThirdPicks(egCtx, userID); return })
 	eg.Go(func() (err error) { bracketPicks, err = s.pickemRepo.GetBracketPicks(egCtx, userID); return })
+	eg.Go(func() (err error) { lockedCodes, err = s.pickemRepo.GetLockedGroupCodes(egCtx, userID); return })
 
 	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
 
 	groupPicksByGroup := groupPicksByGroupCode(groupPicks)
+	lockedByGroup := make(map[string]bool, len(lockedCodes))
+	for _, code := range lockedCodes {
+		lockedByGroup[code] = true
+	}
 	bracket := s.projectBracket(groupPicksByGroup, bestThirds, bracketPicks)
 
 	return &domain.UserPickem{
-		GroupPicks: s.buildGroupPicksView(groupPicksByGroup),
+		GroupPicks: s.buildGroupPicksView(groupPicksByGroup, lockedByGroup),
 		BestThirds: s.buildBestThirdsView(bestThirds),
 		Bracket:    bracket,
 		Progress: domain.PickemProgress{
-			Groups:     computeGroupsProgress(groupPicksByGroup),
+			Groups:     stepProgress(len(lockedCodes), 12),
 			BestThirds: computeBestThirdsProgress(bestThirds),
 			Bracket:    computeBracketProgress(bracketPicks),
 		},
@@ -136,7 +143,31 @@ func (s *PickemService) SaveGroupPicks(
 		return nil
 	}
 
-	return s.pickemRepo.UpsertGroupPicks(ctx, userID, picks)
+	if err := s.pickemRepo.UpsertGroupPicks(ctx, userID, picks); err != nil {
+		return err
+	}
+
+	changedCodes := changedGroupCodes(existing, picks)
+	if len(changedCodes) > 0 {
+		if err := s.pickemRepo.ClearGroupLocks(ctx, userID, changedCodes); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *PickemService) SetGroupLock(
+	ctx context.Context,
+	userID, groupCode string,
+	locked bool,
+	picks []*domain.UserGroupPick,
+) error {
+	if s.isPickemLocked() {
+		return domain.ErrPickemLocked
+	}
+
+	return s.pickemRepo.SetGroupLock(ctx, userID, groupCode, locked, picks)
 }
 
 func (s *PickemService) SaveBestThirds(ctx context.Context, userID string, teamFifaCodes []string) error {
@@ -152,7 +183,7 @@ func (s *PickemService) SaveBestThirds(ctx context.Context, userID string, teamF
 
 	groupPicksByGroup := groupPicksByGroupCode(groupPicks)
 
-	if !computeGroupsProgress(groupPicksByGroup).IsComplete() {
+	if !groupOrderingComplete(groupPicksByGroup) {
 		return domain.ErrGroupPicksRequired
 	}
 
@@ -214,7 +245,7 @@ func (s *PickemService) SaveBracketPicks(ctx context.Context, userID string, bra
 	groupPicksByGroup := groupPicksByGroupCode(groupPicks)
 
 	// Check if all 12 groups and 8 best-thirds are complete before bracket picks are accepted
-	groupsAndThirdsComplete := computeGroupsProgress(groupPicksByGroup).IsComplete() && len(bestThirds) == 8
+	groupsAndThirdsComplete := groupOrderingComplete(groupPicksByGroup) && len(bestThirds) == 8
 	if !groupsAndThirdsComplete {
 		return domain.ErrGroupPicksRequired
 	}
@@ -241,7 +272,10 @@ func (s *PickemService) isPickemLocked() bool {
 	return time.Now().UTC().After(s.lockTime)
 }
 
-func computeGroupsProgress(groupPicks map[string][]*domain.UserGroupPick) domain.StepProgress {
+// groupOrderingComplete reports whether every group has exactly 4 picks in positions 1–4.
+// Group ordering completeness no longer drives step-1 progress (locks do), but it remains a
+// precondition for accepting best-thirds and bracket picks.
+func groupOrderingComplete(groupPicks map[string][]*domain.UserGroupPick) bool {
 	completed := 0
 	for _, picks := range groupPicks {
 		if len(picks) == 4 {
@@ -249,7 +283,33 @@ func computeGroupsProgress(groupPicks map[string][]*domain.UserGroupPick) domain
 		}
 	}
 
-	return stepProgress(completed, 12)
+	return completed == 12
+}
+
+func changedGroupCodes(existing, incoming []*domain.UserGroupPick) []string {
+	type pickKey struct {
+		groupCode string
+		position  int
+	}
+
+	existingByKey := make(map[pickKey]string, len(existing))
+	for _, p := range existing {
+		existingByKey[pickKey{p.TeamGroupCode, p.PredictedPosition}] = p.TeamFifaCode
+	}
+
+	changed := make(map[string]bool, 12)
+	for _, p := range incoming {
+		if existingByKey[pickKey{p.TeamGroupCode, p.PredictedPosition}] != p.TeamFifaCode {
+			changed[p.TeamGroupCode] = true
+		}
+	}
+
+	codes := make([]string, 0, len(changed))
+	for code := range changed {
+		codes = append(codes, code)
+	}
+
+	return codes
 }
 
 func computeBestThirdsProgress(bestThirds []*domain.UserBestThirdPick) domain.StepProgress {
@@ -424,22 +484,24 @@ func groupPicksByGroupCode(picks []*domain.UserGroupPick) map[string][]*domain.U
 	return byGroup
 }
 
-func (s *PickemService) buildGroupPicksView(picksByGroup map[string][]*domain.UserGroupPick) []domain.ResolvedGroupPick {
-	if len(picksByGroup) == 0 {
-		return s.defaultGroupPicksView()
-	}
+func (s *PickemService) buildGroupPicksView(picksByGroup map[string][]*domain.UserGroupPick, lockedByGroup map[string]bool) []domain.ResolvedGroupPick {
+	defaults := s.defaultGroupPicksView()
 
-	groupPicks := make([]domain.ResolvedGroupPick, 0, len(picksByGroup))
-	for groupCode, picks := range picksByGroup {
-		teams := make([]domain.RankedTeam, 0, len(picks))
-		for _, pick := range picks {
-			teams = append(teams, domain.RankedTeam{Position: pick.PredictedPosition, Team: *s.teamLookup[pick.TeamFifaCode]})
+	for i, group := range defaults {
+		saved, ok := picksByGroup[group.GroupCode]
+		if ok && len(saved) > 0 {
+			teams := make([]domain.RankedTeam, 0, len(saved))
+
+			for _, pick := range saved {
+				teams = append(teams, domain.RankedTeam{Position: pick.PredictedPosition, Team: *s.teamLookup[pick.TeamFifaCode]})
+			}
+
+			defaults[i].Teams = teams
 		}
-
-		groupPicks = append(groupPicks, domain.ResolvedGroupPick{GroupCode: groupCode, Teams: teams})
+		defaults[i].Locked = lockedByGroup[group.GroupCode]
 	}
 
-	return groupPicks
+	return defaults
 }
 
 func (s *PickemService) defaultGroupPicksView() []domain.ResolvedGroupPick {
