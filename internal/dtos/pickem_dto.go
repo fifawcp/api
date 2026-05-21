@@ -9,6 +9,12 @@ type GroupPickDto struct {
 	TeamFifaCodes []string `json:"team_fifa_codes" validate:"required,len=4,unique,dive,required,fifa_code" example:"MEX,RSA,KOR,CZE"` // index 0 = pos 1, index 3 = pos 4
 }
 
+type SetGroupLockDto struct {
+	GroupCode     string   `json:"group_code" validate:"required,len=1,oneof=A B C D E F G H I J K L" example:"A"`
+	Locked        bool     `json:"locked" example:"true"`
+	TeamFifaCodes []string `json:"team_fifa_codes" validate:"required,len=4,unique,dive,required,fifa_code" example:"MEX,RSA,KOR,CZE"`
+}
+
 type SaveBestThirdsDto struct {
 	TeamFifaCodes []string `json:"team_fifa_codes" validate:"required,len=8,unique,dive,required,fifa_code" example:"MEX,RSA,KOR,CZE,BRA,MAR,HAI,SCO"`
 }

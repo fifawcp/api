@@ -11,6 +11,7 @@ type MockPickemService struct {
 	GetChampionPickFunc       func(ctx context.Context, userID string) (*domain.Team, error)
 	GetUserPickemProgressFunc func(ctx context.Context, userID string) (*domain.PickemProgress, error)
 	SaveGroupPicksFunc        func(ctx context.Context, userID string, picks []*domain.UserGroupPick) error
+	SetGroupLockFunc          func(ctx context.Context, userID, groupCode string, locked bool, picks []*domain.UserGroupPick) error
 	SaveBestThirdsFunc        func(ctx context.Context, userID string, teamFifaCodes []string) error
 	SaveBracketPicksFunc      func(ctx context.Context, userID string, picks []*domain.UserBracketPick) error
 }
@@ -41,6 +42,13 @@ func (m *MockPickemService) SaveGroupPicks(ctx context.Context, userID string, p
 		return m.SaveGroupPicksFunc(ctx, userID, picks)
 	}
 	panic("SaveGroupPicks called unexpectedly")
+}
+
+func (m *MockPickemService) SetGroupLock(ctx context.Context, userID, groupCode string, locked bool, picks []*domain.UserGroupPick) error {
+	if m.SetGroupLockFunc != nil {
+		return m.SetGroupLockFunc(ctx, userID, groupCode, locked, picks)
+	}
+	panic("SetGroupLock called unexpectedly")
 }
 
 func (m *MockPickemService) SaveBestThirds(ctx context.Context, userID string, teamFifaCodes []string) error {

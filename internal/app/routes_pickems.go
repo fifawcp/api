@@ -11,6 +11,7 @@ func pickemRoutes(c *Container) chi.Router {
 
 	r.Get("/", c.PickemHandler.GetUserPickem)
 	r.Put("/groups", c.PickemHandler.SaveGroupPicks)
+	r.Put("/groups/lock", c.PickemHandler.SetGroupLock)
 	r.Put("/best-thirds", c.PickemHandler.SaveBestThirds)
 	r.Put("/bracket", c.PickemHandler.SaveBracketPicks)
 

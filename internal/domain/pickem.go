@@ -12,6 +12,7 @@ type UserPickem struct {
 
 type ResolvedGroupPick struct {
 	GroupCode string       `json:"group_code"`
+	Locked    bool         `json:"locked"`
 	Teams     []RankedTeam `json:"teams"`
 }
 
@@ -80,4 +81,7 @@ type PickemRepository interface {
 	GetBracketPicksByMatch(ctx context.Context, matchID int64) ([]*UserBracketPick, error) // for scoring
 	GetChampionPick(ctx context.Context, userID string) (*string, error)
 	GetUserProgressCounts(ctx context.Context, userID string) (PickemProgressCounts, error)
+	GetLockedGroupCodes(ctx context.Context, userID string) ([]string, error)
+	SetGroupLock(ctx context.Context, userID, groupCode string, locked bool, picks []*UserGroupPick) error
+	ClearGroupLocks(ctx context.Context, userID string, groupCodes []string) error
 }

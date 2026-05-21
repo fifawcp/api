@@ -347,14 +347,10 @@ func (r *PickemRepository) GetUserProgressCounts(ctx context.Context, userID str
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
 
+	// `groups_completed` is the number of locked groups
 	query := `
 		SELECT
-			(SELECT COUNT(*) FROM (
-				SELECT 1 FROM user_group_picks
-				WHERE user_id = $1
-				GROUP BY team_group_code
-				HAVING COUNT(*) = 4
-			) g) AS groups_completed,
+			(SELECT COUNT(*) FROM user_group_locks WHERE user_id = $1) AS groups_completed,
 			(SELECT COUNT(*) FROM user_best_third_picks WHERE user_id = $1) AS best_thirds_completed,
 			(SELECT COUNT(*) FROM user_bracket_picks WHERE user_id = $1) AS bracket_completed
 	`
@@ -367,6 +363,155 @@ func (r *PickemRepository) GetUserProgressCounts(ctx context.Context, userID str
 	}
 
 	return counts, nil
+}
+
+func (r *PickemRepository) GetLockedGroupCodes(ctx context.Context, userID string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	rows, err := r.db.QueryContext(ctx, `SELECT group_code FROM user_group_locks WHERE user_id = $1`, userID)
+	if err != nil {
+		return nil, handleDBError(err, resourcePickem)
+	}
+	defer rows.Close()
+
+	codes := []string{}
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			return nil, handleDBError(err, resourcePickem)
+		}
+		codes = append(codes, code)
+	}
+
+	return codes, rows.Err()
+}
+
+func (r *PickemRepository) SetGroupLock(
+	ctx context.Context,
+	userID, groupCode string,
+	locked bool,
+	picks []*domain.UserGroupPick,
+) error {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return handleDBError(err, resourcePickem)
+	}
+	defer tx.Rollback()
+
+	// Unlocking: the lock row is removed
+	if !locked {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM user_group_locks WHERE user_id = $1 AND group_code = $2`, userID, groupCode); err != nil {
+			return handleDBError(err, resourcePickem)
+		}
+
+		return tx.Commit()
+	}
+
+	// Locking: detect whether the incoming order differs from what's stored. If so, replace this group's picks and cascade-clear best-thirds + bracket.
+	// If not, only the lock row is upserted (no downstream cascade)
+	existingRows, err := tx.QueryContext(
+		ctx,
+		`SELECT team_fifa_code, predicted_position FROM user_group_picks WHERE user_id = $1 AND team_group_code = $2`,
+		userID, groupCode,
+	)
+	if err != nil {
+		return handleDBError(err, resourcePickem)
+	}
+
+	existingByPos := make(map[int]string, 4)
+	for existingRows.Next() {
+		var code string
+		var pos int
+
+		if err := existingRows.Scan(&code, &pos); err != nil {
+			existingRows.Close()
+			return handleDBError(err, resourcePickem)
+		}
+
+		existingByPos[pos] = code
+	}
+	existingRows.Close()
+	if err := existingRows.Err(); err != nil {
+		return handleDBError(err, resourcePickem)
+	}
+
+	orderChanged := len(existingByPos) != len(picks)
+	if !orderChanged {
+		for _, p := range picks {
+			if existingByPos[p.PredictedPosition] != p.TeamFifaCode {
+				orderChanged = true
+				break
+			}
+		}
+	}
+
+	// If group order changed, delete the existing picks for best-thirds and bracket
+	if orderChanged {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM user_group_picks WHERE user_id = $1 AND team_group_code = $2`, userID, groupCode); err != nil {
+			return handleDBError(err, resourcePickem)
+		}
+
+		if _, err := tx.ExecContext(ctx, `DELETE FROM user_best_third_picks WHERE user_id = $1`, userID); err != nil {
+			return handleDBError(err, resourcePickem)
+		}
+
+		if _, err := tx.ExecContext(ctx, `DELETE FROM user_bracket_picks WHERE user_id = $1`, userID); err != nil {
+			return handleDBError(err, resourcePickem)
+		}
+
+		var values []string
+		var args []any
+		argIndex := 1
+		for _, p := range picks {
+			values = append(values, "($"+strconv.Itoa(argIndex)+",$"+strconv.Itoa(argIndex+1)+",$"+strconv.Itoa(argIndex+2)+",$"+strconv.Itoa(argIndex+3)+")")
+			args = append(args, userID, p.TeamFifaCode, p.TeamGroupCode, p.PredictedPosition)
+			argIndex += 4
+		}
+
+		query := `INSERT INTO user_group_picks (
+			user_id,
+			team_fifa_code,
+			team_group_code,
+			predicted_position
+		) VALUES ` + strings.Join(values, ",")
+
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return handleDBError(err, resourcePickem)
+		}
+	}
+
+	if _, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO user_group_locks (user_id, group_code) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+		userID, groupCode,
+	); err != nil {
+		return handleDBError(err, resourcePickem)
+	}
+
+	return tx.Commit()
+}
+
+func (r *PickemRepository) ClearGroupLocks(ctx context.Context, userID string, groupCodes []string) error {
+	if len(groupCodes) == 0 {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	if _, err := r.db.ExecContext(
+		ctx,
+		`DELETE FROM user_group_locks WHERE user_id = $1 AND group_code = ANY($2)`,
+		userID, pq.Array(groupCodes),
+	); err != nil {
+		return handleDBError(err, resourcePickem)
+	}
+
+	return nil
 }
 
 func (r *PickemRepository) GetBracketPicksByMatch(ctx context.Context, matchID int64) ([]*domain.UserBracketPick, error) {

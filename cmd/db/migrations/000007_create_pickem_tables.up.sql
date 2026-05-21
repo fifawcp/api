@@ -12,6 +12,16 @@ CREATE TABLE IF NOT EXISTS user_group_picks (
 CREATE INDEX IF NOT EXISTS idx_user_group_picks_user_id         ON user_group_picks(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_group_picks_team_group_code ON user_group_picks(team_group_code);
 
+CREATE TABLE IF NOT EXISTS user_group_locks (
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  group_code CHAR(1) NOT NULL CHECK (
+    group_code IN ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L')
+  ),
+  PRIMARY KEY (user_id, group_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_group_locks_user_id ON user_group_locks(user_id);
+
 CREATE TABLE IF NOT EXISTS user_best_third_picks (
   user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   team_fifa_code VARCHAR(8) NOT NULL REFERENCES teams(fifa_code),

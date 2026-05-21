@@ -209,6 +209,20 @@ func (s *Seeder) seedPickemData(ctx context.Context, users []*domain.User) {
 			continue
 		}
 
+		// Seeded pickem users have committed their predictions, so every group ships pre-locked
+		lockPlaceholders := make([]string, 0, len(groupCodes))
+		lockArgs := make([]any, 0, len(groupCodes)*2)
+		for i, code := range groupCodes {
+			base := i * 2
+			lockPlaceholders = append(lockPlaceholders, fmt.Sprintf("($%d, $%d)", base+1, base+2))
+			lockArgs = append(lockArgs, user.ID, code)
+		}
+		lockQuery := `INSERT INTO user_group_locks (user_id, group_code) VALUES ` +
+			strings.Join(lockPlaceholders, ", ") + ` ON CONFLICT DO NOTHING`
+		if _, err := s.db.ExecContext(ctx, lockQuery, lockArgs...); err != nil {
+			s.logger.Error("Error seeding group locks", logging.Error, err.Error())
+		}
+
 		mathrand.Shuffle(len(thirdPlaceTeams), func(a, b int) {
 			thirdPlaceTeams[a], thirdPlaceTeams[b] = thirdPlaceTeams[b], thirdPlaceTeams[a]
 		})
