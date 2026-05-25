@@ -12,8 +12,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func newTestBoardService(br *mocks.MockBoardRepository) BoardServiceInterface {
-	return NewBoardService(br)
+func newTestBoardService(br *mocks.MockBoardRepository, cr *mocks.MockCompetitionRepository) BoardServiceInterface {
+	return NewBoardService(br, cr)
+}
+
+func defaultCompetitionsSucceedFunc() func(ctx context.Context, competition *domain.Competition) error {
+	return func(ctx context.Context, competition *domain.Competition) error {
+		return nil
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -36,7 +42,11 @@ func TestBoardService_CreateBoard(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		cr := &mocks.MockCompetitionRepository{
+			CreateCompetitionFunc: defaultCompetitionsSucceedFunc(),
+		}
+
+		service := newTestBoardService(br, cr)
 
 		result, err := service.CreateBoard(context.Background(), payload, userID)
 
@@ -45,6 +55,97 @@ func TestBoardService_CreateBoard(t *testing.T) {
 		assert.NotNil(t, result.JoinCode)
 		assert.Len(t, *result.JoinCode, 8)
 		assert.Equal(t, domain.BoardPrivacyPrivate, result.Privacy)
+	})
+
+	t.Run("creates default Pick'em and All Matches competitions", func(t *testing.T) {
+		t.Parallel()
+
+		payload := dtos.CreateBoardDto{Name: "Test Board"}
+		userID := gofakeit.UUID()
+		expectedID := gofakeit.Int64()
+
+		br := &mocks.MockBoardRepository{
+			CreateBoardFunc: func(ctx context.Context, board *domain.Board, ownerUserID string) error {
+				board.ID = expectedID
+				return nil
+			},
+		}
+
+		createdCompetitions := []*domain.Competition{}
+		cr := &mocks.MockCompetitionRepository{
+			CreateCompetitionFunc: func(ctx context.Context, competition *domain.Competition) error {
+				createdCompetitions = append(createdCompetitions, competition)
+				return nil
+			},
+		}
+
+		service := newTestBoardService(br, cr)
+
+		_, err := service.CreateBoard(context.Background(), payload, userID)
+
+		assert.NoError(t, err)
+		assert.Len(t, createdCompetitions, 2)
+
+		pickem := createdCompetitions[0]
+		assert.Equal(t, expectedID, pickem.BoardID)
+		assert.Equal(t, domain.CompetitionTypePickem, pickem.Type)
+		assert.Equal(t, "Pick'em", pickem.Name)
+		assert.NotNil(t, pickem.CreatedBy)
+		assert.Equal(t, userID, *pickem.CreatedBy)
+		assert.Nil(t, pickem.Scope)
+
+		match := createdCompetitions[1]
+		assert.Equal(t, expectedID, match.BoardID)
+		assert.Equal(t, domain.CompetitionTypeMatch, match.Type)
+		assert.Equal(t, "All Matches", match.Name)
+		assert.NotNil(t, match.CreatedBy)
+		assert.Equal(t, userID, *match.CreatedBy)
+		assert.NotNil(t, match.Scope)
+		assert.ElementsMatch(t, []domain.MatchStageCode{
+			domain.MatchStageCodeGroupStage,
+			domain.MatchStageCodeRoundOf32,
+			domain.MatchStageCodeRoundOf16,
+			domain.MatchStageCodeQuarterFinals,
+			domain.MatchStageCodeSemiFinals,
+			domain.MatchStageCodeThirdPlace,
+			domain.MatchStageCodeFinal,
+		}, match.Scope.Stages)
+		assert.Empty(t, match.Scope.TeamFifaCodes)
+	})
+
+	t.Run("rolls back board when default competition creation fails", func(t *testing.T) {
+		t.Parallel()
+
+		payload := dtos.CreateBoardDto{Name: "Test Board"}
+		userID := gofakeit.UUID()
+		expectedID := gofakeit.Int64()
+		competitionErr := errors.New("competition insert failed")
+
+		deletedBoardID := int64(0)
+		br := &mocks.MockBoardRepository{
+			CreateBoardFunc: func(ctx context.Context, board *domain.Board, ownerUserID string) error {
+				board.ID = expectedID
+				return nil
+			},
+			DeleteBoardFunc: func(ctx context.Context, boardID int64) error {
+				deletedBoardID = boardID
+				return nil
+			},
+		}
+
+		cr := &mocks.MockCompetitionRepository{
+			CreateCompetitionFunc: func(ctx context.Context, competition *domain.Competition) error {
+				return competitionErr
+			},
+		}
+
+		service := newTestBoardService(br, cr)
+
+		result, err := service.CreateBoard(context.Background(), payload, userID)
+
+		assert.ErrorIs(t, err, competitionErr)
+		assert.Nil(t, result)
+		assert.Equal(t, expectedID, deletedBoardID)
 	})
 
 	t.Run("retries on join code collision and returns error after max retries", func(t *testing.T) {
@@ -61,7 +162,7 @@ func TestBoardService_CreateBoard(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		result, err := service.CreateBoard(context.Background(), payload, userID)
 
@@ -82,7 +183,7 @@ func TestBoardService_CreateBoard(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		result, err := service.CreateBoard(context.Background(), payload, userID)
 
@@ -114,7 +215,7 @@ func TestBoardService_GetUserBoards(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		result, err := service.GetUserBoards(context.Background(), userID)
 
@@ -133,7 +234,7 @@ func TestBoardService_GetUserBoards(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		result, err := service.GetUserBoards(context.Background(), userID)
 
@@ -176,7 +277,7 @@ func TestBoardService_GetBoardByID(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		result, err := service.GetBoardByID(context.Background(), boardID, userID)
 
@@ -198,7 +299,7 @@ func TestBoardService_GetBoardByID(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		result, err := service.GetBoardByID(context.Background(), boardID, userID)
 
@@ -231,7 +332,7 @@ func TestBoardService_RegenerateJoinCode(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		result, err := service.RegenerateJoinCode(context.Background(), boardID)
 
@@ -251,7 +352,7 @@ func TestBoardService_RegenerateJoinCode(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		result, err := service.RegenerateJoinCode(context.Background(), boardID)
 
@@ -273,7 +374,7 @@ func TestBoardService_RegenerateJoinCode(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		result, err := service.RegenerateJoinCode(context.Background(), boardID)
 
@@ -306,7 +407,7 @@ func TestBoardService_UpdateBoard(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		err := service.UpdateBoard(context.Background(), boardID, domain.BoardMemberRoleAdmin, payload)
 
@@ -319,7 +420,7 @@ func TestBoardService_UpdateBoard(t *testing.T) {
 		boardID := gofakeit.Int64()
 		payload := dtos.UpdateBoardDto{Name: "Updated Board"}
 
-		service := newTestBoardService(nil)
+		service := newTestBoardService(nil, nil)
 
 		err := service.UpdateBoard(context.Background(), boardID, domain.BoardMemberRoleMember, payload)
 
@@ -339,7 +440,7 @@ func TestBoardService_UpdateBoard(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		err := service.UpdateBoard(context.Background(), boardID, domain.BoardMemberRoleAdmin, payload)
 
@@ -361,7 +462,7 @@ func TestBoardService_UpdateBoard(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		err := service.UpdateBoard(context.Background(), boardID, domain.BoardMemberRoleAdmin, payload)
 
@@ -381,7 +482,7 @@ func TestBoardService_UpdateBoard(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		err := service.UpdateBoard(context.Background(), boardID, domain.BoardMemberRoleAdmin, payload)
 
@@ -411,7 +512,7 @@ func TestBoardService_DeleteBoard(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		err := service.DeleteBoard(context.Background(), boardID, domain.BoardMemberRoleOwner)
 
@@ -429,7 +530,7 @@ func TestBoardService_DeleteBoard(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		err := service.DeleteBoard(context.Background(), boardID, domain.BoardMemberRoleOwner)
 
@@ -450,7 +551,7 @@ func TestBoardService_DeleteBoard(t *testing.T) {
 			},
 		}
 
-		service := newTestBoardService(br)
+		service := newTestBoardService(br, nil)
 
 		err := service.DeleteBoard(context.Background(), boardID, domain.BoardMemberRoleOwner)
 
@@ -465,7 +566,7 @@ func TestBoardService_DeleteBoard(t *testing.T) {
 func TestBoardService_generateJoinCode(t *testing.T) {
 	t.Parallel()
 
-	service := NewBoardService(nil).(*BoardService)
+	service := NewBoardService(nil, nil).(*BoardService)
 
 	t.Run("generates 8 character code", func(t *testing.T) {
 		t.Parallel()

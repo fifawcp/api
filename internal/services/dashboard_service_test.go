@@ -71,7 +71,7 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 			GetUserMatchStatsFunc: func(ctx context.Context, competitionID int64, userID string) (domain.CompetitionUserStats, error) {
 				return domain.CompetitionUserStats{Rank: 5, Points: 90}, nil
 			},
-			GetLeaderboardFunc: func(ctx context.Context, competitionID int64, page, limit int) (*domain.CompetitionLeaderboardPage, error) {
+			GetLeaderboardFunc: func(ctx context.Context, competitionID int64, page, limit int, q string) (*domain.CompetitionLeaderboardPage, error) {
 				assert.Equal(t, 1, page)
 				assert.Equal(t, 5, limit)
 				if competitionID == 11 {
@@ -164,7 +164,7 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 			GetUserMatchStatsFunc: func(ctx context.Context, competitionID int64, userID string) (domain.CompetitionUserStats, error) {
 				return domain.CompetitionUserStats{}, nil
 			},
-			GetLeaderboardFunc: func(ctx context.Context, competitionID int64, page, limit int) (*domain.CompetitionLeaderboardPage, error) {
+			GetLeaderboardFunc: func(ctx context.Context, competitionID int64, page, limit int, q string) (*domain.CompetitionLeaderboardPage, error) {
 				return &domain.CompetitionLeaderboardPage{Members: []*domain.CompetitionLeaderboardEntry{}}, nil
 			},
 		}
@@ -217,7 +217,7 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		}
 
 		competitionScoreRepo := &mocks.MockCompetitionScoreRepository{
-			GetLeaderboardFunc: func(ctx context.Context, competitionID int64, page, limit int) (*domain.CompetitionLeaderboardPage, error) {
+			GetLeaderboardFunc: func(ctx context.Context, competitionID int64, page, limit int, q string) (*domain.CompetitionLeaderboardPage, error) {
 				return &domain.CompetitionLeaderboardPage{
 					Members: []*domain.CompetitionLeaderboardEntry{
 						{Rank: 1, Member: domain.CompetitionLeaderboardMember{UserID: "u1", UserName: "alice"}, Score: &domain.PickemScore{Total: 100}},

@@ -38,8 +38,6 @@ var uefaTeams = []string{
 
 var competitionTemplates = func() []dtos.CreateCompetitionDto {
 	templates := []dtos.CreateCompetitionDto{
-		// Pure pickem (no scope per validator)
-		{Type: domain.CompetitionTypePickem, Name: "World Cup Pick'em"},
 		// Stage-only filters
 		{Type: domain.CompetitionTypeMatch, Name: "Knockout Stage", Scope: &dtos.CreateCompetitionScopeDto{Stages: bracketStages}},
 		{Type: domain.CompetitionTypeMatch, Name: "Group Stage Only", Scope: &dtos.CreateCompetitionScopeDto{Stages: groupStageOnly}},

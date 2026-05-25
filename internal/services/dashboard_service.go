@@ -62,11 +62,11 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 		return
 	})
 	eg.Go(func() (err error) {
-		pickemPage, err = s.competitionScoreRepo.GetLeaderboard(egCtx, s.globalPickemCompetition.ID, 1, 5)
+		pickemPage, err = s.competitionScoreRepo.GetLeaderboard(egCtx, s.globalPickemCompetition.ID, 1, 5, "")
 		return
 	})
 	eg.Go(func() (err error) {
-		matchPage, err = s.competitionScoreRepo.GetLeaderboard(egCtx, s.globalMatchCompetition.ID, 1, 5)
+		matchPage, err = s.competitionScoreRepo.GetLeaderboard(egCtx, s.globalMatchCompetition.ID, 1, 5, "")
 		return
 	})
 

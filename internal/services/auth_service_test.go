@@ -30,7 +30,8 @@ func newTestAuthService(
 	cfg := &config.Config{
 		Env: "testing",
 		JWT: config.JWTConfig{
-			Secret: "test-secret",
+			Secret:             "test-secret",
+			RefreshGraceWindow: 10 * time.Second,
 		},
 		Auth: config.AuthConfig{
 			OTPCooldown:    30 * time.Second,
@@ -1136,6 +1137,67 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		assert.NotNil(t, result)
 		assert.NotEmpty(t, result.AccessToken)
 		assert.NotEmpty(t, result.RefreshToken)
+	})
+
+	t.Run("succeeds for an already-rotated token within the grace window", func(t *testing.T) {
+		t.Parallel()
+
+		userID := gofakeit.UUID()
+		sessionID := gofakeit.UUID()
+		rotatedAt := time.Now().Add(-2 * time.Second) // within the 10s test grace window
+
+		rotated := false
+		rtr := &mocks.MockRefreshTokenRepository{
+			GetRefreshTokenByTokenHashFunc: func(ctx context.Context, hash string) (*domain.RefreshToken, error) {
+				return &domain.RefreshToken{UserID: userID, SessionID: sessionID, RotatedAt: &rotatedAt}, nil
+			},
+			RotateRefreshTokenFunc: func(ctx context.Context, oldHash string, newToken *domain.RefreshToken) error {
+				rotated = true
+				return nil
+			},
+		}
+
+		sr := &mocks.MockSessionRepository{
+			UpdateLastUsedAtFunc: func(ctx context.Context, id string) error { return nil },
+		}
+
+		authenticator := &mocks.MockAuthenticator{
+			GenerateTokenFunc: func(uid string, tokenType auth.TokenType) (*auth.TokenResult, error) {
+				return &auth.TokenResult{Token: "new_token_" + string(tokenType), ExpiresAt: time.Now().Add(time.Hour)}, nil
+			},
+		}
+
+		service := newTestAuthService(nil, sr, rtr, nil, &mocks.MockLogger{}, authenticator, nil)
+
+		result, err := service.RefreshToken(context.Background(), "token")
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.NotEmpty(t, result.AccessToken)
+		assert.NotEmpty(t, result.RefreshToken)
+		assert.True(t, rotated, "expected the in-grace token to be re-issued")
+	})
+
+	t.Run("rejects an already-rotated token past the grace window", func(t *testing.T) {
+		t.Parallel()
+
+		userID := gofakeit.UUID()
+		sessionID := gofakeit.UUID()
+		rotatedAt := time.Now().Add(-time.Hour) // well beyond the 10s test grace window
+
+		rtr := &mocks.MockRefreshTokenRepository{
+			GetRefreshTokenByTokenHashFunc: func(ctx context.Context, hash string) (*domain.RefreshToken, error) {
+				return &domain.RefreshToken{UserID: userID, SessionID: sessionID, RotatedAt: &rotatedAt}, nil
+			},
+		}
+
+		service := newTestAuthService(nil, nil, rtr, nil, &mocks.MockLogger{}, &mocks.MockAuthenticator{}, nil)
+
+		result, err := service.RefreshToken(context.Background(), "token")
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrRefreshTokenInvalidOrExpired)
+		assert.Nil(t, result)
 	})
 
 	t.Run("returns invalid or expired refresh token error when refresh token not found", func(t *testing.T) {
