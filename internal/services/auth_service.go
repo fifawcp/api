@@ -203,6 +203,14 @@ func (s *AuthService) RefreshToken(
 		return nil, err
 	}
 
+	// A token already superseded by rotation is honored only inside the grace
+	// window — this lets concurrent refreshes (e.g. the web middleware and client
+	// racing on the same cookie) both succeed instead of logging the user out.
+	// Reuse past the window is treated as invalid.
+	if refreshToken.RotatedAt != nil && time.Since(*refreshToken.RotatedAt) > s.cfg.JWT.RefreshGraceWindow {
+		return nil, domain.ErrRefreshTokenInvalidOrExpired
+	}
+
 	// Generate access token
 	accessTokenResult, err := s.authenticator.GenerateToken(refreshToken.UserID, auth.AccessTokenType)
 	if err != nil {

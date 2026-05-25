@@ -10,7 +10,7 @@ import (
 type CompetitionServiceInterface interface {
 	CreateCompetition(ctx context.Context, boardID int64, userID string, role domain.BoardMemberRole, payload dtos.CreateCompetitionDto) (*domain.CompetitionListItem, error)
 	GetBoardCompetitions(ctx context.Context, boardID int64, viewerUserID string) ([]*domain.CompetitionListItem, error)
-	GetLeaderboard(ctx context.Context, competitionID int64, page, limit int) (*domain.CompetitionLeaderboardPage, error)
+	GetLeaderboard(ctx context.Context, competitionID int64, page, limit int, q string) (*domain.CompetitionLeaderboardPage, error)
 	DeleteCompetition(ctx context.Context, boardID, competitionID int64, role domain.BoardMemberRole) error
 }
 
@@ -80,8 +80,9 @@ func (s *CompetitionService) GetLeaderboard(
 	ctx context.Context,
 	competitionID int64,
 	page, limit int,
+	q string,
 ) (*domain.CompetitionLeaderboardPage, error) {
-	return s.competitionScoreRepository.GetLeaderboard(ctx, competitionID, page, limit)
+	return s.competitionScoreRepository.GetLeaderboard(ctx, competitionID, page, limit, q)
 }
 
 func (s *CompetitionService) DeleteCompetition(

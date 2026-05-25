@@ -249,7 +249,7 @@ func (c *Container) initServices() {
 		c.otpStorage, c.Logger, c.Config, c.Authenticator, c.mailer,
 	)
 	c.UserService = services.NewUserService(c.userRepository, c.userStorage, c.Logger)
-	c.boardService = services.NewBoardService(c.boardRepository)
+	c.boardService = services.NewBoardService(c.boardRepository, c.competitionRepository)
 	c.BoardMemberService = services.NewBoardMemberService(
 		c.boardRepository, c.boardMemberRepository,
 	)
@@ -307,7 +307,7 @@ func (c *Container) initHandlers() {
 }
 
 func (c *Container) initJobs() {
-	if err := c.Scheduler.RegisterJob(c.Config.Cron.CleanupSessionsSchedule, jobs.NewCleanupSessionsJob(c.sessionRepository, c.Logger)); err != nil {
+	if err := c.Scheduler.RegisterJob(c.Config.Cron.CleanupSessionsSchedule, jobs.NewCleanupSessionsJob(c.sessionRepository, c.refreshTokenRepository, c.Config.JWT.RefreshGraceWindow, c.Logger)); err != nil {
 		c.Logger.Error(
 			"failed to register job",
 			"job", "cleanup:expired-sessions",

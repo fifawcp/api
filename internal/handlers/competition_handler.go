@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/fifawcp/api/internal/dtos"
 	"github.com/fifawcp/api/internal/httpctx"
@@ -100,12 +101,13 @@ func (h *CompetitionHandler) GetBoardCompetitions(w http.ResponseWriter, r *http
 // GetLeaderboard godoc
 //
 //	@Summary		Get competition leaderboard
-//	@Description	Returns a paginated leaderboard for a competition.
+//	@Description	Returns a paginated leaderboard for a competition. Optionally filters by member username, first name, or last name.
 //	@Tags			competitions
 //	@Produce		json
 //	@Param			competitionId	path		int					true	"Competition ID"
 //	@Param			page			query		int					false	"Page number (1-indexed, default 1)"
 //	@Param			limit			query		int					false	"Page size (default 20, max 100)"
+//	@Param			q				query		string				false	"Filter by username, first name, or last name (case-insensitive substring match)"
 //	@Success		200				{object}	httpx.Response		"Leaderboard page retrieved successfully"
 //	@Failure		400				{object}	httpx.ErrorResponse	"Invalid pagination params"
 //	@Failure		401				{object}	httpx.ErrorResponse	"Unauthorized"
@@ -117,7 +119,12 @@ func (h *CompetitionHandler) GetLeaderboard(w http.ResponseWriter, r *http.Reque
 	competitionID := httpctx.GetCompetitionID(r.Context())
 	page, limit := httpx.ParsePagination(w, r)
 
-	leaderboardPage, err := h.competitionService.GetLeaderboard(r.Context(), competitionID, page, limit)
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(q) > 64 {
+		q = q[:64]
+	}
+
+	leaderboardPage, err := h.competitionService.GetLeaderboard(r.Context(), competitionID, page, limit, q)
 	if err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return

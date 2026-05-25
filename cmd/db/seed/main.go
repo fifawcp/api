@@ -69,6 +69,7 @@ func main() {
 	competitionService := services.NewCompetitionService(
 		boardRepository, competitionRepository, competitionScoreRepository,
 	)
+	boardService := services.NewBoardService(boardRepository, competitionRepository)
 	matchService := services.NewMatchService(
 		matchRepository, groupStandingRepository,
 		groupStandingService, scoringService, competitionScoringService, logger,
@@ -80,7 +81,7 @@ func main() {
 	seeder := NewSeeder(
 		pgDB, logger,
 		userRepository, boardRepository, boardMemberRepository, pickemRepository,
-		matchRepository, matchService, pickemService, competitionService,
+		matchRepository, matchService, pickemService, boardService, competitionService,
 	)
 
 	flush := flag.Bool("flush", false, "")

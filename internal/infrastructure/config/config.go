@@ -74,6 +74,7 @@ type JWTConfig struct {
 	Issuer             string
 	AccessTokenExpiry  time.Duration
 	RefreshTokenExpiry time.Duration
+	RefreshGraceWindow time.Duration
 }
 
 type AuthConfig struct {
@@ -157,6 +158,7 @@ func NewConfig() *Config {
 			Issuer:             env.GetString("JWT_ISSUER", "fifa-wcp"),
 			AccessTokenExpiry:  env.GetDuration("JWT_ACCESS_TOKEN_EXPIRY", 15*time.Minute),
 			RefreshTokenExpiry: env.GetDuration("JWT_REFRESH_TOKEN_EXPIRY", 7*24*time.Hour),
+			RefreshGraceWindow: env.GetDuration("JWT_REFRESH_GRACE_WINDOW", 10*time.Second),
 		},
 		Auth: AuthConfig{
 			SessionTTL:     env.GetDuration("AUTH_SESSION_TTL", 7*24*time.Hour),
@@ -207,7 +209,7 @@ func NewConfig() *Config {
 			RoundOf16:          env.GetInt("SCORING_ROUND_OF_16", 6),
 			Quarterfinals:      env.GetInt("SCORING_QUARTERFINALS", 8),
 			Semifinals:         env.GetInt("SCORING_SEMIFINALS", 12),
-			ThirdPlace:         env.GetInt("SCORING_THIRD_PLACE", 6),
+			ThirdPlace:         env.GetInt("SCORING_THIRD_PLACE", 16),
 			Final:              env.GetInt("SCORING_FINAL", 20),
 			MatchScoreExact:    env.GetInt("SCORING_MATCH_SCORE_EXACT", 5),
 			MatchScoreOutcome:  env.GetInt("SCORING_MATCH_SCORE_OUTCOME", 2),

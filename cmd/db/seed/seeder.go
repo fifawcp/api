@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"math/big"
 	mathrand "math/rand"
 	"sort"
 	"strconv"
@@ -29,6 +27,7 @@ type Seeder struct {
 	matchRepository       domain.MatchRepository
 	matchService          services.MatchServiceInterface
 	pickemService         services.PickemServiceInterface
+	boardService          services.BoardServiceInterface
 	competitionService    services.CompetitionServiceInterface
 	boardOwners           map[int64]string
 }
@@ -43,6 +42,7 @@ func NewSeeder(
 	matchRepository domain.MatchRepository,
 	matchService services.MatchServiceInterface,
 	pickemService services.PickemServiceInterface,
+	boardService services.BoardServiceInterface,
 	competitionService services.CompetitionServiceInterface,
 ) *Seeder {
 	return &Seeder{
@@ -55,6 +55,7 @@ func NewSeeder(
 		matchRepository:       matchRepository,
 		matchService:          matchService,
 		pickemService:         pickemService,
+		boardService:          boardService,
 		competitionService:    competitionService,
 		boardOwners:           map[int64]string{},
 	}
@@ -114,7 +115,6 @@ func (s *Seeder) generateUsers(amount int) []*domain.User {
 func (s *Seeder) seedBoards(ctx context.Context, users []*domain.User) {
 	for i := range boardsAmount {
 		owner := users[i]
-		joinCode := generateJoinCode()
 		ownerID := owner.ID
 
 		name := boardNames[mathrand.Intn(len(boardNames))]
@@ -122,12 +122,8 @@ func (s *Seeder) seedBoards(ctx context.Context, users []*domain.User) {
 			name = name[:boardNameMaxLength]
 		}
 
-		board := &domain.Board{
-			Name:     name,
-			JoinCode: &joinCode,
-		}
-
-		if err := s.boardRepository.CreateBoard(ctx, board, ownerID); err != nil {
+		board, err := s.boardService.CreateBoard(ctx, dtos.CreateBoardDto{Name: name}, ownerID)
+		if err != nil {
 			s.logger.Error(
 				"Error seeding board",
 				logging.Error, err.Error(),
@@ -153,7 +149,7 @@ func (s *Seeder) seedBoards(ctx context.Context, users []*domain.User) {
 
 		// Insert the members into the board
 		for j := 0; j < memberCount && j < len(candidates); j++ {
-			if _, err := s.boardMemberRepository.CreateBoardMember(ctx, joinCode, candidates[j].ID); err != nil {
+			if _, err := s.boardMemberRepository.CreateBoardMember(ctx, *board.JoinCode, candidates[j].ID); err != nil {
 				s.logger.Error(
 					"Error seeding board member",
 					logging.Error, err.Error(),
@@ -161,21 +157,6 @@ func (s *Seeder) seedBoards(ctx context.Context, users []*domain.User) {
 			}
 		}
 	}
-}
-
-func generateJoinCode() string {
-	const (
-		charset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		length  = 8
-	)
-
-	result := make([]byte, length)
-	for i := range result {
-		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		result[i] = charset[num.Int64()]
-	}
-
-	return string(result)
 }
 
 func (s *Seeder) seedPickemData(ctx context.Context, users []*domain.User) {

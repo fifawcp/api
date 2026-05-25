@@ -20,15 +20,28 @@ type BoardServiceInterface interface {
 }
 
 type BoardService struct {
-	boardRepository domain.BoardRepository
+	boardRepository       domain.BoardRepository
+	competitionRepository domain.CompetitionRepository
 }
 
 func NewBoardService(
 	boardRepository domain.BoardRepository,
+	competitionRepository domain.CompetitionRepository,
 ) BoardServiceInterface {
 	return &BoardService{
-		boardRepository: boardRepository,
+		boardRepository:       boardRepository,
+		competitionRepository: competitionRepository,
 	}
+}
+
+var allMatchStages = []domain.MatchStageCode{
+	domain.MatchStageCodeGroupStage,
+	domain.MatchStageCodeRoundOf32,
+	domain.MatchStageCodeRoundOf16,
+	domain.MatchStageCodeQuarterFinals,
+	domain.MatchStageCodeSemiFinals,
+	domain.MatchStageCodeThirdPlace,
+	domain.MatchStageCodeFinal,
 }
 
 func (s *BoardService) CreateBoard(
@@ -56,6 +69,27 @@ func (s *BoardService) CreateBoard(
 			default:
 				return nil, err
 			}
+		}
+
+		if err := s.competitionRepository.CreateCompetition(ctx, &domain.Competition{
+			BoardID:   board.ID,
+			Type:      domain.CompetitionTypePickem,
+			Name:      "Pick'em",
+			CreatedBy: &userID,
+		}); err != nil {
+			_ = s.boardRepository.DeleteBoard(ctx, board.ID)
+			return nil, err
+		}
+
+		if err := s.competitionRepository.CreateCompetition(ctx, &domain.Competition{
+			BoardID:   board.ID,
+			Type:      domain.CompetitionTypeMatch,
+			Name:      "All Matches",
+			CreatedBy: &userID,
+			Scope:     &domain.CompetitionScope{Stages: allMatchStages},
+		}); err != nil {
+			_ = s.boardRepository.DeleteBoard(ctx, board.ID)
+			return nil, err
 		}
 
 		return board, nil

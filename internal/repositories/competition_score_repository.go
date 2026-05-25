@@ -199,6 +199,7 @@ func (r *CompetitionScoreRepository) GetLeaderboard(
 	ctx context.Context,
 	competitionID int64,
 	page, limit int,
+	q string,
 ) (*domain.CompetitionLeaderboardPage, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
@@ -213,9 +214,9 @@ func (r *CompetitionScoreRepository) GetLeaderboard(
 
 	switch competitionType {
 	case domain.CompetitionTypePickem:
-		return r.getPickemLeaderboard(ctx, competitionID, page, limit)
+		return r.getPickemLeaderboard(ctx, competitionID, page, limit, q)
 	case domain.CompetitionTypeMatch:
-		return r.getMatchLeaderboard(ctx, competitionID, page, limit)
+		return r.getMatchLeaderboard(ctx, competitionID, page, limit, q)
 	default:
 		return nil, domain.ErrCompetitionNotFound
 	}
@@ -225,6 +226,7 @@ func (r *CompetitionScoreRepository) getPickemLeaderboard(
 	ctx context.Context,
 	competitionID int64,
 	page, limit int,
+	q string,
 ) (*domain.CompetitionLeaderboardPage, error) {
 	offset := (page - 1) * limit
 
@@ -251,25 +253,32 @@ func (r *CompetitionScoreRepository) getPickemLeaderboard(
 						cps.group_qualifier_hits  DESC,
 						bm.created_at ASC,
 						cps.user_id ASC
-				) AS rank,
-				COUNT(*) OVER () AS total
+				) AS rank
 			FROM competition_pickem_scores cps
 			INNER JOIN competitions comp ON comp.id = cps.competition_id
 			INNER JOIN users u           ON u.id = cps.user_id
 			INNER JOIN board_members bm  ON bm.board_id = comp.board_id AND bm.user_id = cps.user_id
 			WHERE cps.competition_id = $1
+		),
+		filtered AS (
+			SELECT *, COUNT(*) OVER () AS total
+			FROM ranked
+			WHERE $4::text = ''
+			   OR username   ILIKE '%' || $4 || '%'
+			   OR first_name ILIKE '%' || $4 || '%'
+			   OR last_name  ILIKE '%' || $4 || '%'
 		)
 		SELECT
 			user_id, username, first_name, last_name, role, joined_at,
 			rank, total_points,
 			group_exact_positions, group_qualifier_hits, best_third_hits, bracket_hits,
 			total
-		FROM ranked
+		FROM filtered
 		ORDER BY rank ASC, joined_at ASC, user_id ASC
 		OFFSET $2 LIMIT $3
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, competitionID, offset, limit)
+	rows, err := r.db.QueryContext(ctx, query, competitionID, offset, limit, q)
 	if err != nil {
 		return nil, handleDBError(err, resourceCompetitionScore)
 	}
@@ -314,8 +323,15 @@ func (r *CompetitionScoreRepository) getPickemLeaderboard(
 
 	if len(leaderboard.Members) == 0 {
 		if err := r.db.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM competition_pickem_scores WHERE competition_id = $1`,
-			competitionID,
+			`SELECT COUNT(*)
+			 FROM competition_pickem_scores cps
+			 INNER JOIN users u ON u.id = cps.user_id
+			 WHERE cps.competition_id = $1
+			   AND ($2::text = ''
+			        OR u.username   ILIKE '%' || $2 || '%'
+			        OR u.first_name ILIKE '%' || $2 || '%'
+			        OR u.last_name  ILIKE '%' || $2 || '%')`,
+			competitionID, q,
 		).Scan(&leaderboard.Pagination.Total); err != nil && err != sql.ErrNoRows {
 			return nil, handleDBError(err, resourceCompetitionScore)
 		}
@@ -417,6 +433,7 @@ func (r *CompetitionScoreRepository) getMatchLeaderboard(
 	ctx context.Context,
 	competitionID int64,
 	page, limit int,
+	q string,
 ) (*domain.CompetitionLeaderboardPage, error) {
 	offset := (page - 1) * limit
 
@@ -439,25 +456,32 @@ func (r *CompetitionScoreRepository) getMatchLeaderboard(
 						cms.correct_outcomes DESC,
 						bm.created_at ASC,
 						cms.user_id ASC
-				) AS rank,
-				COUNT(*) OVER () AS total
+				) AS rank
 			FROM competition_match_scores cms
 			INNER JOIN competitions comp ON comp.id = cms.competition_id
 			INNER JOIN users u           ON u.id = cms.user_id
 			INNER JOIN board_members bm  ON bm.board_id = comp.board_id AND bm.user_id = cms.user_id
 			WHERE cms.competition_id = $1
+		),
+		filtered AS (
+			SELECT *, COUNT(*) OVER () AS total
+			FROM ranked
+			WHERE $4::text = ''
+			   OR username   ILIKE '%' || $4 || '%'
+			   OR first_name ILIKE '%' || $4 || '%'
+			   OR last_name  ILIKE '%' || $4 || '%'
 		)
 		SELECT
 			user_id, username, first_name, last_name, role, joined_at,
 			rank, total_points,
 			exact_hits, correct_outcomes,
 			total
-		FROM ranked
+		FROM filtered
 		ORDER BY rank ASC, joined_at ASC, user_id ASC
 		OFFSET $2 LIMIT $3
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, competitionID, offset, limit)
+	rows, err := r.db.QueryContext(ctx, query, competitionID, offset, limit, q)
 	if err != nil {
 		return nil, handleDBError(err, resourceCompetitionScore)
 	}
@@ -500,8 +524,15 @@ func (r *CompetitionScoreRepository) getMatchLeaderboard(
 
 	if len(leaderboard.Members) == 0 {
 		if err := r.db.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM competition_match_scores WHERE competition_id = $1`,
-			competitionID,
+			`SELECT COUNT(*)
+			 FROM competition_match_scores cms
+			 INNER JOIN users u ON u.id = cms.user_id
+			 WHERE cms.competition_id = $1
+			   AND ($2::text = ''
+			        OR u.username   ILIKE '%' || $2 || '%'
+			        OR u.first_name ILIKE '%' || $2 || '%'
+			        OR u.last_name  ILIKE '%' || $2 || '%')`,
+			competitionID, q,
 		).Scan(&leaderboard.Pagination.Total); err != nil && err != sql.ErrNoRows {
 			return nil, handleDBError(err, resourceCompetitionScore)
 		}
