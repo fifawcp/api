@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/infrastructure/config"
@@ -386,6 +387,43 @@ func (r *CompetitionRepository) DeleteCompetition(
 	}
 
 	return nil
+}
+
+func (r *CompetitionRepository) GetCompetitionByID(
+	ctx context.Context,
+	boardID, competitionID int64,
+) (*domain.Competition, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	competition := &domain.Competition{}
+	var createdBy sql.NullString
+
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, board_id, type, name, created_by, created_at
+		 FROM competitions
+		 WHERE id = $1 AND board_id = $2`,
+		competitionID, boardID,
+	).Scan(
+		&competition.ID,
+		&competition.BoardID,
+		&competition.Type,
+		&competition.Name,
+		&createdBy,
+		&competition.CreatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, domain.ErrCompetitionNotFound
+	}
+	if err != nil {
+		return nil, handleDBError(err, resourceCompetition)
+	}
+
+	if createdBy.Valid {
+		competition.CreatedBy = &createdBy.String
+	}
+
+	return competition, nil
 }
 
 func (r *CompetitionRepository) GetAllPickemIDs(ctx context.Context) ([]int64, error) {

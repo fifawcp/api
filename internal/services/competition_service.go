@@ -98,5 +98,15 @@ func (s *CompetitionService) DeleteCompetition(
 		return err
 	}
 
+	competition, err := s.competitionRepository.GetCompetitionByID(ctx, boardID, competitionID)
+	if err != nil {
+		return err
+	}
+
+	// The tournament pick'em is the board's anchor competition and must never be removed.
+	if competition.Type == domain.CompetitionTypePickem {
+		return domain.ErrCompetitionPickemNotDeletable
+	}
+
 	return s.competitionRepository.DeleteCompetition(ctx, boardID, competitionID)
 }

@@ -30,6 +30,7 @@ const (
 	codeMaxBoardMembersExceeded        = "MAX_BOARD_MEMBERS_EXCEEDED"
 	codeCompetitionPickemAlreadyExists = "COMPETITION_PICKEM_ALREADY_EXISTS"
 	codeCompetitionNameAlreadyExists   = "COMPETITION_NAME_ALREADY_EXISTS"
+	codeCompetitionPickemNotDeletable  = "COMPETITION_PICKEM_NOT_DELETABLE"
 
 	// 401 Unauthorized
 	codeOTPInvalidOrExpired          = "OTP_INVALID_OR_EXPIRED"
@@ -43,10 +44,11 @@ const (
 	codeOTPCooldown        = "OTP_COOLDOWN"
 
 	// 403 Forbidden
-	codeForbidden               = "FORBIDDEN"
-	codeOAuthAccountNotVerified = "OAUTH_ACCOUNT_NOT_VERIFIED"
-	codeBoardIsGlobal           = "BOARD_IS_GLOBAL"
-	codeCompetitionForbidden    = "COMPETITION_FORBIDDEN"
+	codeForbidden                 = "FORBIDDEN"
+	codeOAuthAccountNotVerified   = "OAUTH_ACCOUNT_NOT_VERIFIED"
+	codeBoardIsGlobal             = "BOARD_IS_GLOBAL"
+	codeCompetitionForbidden      = "COMPETITION_FORBIDDEN"
+	codeBoardManageAdminForbidden = "BOARD_MANAGE_ADMIN_FORBIDDEN"
 
 	// 400 Bad Request
 	codeInvalidWinnerTeam          = "INVALID_WINNER_TEAM"
@@ -116,6 +118,8 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 	// 409 Conflict
 	case errors.Is(err, domain.ErrCompetitionPickemAlreadyExists):
 		httpx.Conflict(w, r, codeCompetitionPickemAlreadyExists, domain.ErrCompetitionPickemAlreadyExists.Error())
+	case errors.Is(err, domain.ErrCompetitionPickemNotDeletable):
+		httpx.Conflict(w, r, codeCompetitionPickemNotDeletable, domain.ErrCompetitionPickemNotDeletable.Error())
 	case errors.Is(err, domain.ErrUserAlreadyExists):
 		httpx.Conflict(w, r, codeUserAlreadyExists, domain.ErrUserAlreadyExists.Error())
 	case errors.Is(err, domain.ErrUsernameAlreadyExists):
@@ -156,6 +160,8 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.Forbidden(w, r, codeBoardIsGlobal, domain.ErrBoardIsGlobal.Error())
 	case errors.Is(err, domain.ErrCompetitionForbidden):
 		httpx.Forbidden(w, r, codeCompetitionForbidden, domain.ErrCompetitionForbidden.Error())
+	case errors.Is(err, domain.ErrBoardManageAdminForbidden):
+		httpx.Forbidden(w, r, codeBoardManageAdminForbidden, domain.ErrBoardManageAdminForbidden.Error())
 
 	// 400 Bad Request
 	case errors.Is(err, domain.ErrInvalidWinnerTeam):

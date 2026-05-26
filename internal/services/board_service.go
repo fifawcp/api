@@ -14,7 +14,7 @@ type BoardServiceInterface interface {
 	CreateBoard(ctx context.Context, payload dtos.CreateBoardDto, userID string) (*domain.Board, error)
 	GetUserBoards(ctx context.Context, userID string) ([]*domain.UserBoardListItem, error)
 	GetBoardByID(ctx context.Context, boardID int64, userID string) (*domain.BoardDetails, error)
-	RegenerateJoinCode(ctx context.Context, boardID int64) (string, error)
+	RegenerateJoinCode(ctx context.Context, boardID int64, role domain.BoardMemberRole) (string, error)
 	UpdateBoard(ctx context.Context, boardID int64, role domain.BoardMemberRole, payload dtos.UpdateBoardDto) error
 	DeleteBoard(ctx context.Context, boardID int64, role domain.BoardMemberRole) error
 }
@@ -111,7 +111,11 @@ func (s *BoardService) GetBoardByID(
 	return s.boardRepository.GetBoardDetails(ctx, boardID, userID)
 }
 
-func (s *BoardService) RegenerateJoinCode(ctx context.Context, boardID int64) (string, error) {
+func (s *BoardService) RegenerateJoinCode(ctx context.Context, boardID int64, role domain.BoardMemberRole) (string, error) {
+	if !role.CanManage() {
+		return "", domain.ErrForbidden
+	}
+
 	if err := assertNotGlobalBoard(ctx, s.boardRepository, boardID); err != nil {
 		return "", err
 	}

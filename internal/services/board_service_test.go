@@ -334,7 +334,7 @@ func TestBoardService_RegenerateJoinCode(t *testing.T) {
 
 		service := newTestBoardService(br, nil)
 
-		result, err := service.RegenerateJoinCode(context.Background(), boardID)
+		result, err := service.RegenerateJoinCode(context.Background(), boardID, domain.BoardMemberRoleAdmin)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, result)
@@ -354,7 +354,7 @@ func TestBoardService_RegenerateJoinCode(t *testing.T) {
 
 		service := newTestBoardService(br, nil)
 
-		result, err := service.RegenerateJoinCode(context.Background(), boardID)
+		result, err := service.RegenerateJoinCode(context.Background(), boardID, domain.BoardMemberRoleAdmin)
 
 		assert.ErrorIs(t, err, domain.ErrBoardIsGlobal)
 		assert.Empty(t, result)
@@ -376,10 +376,24 @@ func TestBoardService_RegenerateJoinCode(t *testing.T) {
 
 		service := newTestBoardService(br, nil)
 
-		result, err := service.RegenerateJoinCode(context.Background(), boardID)
+		result, err := service.RegenerateJoinCode(context.Background(), boardID, domain.BoardMemberRoleAdmin)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "database error")
+		assert.Empty(t, result)
+	})
+
+	t.Run("rejects member without manage permission", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.Int64()
+
+		// Empty repository: a role short-circuit must happen before any repo call.
+		service := newTestBoardService(&mocks.MockBoardRepository{}, nil)
+
+		result, err := service.RegenerateJoinCode(context.Background(), boardID, domain.BoardMemberRoleMember)
+
+		assert.ErrorIs(t, err, domain.ErrForbidden)
 		assert.Empty(t, result)
 	})
 }
