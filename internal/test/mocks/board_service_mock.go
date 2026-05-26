@@ -11,7 +11,7 @@ type MockBoardService struct {
 	CreateBoardFunc        func(ctx context.Context, payload dtos.CreateBoardDto, userID string) (*domain.Board, error)
 	GetUserBoardsFunc      func(ctx context.Context, userID string) ([]*domain.UserBoardListItem, error)
 	GetBoardByIDFunc       func(ctx context.Context, boardID int64, userID string) (*domain.BoardDetails, error)
-	RegenerateJoinCodeFunc func(ctx context.Context, boardID int64) (string, error)
+	RegenerateJoinCodeFunc func(ctx context.Context, boardID int64, role domain.BoardMemberRole) (string, error)
 	UpdateBoardFunc        func(ctx context.Context, boardID int64, role domain.BoardMemberRole, payload dtos.UpdateBoardDto) error
 	DeleteBoardFunc        func(ctx context.Context, boardID int64, role domain.BoardMemberRole) error
 }
@@ -37,9 +37,9 @@ func (m *MockBoardService) GetBoardByID(ctx context.Context, boardID int64, user
 	panic("GetBoardByID called unexpectedly")
 }
 
-func (m *MockBoardService) RegenerateJoinCode(ctx context.Context, boardID int64) (string, error) {
+func (m *MockBoardService) RegenerateJoinCode(ctx context.Context, boardID int64, role domain.BoardMemberRole) (string, error) {
 	if m.RegenerateJoinCodeFunc != nil {
-		return m.RegenerateJoinCodeFunc(ctx, boardID)
+		return m.RegenerateJoinCodeFunc(ctx, boardID, role)
 	}
 	panic("RegenerateJoinCode called unexpectedly")
 }

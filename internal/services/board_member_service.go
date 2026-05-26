@@ -76,6 +76,10 @@ func (s *BoardMemberService) UpdateBoardMemberRole(
 		return err
 	}
 
+	if err := s.assertCanManageTarget(ctx, boardID, userID, role); err != nil {
+		return err
+	}
+
 	return s.boardMemberRepository.UpdateBoardMemberRole(ctx, boardID, userID, payload.Role)
 }
 
@@ -93,7 +97,31 @@ func (s *BoardMemberService) RemoveBoardMember(
 		return err
 	}
 
+	if err := s.assertCanManageTarget(ctx, boardID, userID, role); err != nil {
+		return err
+	}
+
 	return s.boardMemberRepository.RemoveBoardMember(ctx, boardID, userID)
+}
+
+// assertCanManageTarget enforces that only an owner may act on an admin. Admins can manage
+// members only — they cannot change another admin's role or remove them.
+func (s *BoardMemberService) assertCanManageTarget(
+	ctx context.Context,
+	boardID int64,
+	targetUserID string,
+	callerRole domain.BoardMemberRole,
+) error {
+	target, err := s.boardMemberRepository.GetBoardMember(ctx, boardID, targetUserID)
+	if err != nil {
+		return err
+	}
+
+	if target.Role == domain.BoardMemberRoleAdmin && callerRole != domain.BoardMemberRoleOwner {
+		return domain.ErrBoardManageAdminForbidden
+	}
+
+	return nil
 }
 
 func (s *BoardMemberService) LeaveBoard(

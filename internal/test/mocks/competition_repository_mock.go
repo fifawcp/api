@@ -9,6 +9,7 @@ import (
 type MockCompetitionRepository struct {
 	CreateCompetitionFunc              func(ctx context.Context, competition *domain.Competition) error
 	GetBoardCompetitionsFunc           func(ctx context.Context, boardID int64, viewerUserID string) ([]*domain.CompetitionListItem, error)
+	GetCompetitionByIDFunc             func(ctx context.Context, boardID, competitionID int64) (*domain.Competition, error)
 	DeleteCompetitionFunc              func(ctx context.Context, boardID, competitionID int64) error
 	GetAllPickemIDsFunc                func(ctx context.Context) ([]int64, error)
 	FindMatchCompetitionsByMatchesFunc func(ctx context.Context, matchIDs []int64) ([]int64, error)
@@ -27,6 +28,13 @@ func (m *MockCompetitionRepository) GetBoardCompetitions(ctx context.Context, bo
 		return m.GetBoardCompetitionsFunc(ctx, boardID, viewerUserID)
 	}
 	panic("GetBoardCompetitions called unexpectedly")
+}
+
+func (m *MockCompetitionRepository) GetCompetitionByID(ctx context.Context, boardID, competitionID int64) (*domain.Competition, error) {
+	if m.GetCompetitionByIDFunc != nil {
+		return m.GetCompetitionByIDFunc(ctx, boardID, competitionID)
+	}
+	panic("GetCompetitionByID called unexpectedly")
 }
 
 func (m *MockCompetitionRepository) DeleteCompetition(ctx context.Context, boardID, competitionID int64) error {

@@ -244,8 +244,9 @@ func (h *BoardHandler) LeaveBoard(w http.ResponseWriter, r *http.Request) {
 //	@Router			/boards/{boardId}/regenerate-join-code [post]
 func (h *BoardHandler) RegenerateJoinCode(w http.ResponseWriter, r *http.Request) {
 	boardID := httpctx.GetBoardID(r.Context())
+	boardMemberRole := httpctx.GetBoardMemberRole(r.Context())
 
-	joinCode, err := h.boardService.RegenerateJoinCode(r.Context(), boardID)
+	joinCode, err := h.boardService.RegenerateJoinCode(r.Context(), boardID, boardMemberRole)
 	if err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return

@@ -75,6 +75,7 @@ type CompetitionLeaderboardPage struct {
 type CompetitionRepository interface {
 	CreateCompetition(ctx context.Context, competition *Competition) error
 	GetBoardCompetitions(ctx context.Context, boardID int64, viewerUserID string) ([]*CompetitionListItem, error)
+	GetCompetitionByID(ctx context.Context, boardID, competitionID int64) (*Competition, error)
 	DeleteCompetition(ctx context.Context, boardID, competitionID int64) error
 	GetAllPickemIDs(ctx context.Context) ([]int64, error)
 	FindMatchCompetitionsByMatches(ctx context.Context, matchIDs []int64) ([]int64, error)

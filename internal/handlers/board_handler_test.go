@@ -598,6 +598,7 @@ func TestBoardHandler_RegenerateJoinCode(t *testing.T) {
 		req := testutils.MakeJSONRequest(
 			t, http.MethodPost, "/boards/"+strconv.FormatInt(boardID, 10)+"/regenerate-join-code", nil,
 			testutils.WithBoardID(boardID),
+			testutils.WithBoardMemberRole(domain.BoardMemberRoleAdmin),
 		)
 
 		return req
@@ -609,7 +610,7 @@ func TestBoardHandler_RegenerateJoinCode(t *testing.T) {
 		newJoinCode := "NEWCODE1"
 
 		bs := &mocks.MockBoardService{
-			RegenerateJoinCodeFunc: func(ctx context.Context, boardID int64) (string, error) {
+			RegenerateJoinCodeFunc: func(ctx context.Context, boardID int64, role domain.BoardMemberRole) (string, error) {
 				return newJoinCode, nil
 			},
 		}
@@ -635,7 +636,7 @@ func TestBoardHandler_RegenerateJoinCode(t *testing.T) {
 		t.Parallel()
 
 		bs := &mocks.MockBoardService{
-			RegenerateJoinCodeFunc: func(ctx context.Context, boardID int64) (string, error) {
+			RegenerateJoinCodeFunc: func(ctx context.Context, boardID int64, role domain.BoardMemberRole) (string, error) {
 				return "", errors.New("db error")
 			},
 		}

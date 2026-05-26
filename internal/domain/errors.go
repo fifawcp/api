@@ -55,6 +55,7 @@ var ErrBoardIsGlobal = errors.New("operation not allowed on global board")
 var ErrBoardMemberNotFound = errors.New("board member not found")
 var ErrBoardMemberAlreadyInBoard = errors.New("user is already a member of this board")
 var ErrCannotTransferOwnershipToSelf = errors.New("cannot transfer ownership to yourself")
+var ErrBoardManageAdminForbidden = errors.New("only the board owner can manage admins")
 
 // Group Standings
 var ErrInvalidGroupCode = errors.New("invalid group code")
@@ -108,6 +109,7 @@ var ErrCompetitionNotFound = errors.New("competition not found")
 var ErrCompetitionForbidden = errors.New("only board owner or admins can manage competitions")
 var ErrCompetitionPickemAlreadyExists = errors.New("a tournament pick'em competition already exists on this board")
 var ErrCompetitionNameAlreadyExists = errors.New("a competition with this name already exists on this board")
+var ErrCompetitionPickemNotDeletable = errors.New("the tournament pick'em competition cannot be deleted")
 
 // Pickem
 var ErrPickemLocked = errors.New("pickem is locked: tournament has started")

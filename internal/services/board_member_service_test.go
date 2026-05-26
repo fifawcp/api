@@ -240,6 +240,9 @@ func TestBoardMemberService_UpdateBoardMemberRole(t *testing.T) {
 			},
 		}
 		bmr := &mocks.MockBoardMemberRepository{
+			GetBoardMemberFunc: func(ctx context.Context, bid int64, uid string) (*domain.BoardMember, error) {
+				return &domain.BoardMember{Role: domain.BoardMemberRoleMember}, nil
+			},
 			UpdateBoardMemberRoleFunc: func(ctx context.Context, bid int64, uid string, role domain.BoardMemberRole) error {
 				assert.Equal(t, boardID, bid)
 				assert.Equal(t, userID, uid)
@@ -303,6 +306,9 @@ func TestBoardMemberService_UpdateBoardMemberRole(t *testing.T) {
 			},
 		}
 		bmr := &mocks.MockBoardMemberRepository{
+			GetBoardMemberFunc: func(ctx context.Context, bid int64, uid string) (*domain.BoardMember, error) {
+				return &domain.BoardMember{Role: domain.BoardMemberRoleMember}, nil
+			},
 			UpdateBoardMemberRoleFunc: func(ctx context.Context, bid int64, uid string, role domain.BoardMemberRole) error {
 				return errors.New("database error")
 			},
@@ -314,6 +320,60 @@ func TestBoardMemberService_UpdateBoardMemberRole(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "database error")
+	})
+
+	t.Run("forbids an admin from changing another admin's role", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.Int64()
+		userID := gofakeit.UUID()
+		payload := dtos.UpdateBoardMemberRoleDto{Role: domain.BoardMemberRoleMember}
+
+		br := &mocks.MockBoardRepository{
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
+				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPrivate}, nil
+			},
+		}
+		bmr := &mocks.MockBoardMemberRepository{
+			GetBoardMemberFunc: func(ctx context.Context, bid int64, uid string) (*domain.BoardMember, error) {
+				return &domain.BoardMember{Role: domain.BoardMemberRoleAdmin}, nil
+			},
+			// UpdateBoardMemberRoleFunc intentionally unset — it must not be called.
+		}
+
+		service := newTestBoardMemberService(br, bmr)
+
+		err := service.UpdateBoardMemberRole(context.Background(), boardID, userID, domain.BoardMemberRoleAdmin, payload)
+
+		assert.ErrorIs(t, err, domain.ErrBoardManageAdminForbidden)
+	})
+
+	t.Run("allows an owner to change an admin's role", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.Int64()
+		userID := gofakeit.UUID()
+		payload := dtos.UpdateBoardMemberRoleDto{Role: domain.BoardMemberRoleMember}
+
+		br := &mocks.MockBoardRepository{
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
+				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPrivate}, nil
+			},
+		}
+		bmr := &mocks.MockBoardMemberRepository{
+			GetBoardMemberFunc: func(ctx context.Context, bid int64, uid string) (*domain.BoardMember, error) {
+				return &domain.BoardMember{Role: domain.BoardMemberRoleAdmin}, nil
+			},
+			UpdateBoardMemberRoleFunc: func(ctx context.Context, bid int64, uid string, role domain.BoardMemberRole) error {
+				return nil
+			},
+		}
+
+		service := newTestBoardMemberService(br, bmr)
+
+		err := service.UpdateBoardMemberRole(context.Background(), boardID, userID, domain.BoardMemberRoleOwner, payload)
+
+		assert.NoError(t, err)
 	})
 }
 
@@ -335,6 +395,9 @@ func TestBoardMemberService_RemoveBoardMember(t *testing.T) {
 			},
 		}
 		bmr := &mocks.MockBoardMemberRepository{
+			GetBoardMemberFunc: func(ctx context.Context, bid int64, uid string) (*domain.BoardMember, error) {
+				return &domain.BoardMember{Role: domain.BoardMemberRoleMember}, nil
+			},
 			RemoveBoardMemberFunc: func(ctx context.Context, bid int64, uid string) error {
 				assert.Equal(t, boardID, bid)
 				assert.Equal(t, userID, uid)
@@ -394,6 +457,9 @@ func TestBoardMemberService_RemoveBoardMember(t *testing.T) {
 			},
 		}
 		bmr := &mocks.MockBoardMemberRepository{
+			GetBoardMemberFunc: func(ctx context.Context, bid int64, uid string) (*domain.BoardMember, error) {
+				return &domain.BoardMember{Role: domain.BoardMemberRoleMember}, nil
+			},
 			RemoveBoardMemberFunc: func(ctx context.Context, bid int64, uid string) error {
 				return errors.New("database error")
 			},
@@ -405,6 +471,58 @@ func TestBoardMemberService_RemoveBoardMember(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "database error")
+	})
+
+	t.Run("forbids an admin from removing another admin", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.Int64()
+		userID := gofakeit.UUID()
+
+		br := &mocks.MockBoardRepository{
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
+				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPrivate}, nil
+			},
+		}
+		bmr := &mocks.MockBoardMemberRepository{
+			GetBoardMemberFunc: func(ctx context.Context, bid int64, uid string) (*domain.BoardMember, error) {
+				return &domain.BoardMember{Role: domain.BoardMemberRoleAdmin}, nil
+			},
+			// RemoveBoardMemberFunc intentionally unset — it must not be called.
+		}
+
+		service := newTestBoardMemberService(br, bmr)
+
+		err := service.RemoveBoardMember(context.Background(), boardID, userID, domain.BoardMemberRoleAdmin)
+
+		assert.ErrorIs(t, err, domain.ErrBoardManageAdminForbidden)
+	})
+
+	t.Run("allows an owner to remove an admin", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.Int64()
+		userID := gofakeit.UUID()
+
+		br := &mocks.MockBoardRepository{
+			GetBoardByIDFunc: func(ctx context.Context, bid int64) (*domain.Board, error) {
+				return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPrivate}, nil
+			},
+		}
+		bmr := &mocks.MockBoardMemberRepository{
+			GetBoardMemberFunc: func(ctx context.Context, bid int64, uid string) (*domain.BoardMember, error) {
+				return &domain.BoardMember{Role: domain.BoardMemberRoleAdmin}, nil
+			},
+			RemoveBoardMemberFunc: func(ctx context.Context, bid int64, uid string) error {
+				return nil
+			},
+		}
+
+		service := newTestBoardMemberService(br, bmr)
+
+		err := service.RemoveBoardMember(context.Background(), boardID, userID, domain.BoardMemberRoleOwner)
+
+		assert.NoError(t, err)
 	})
 }
 
