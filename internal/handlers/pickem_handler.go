@@ -52,7 +52,9 @@ func (h *PickemHandler) GetUserPickem(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondWithData(w, http.StatusOK, pickem)
 }
 
-// SaveGroupPicks saves (overwrites) the user's group order picks.
+// SaveGroupPicks saves (overwrites) the user's group order picks and syncs each group's
+// lock state from the per-group `locked` flag. Changing a group's order cascade-clears
+// best-thirds + bracket; toggling only a lock does not.
 //
 //	@Summary	Save group picks
 //	@Tags		pickems
@@ -73,6 +75,7 @@ func (h *PickemHandler) SaveGroupPicks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	picks := make([]*domain.UserGroupPick, 0, len(body.GroupPicks)*4)
+	lockedCodes := make([]string, 0, len(body.GroupPicks))
 	for _, g := range body.GroupPicks {
 		for i, code := range g.TeamFifaCodes {
 			picks = append(picks, &domain.UserGroupPick{
@@ -81,55 +84,12 @@ func (h *PickemHandler) SaveGroupPicks(w http.ResponseWriter, r *http.Request) {
 				PredictedPosition: i + 1,
 			})
 		}
+		if g.Locked {
+			lockedCodes = append(lockedCodes, g.GroupCode)
+		}
 	}
 
-	if err := h.pickemService.SaveGroupPicks(r.Context(), user.ID, picks); err != nil {
-		handleServiceError(w, r, err, h.logger)
-		return
-	}
-
-	pickem, err := h.pickemService.GetUserPickem(r.Context(), user.ID)
-	if err != nil {
-		handleServiceError(w, r, err, h.logger)
-		return
-	}
-
-	httpx.RespondWithData(w, http.StatusOK, pickem)
-}
-
-// SetGroupLock locks (confirms) or unlocks a single group's ordering. Locking persists the
-// submitted team order for that group AND sets the lock flag in one transaction; if the order
-// differs from what's stored, best-thirds and bracket picks are cascade-cleared. Unlocking only
-// clears the lock — the saved order is untouched.
-//
-//	@Summary	Lock or unlock a group
-//	@Tags		pickems
-//	@Accept		json
-//	@Produce	json
-//	@Param		body	body		dtos.SetGroupLockDto	true	"Group lock request"
-//	@Success	200		{object}	domain.UserPickem		"User's pickem state"
-//	@Failure	400		{object}	httpx.ErrorResponse		"Invalid request body"
-//	@Failure	401		{object}	httpx.ErrorResponse		"Missing or invalid Bearer token"
-//	@Security	BearerAuth
-//	@Router		/pickems/groups/lock [put]
-func (h *PickemHandler) SetGroupLock(w http.ResponseWriter, r *http.Request) {
-	user := httpctx.GetAuthenticatedUser(r.Context())
-
-	var body dtos.SetGroupLockDto
-	if err := httpx.ReadAndValidateJSON(w, r, &body, h.validator); err != nil {
-		return
-	}
-
-	picks := make([]*domain.UserGroupPick, 0, len(body.TeamFifaCodes))
-	for i, code := range body.TeamFifaCodes {
-		picks = append(picks, &domain.UserGroupPick{
-			TeamFifaCode:      code,
-			TeamGroupCode:     body.GroupCode,
-			PredictedPosition: i + 1,
-		})
-	}
-
-	if err := h.pickemService.SetGroupLock(r.Context(), user.ID, body.GroupCode, body.Locked, picks); err != nil {
+	if err := h.pickemService.SaveGroupPicks(r.Context(), user.ID, picks, lockedCodes); err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return
 	}

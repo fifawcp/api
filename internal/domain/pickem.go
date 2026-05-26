@@ -82,6 +82,7 @@ type PickemRepository interface {
 	GetChampionPick(ctx context.Context, userID string) (*string, error)
 	GetUserProgressCounts(ctx context.Context, userID string) (PickemProgressCounts, error)
 	GetLockedGroupCodes(ctx context.Context, userID string) ([]string, error)
-	SetGroupLock(ctx context.Context, userID, groupCode string, locked bool, picks []*UserGroupPick) error
-	ClearGroupLocks(ctx context.Context, userID string, groupCodes []string) error
+	// SetGroupLocks replaces the user's set of locked groups with exactly lockedCodes
+	// (groups not listed are unlocked). Lock state is sent declaratively with each group save.
+	SetGroupLocks(ctx context.Context, userID string, lockedCodes []string) error
 }
