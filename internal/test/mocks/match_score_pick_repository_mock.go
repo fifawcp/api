@@ -7,10 +7,10 @@ import (
 )
 
 type MockMatchScorePickRepository struct {
-	UpsertMatchScorePickFunc      func(ctx context.Context, pick *domain.UserMatchScorePick) error
-	GetMatchScorePicksByUserFunc  func(ctx context.Context, userID string) ([]*domain.UserMatchScorePick, error)
-	GetMatchScorePicksByMatchFunc func(ctx context.Context, matchID int64) ([]*domain.UserMatchScorePick, error)
-	CountMatchScorePicksByUserFunc               func(ctx context.Context, userID string) (int, error)
+	UpsertMatchScorePickFunc       func(ctx context.Context, pick *domain.UserMatchScorePick) error
+	GetMatchScorePicksByUserFunc   func(ctx context.Context, userID string) ([]*domain.UserMatchScorePick, error)
+	GetMatchScorePicksByMatchFunc  func(ctx context.Context, matchID int64) ([]*domain.UserMatchScorePick, error)
+	CountMatchScorePicksByUserFunc func(ctx context.Context, userID string) (int, error)
 }
 
 func (m *MockMatchScorePickRepository) UpsertMatchScorePick(ctx context.Context, pick *domain.UserMatchScorePick) error {

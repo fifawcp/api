@@ -18,8 +18,7 @@ type PickemServiceInterface interface {
 	GetUserPickem(ctx context.Context, userID string) (*domain.UserPickem, error)
 	GetChampionPick(ctx context.Context, userID string) (*domain.Team, error)
 	GetUserPickemProgress(ctx context.Context, userID string) (*domain.PickemProgress, error)
-	SaveGroupPicks(ctx context.Context, userID string, picks []*domain.UserGroupPick) error
-	SetGroupLock(ctx context.Context, userID, groupCode string, locked bool, picks []*domain.UserGroupPick) error
+	SaveGroupPicks(ctx context.Context, userID string, picks []*domain.UserGroupPick, lockedCodes []string) error
 	SaveBestThirds(ctx context.Context, userID string, teamFifaCodes []string) error
 	SaveBracketPicks(ctx context.Context, userID string, picks []*domain.UserBracketPick) error
 }
@@ -124,50 +123,32 @@ func stepProgress(completed, total int) domain.StepProgress {
 	return domain.StepProgress{Completed: completed, Total: total}
 }
 
+// SaveGroupPicks persists the team order for all 12 groups and syncs each group's lock state.
+// lockedCodes is the declarative set of locked groups from the client. The pick upsert (which
+// cascade-clears best-thirds + bracket) is skipped when the order is unchanged, so toggling
+// only a lock never wipes downstream picks; lock state is synced unconditionally.
 func (s *PickemService) SaveGroupPicks(
 	ctx context.Context,
 	userID string,
 	picks []*domain.UserGroupPick,
+	lockedCodes []string,
 ) error {
 	if s.isPickemLocked() {
 		return domain.ErrPickemLocked
 	}
 
-	// No-op detection: if the incoming picks are identical to what's stored, skip the upsert
-	// to prevent the cascade reset of best-thirds + bracket from firing
 	existing, err := s.pickemRepo.GetGroupPicks(ctx, userID)
 	if err != nil {
 		return err
 	}
-	if sameGroupPicks(existing, picks) {
-		return nil
-	}
 
-	if err := s.pickemRepo.UpsertGroupPicks(ctx, userID, picks); err != nil {
-		return err
-	}
-
-	changedCodes := changedGroupCodes(existing, picks)
-	if len(changedCodes) > 0 {
-		if err := s.pickemRepo.ClearGroupLocks(ctx, userID, changedCodes); err != nil {
+	if !sameGroupPicks(existing, picks) {
+		if err := s.pickemRepo.UpsertGroupPicks(ctx, userID, picks); err != nil {
 			return err
 		}
 	}
 
-	return nil
-}
-
-func (s *PickemService) SetGroupLock(
-	ctx context.Context,
-	userID, groupCode string,
-	locked bool,
-	picks []*domain.UserGroupPick,
-) error {
-	if s.isPickemLocked() {
-		return domain.ErrPickemLocked
-	}
-
-	return s.pickemRepo.SetGroupLock(ctx, userID, groupCode, locked, picks)
+	return s.pickemRepo.SetGroupLocks(ctx, userID, lockedCodes)
 }
 
 func (s *PickemService) SaveBestThirds(ctx context.Context, userID string, teamFifaCodes []string) error {
@@ -284,32 +265,6 @@ func groupOrderingComplete(groupPicks map[string][]*domain.UserGroupPick) bool {
 	}
 
 	return completed == 12
-}
-
-func changedGroupCodes(existing, incoming []*domain.UserGroupPick) []string {
-	type pickKey struct {
-		groupCode string
-		position  int
-	}
-
-	existingByKey := make(map[pickKey]string, len(existing))
-	for _, p := range existing {
-		existingByKey[pickKey{p.TeamGroupCode, p.PredictedPosition}] = p.TeamFifaCode
-	}
-
-	changed := make(map[string]bool, 12)
-	for _, p := range incoming {
-		if existingByKey[pickKey{p.TeamGroupCode, p.PredictedPosition}] != p.TeamFifaCode {
-			changed[p.TeamGroupCode] = true
-		}
-	}
-
-	codes := make([]string, 0, len(changed))
-	for code := range changed {
-		codes = append(codes, code)
-	}
-
-	return codes
 }
 
 func computeBestThirdsProgress(bestThirds []*domain.UserBestThirdPick) domain.StepProgress {

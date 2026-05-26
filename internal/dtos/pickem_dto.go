@@ -7,12 +7,7 @@ type SaveGroupPicksDto struct {
 type GroupPickDto struct {
 	GroupCode     string   `json:"group_code" validate:"required,len=1,oneof=A B C D E F G H I J K L" example:"A"`
 	TeamFifaCodes []string `json:"team_fifa_codes" validate:"required,len=4,unique,dive,required,fifa_code" example:"MEX,RSA,KOR,CZE"` // index 0 = pos 1, index 3 = pos 4
-}
-
-type SetGroupLockDto struct {
-	GroupCode     string   `json:"group_code" validate:"required,len=1,oneof=A B C D E F G H I J K L" example:"A"`
-	Locked        bool     `json:"locked" example:"true"`
-	TeamFifaCodes []string `json:"team_fifa_codes" validate:"required,len=4,unique,dive,required,fifa_code" example:"MEX,RSA,KOR,CZE"`
+	Locked        bool     `json:"locked" example:"true"`                                                                              // the user's per-group confirmation; locks are synced declaratively on each save
 }
 
 type SaveBestThirdsDto struct {

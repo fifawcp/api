@@ -24,6 +24,8 @@ type DashboardLeaderboard struct {
 }
 
 type CompetitionTop struct {
+	CompetitionID   int64                  `json:"competition_id" example:"1"`
+	BoardID         int64                  `json:"board_id" example:"1"`
 	CompetitionName string                 `json:"competition_name" example:"Pick'em"`
 	Entries         []DashboardLeaderEntry `json:"entries"`
 }

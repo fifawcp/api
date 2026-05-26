@@ -7,7 +7,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-
 type DashboardServiceInterface interface {
 	GetDashboard(ctx context.Context, userID string) (*domain.Dashboard, error)
 }
@@ -102,10 +101,14 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 		NextMatch: nextMatch,
 		Leaderboard: domain.DashboardLeaderboard{
 			Pickem: domain.CompetitionTop{
+				CompetitionID:   s.globalPickemCompetition.ID,
+				BoardID:         s.globalPickemCompetition.BoardID,
 				CompetitionName: s.globalPickemCompetition.Name,
 				Entries:         buildLeaderEntries(pickemPage),
 			},
 			Match: domain.CompetitionTop{
+				CompetitionID:   s.globalMatchCompetition.ID,
+				BoardID:         s.globalMatchCompetition.BoardID,
 				CompetitionName: s.globalMatchCompetition.Name,
 				Entries:         buildLeaderEntries(matchPage),
 			},
