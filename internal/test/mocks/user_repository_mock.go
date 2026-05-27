@@ -10,6 +10,7 @@ type MockUserRepository struct {
 	CreateUserFunc          func(ctx context.Context, user *domain.User) error
 	GetUserByIdentifierFunc func(ctx context.Context, identifier string) (*domain.User, error)
 	GetUserByIDFunc         func(ctx context.Context, userID string) (*domain.User, error)
+	UpdateUserFunc          func(ctx context.Context, userID string, updates domain.UserUpdate) (*domain.User, error)
 }
 
 func (m *MockUserRepository) CreateUser(ctx context.Context, user *domain.User) error {
@@ -31,4 +32,11 @@ func (m *MockUserRepository) GetUserByID(ctx context.Context, userID string) (*d
 		return m.GetUserByIDFunc(ctx, userID)
 	}
 	panic("GetUserByID called unexpectedly")
+}
+
+func (m *MockUserRepository) UpdateUser(ctx context.Context, userID string, updates domain.UserUpdate) (*domain.User, error) {
+	if m.UpdateUserFunc != nil {
+		return m.UpdateUserFunc(ctx, userID, updates)
+	}
+	panic("UpdateUser called unexpectedly")
 }

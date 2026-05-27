@@ -2,13 +2,9 @@ package services
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/fifawcp/api/internal/domain"
@@ -123,7 +119,7 @@ func (s *AuthService) VerifyOTP(
 	}
 
 	// Verify OTP
-	if otp.OTPHash != s.hashToken(payload.OTP) {
+	if otp.OTPHash != hashToken(payload.OTP) {
 		s.otpStorage.IncrementAttempts(ctx, payload.Identifier, *payload.Purpose)
 		return domain.ErrOTPInvalidOrExpired
 	}
@@ -194,7 +190,7 @@ func (s *AuthService) RefreshToken(
 	refreshTokenString string,
 ) (*dtos.AuthData, error) {
 	// Validate refresh token
-	refreshToken, err := s.refreshTokenRepository.GetRefreshTokenByTokenHash(ctx, s.hashToken(refreshTokenString))
+	refreshToken, err := s.refreshTokenRepository.GetRefreshTokenByTokenHash(ctx, hashToken(refreshTokenString))
 	if err != nil {
 		if errors.Is(err, domain.ErrRefreshTokenNotFound) {
 			return nil, domain.ErrRefreshTokenInvalidOrExpired
@@ -232,7 +228,7 @@ func (s *AuthService) RefreshToken(
 	if err := s.refreshTokenRepository.RotateRefreshToken(ctx, refreshToken.TokenHash, &domain.RefreshToken{
 		UserID:    refreshToken.UserID,
 		SessionID: refreshToken.SessionID,
-		TokenHash: s.hashToken(refreshTokenResult.Token),
+		TokenHash: hashToken(refreshTokenResult.Token),
 		ExpiresAt: refreshTokenExpiresAt,
 	}); err != nil {
 		return nil, err
@@ -251,15 +247,15 @@ func (s *AuthService) RefreshToken(
 }
 
 func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
-	return s.sessionRepository.DeleteSession(ctx, s.hashToken(refreshToken))
+	return s.sessionRepository.DeleteSession(ctx, hashToken(refreshToken))
 }
 
 func (s *AuthService) LogoutAll(ctx context.Context, refreshToken string) error {
-	return s.sessionRepository.DeleteAllSessions(ctx, s.hashToken(refreshToken))
+	return s.sessionRepository.DeleteAllSessions(ctx, hashToken(refreshToken))
 }
 
 func (s *AuthService) GetSessions(ctx context.Context, refreshToken string) ([]domain.Session, error) {
-	return s.sessionRepository.GetSessions(ctx, s.hashToken(refreshToken))
+	return s.sessionRepository.GetSessions(ctx, hashToken(refreshToken))
 }
 
 func (s *AuthService) DeleteSession(ctx context.Context, sessionID string, userID string) error {
@@ -301,7 +297,7 @@ func (s *AuthService) IssueAuthentication(ctx context.Context, user *domain.User
 	refreshToken := &domain.RefreshToken{
 		UserID:    user.ID,
 		SessionID: session.ID,
-		TokenHash: s.hashToken(refreshTokenResult.Token),
+		TokenHash: hashToken(refreshTokenResult.Token),
 		ExpiresAt: refreshTokenResult.ExpiresAt,
 	}
 
@@ -349,8 +345,8 @@ func (s *AuthService) generateAndStoreOTP(
 	identifier string,
 	purpose domain.OTPPurpose,
 ) (string, error) {
-	plainOtp := s.generateOTP(6)
-	otpHash := s.hashToken(plainOtp)
+	plainOtp := generateOTP(6)
+	otpHash := hashToken(plainOtp)
 	otp := &domain.OTP{
 		Identifier: identifier,
 		Purpose:    purpose,
@@ -372,24 +368,4 @@ func (s *AuthService) generateAndStoreOTP(
 	}
 
 	return plainOtp, nil
-}
-
-func (s *AuthService) generateOTP(length int) string {
-	const digits = "0123456789"
-	otp := make([]byte, length)
-
-	for i := range otp {
-		// Generate a random number between 0 and len(digits)
-		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(digits))))
-
-		// Convert the random number to a byte and add it to the OTP
-		otp[i] = digits[num.Int64()]
-	}
-
-	return string(otp)
-}
-
-func (s *AuthService) hashToken(token string) string {
-	hash := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(hash[:])
 }

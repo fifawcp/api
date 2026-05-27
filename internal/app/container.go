@@ -295,7 +295,7 @@ func (c *Container) initServices() {
 
 func (c *Container) initHandlers() {
 	c.AuthHandler = handlers.NewAuthHandler(c.authService, c.Logger, c.validator, c.Config)
-	c.UserHandler = handlers.NewUserHandler(c.UserService, c.Logger)
+	c.UserHandler = handlers.NewUserHandler(c.UserService, c.Logger, c.validator)
 	c.BoardHandler = handlers.NewBoardHandler(c.boardService, c.BoardMemberService, c.Config, c.validator, c.Logger)
 	c.GroupHandler = handlers.NewGroupStandingHandler(c.groupStandingService, c.Logger)
 	c.MatchHandler = handlers.NewMatchHandler(c.matchService, c.matchScorePickService, c.Logger, c.validator)

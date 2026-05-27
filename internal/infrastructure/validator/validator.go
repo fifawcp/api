@@ -47,6 +47,10 @@ func NewValidator() *Validator {
 		validateCreateCompetition,
 		dtos.CreateCompetitionDto{},
 	)
+	v.validate.RegisterStructValidation(
+		validateUpdateUser,
+		dtos.UpdateUserDto{},
+	)
 	v.validate.RegisterValidation("min_array_len", validateMinArrayLen)
 	v.validate.RegisterValidation("fifa_code", func(fl validator.FieldLevel) bool {
 		return IsValidFifaCode(fl.Field().String())
@@ -121,6 +125,8 @@ func formatFieldError(err validator.FieldError) ValidationField {
 		return ValidationField{Code: "PENALTY_INCOMPLETE", Message: "penalty score must include both home and away values"}
 	case "penalty_tied":
 		return ValidationField{Code: "PENALTY_TIED", Message: "penalty score must be decisive: home and away values cannot be equal"}
+	case "at_least_one_field":
+		return ValidationField{Code: "AT_LEAST_ONE_FIELD", Message: "at least one field must be provided"}
 	default:
 		return ValidationField{Code: "INVALID", Message: "is invalid"}
 	}
@@ -172,6 +178,14 @@ func validateCreateCompetition(sl validator.StructLevel) {
 		if input.Scope == nil || len(input.Scope.Stages) == 0 {
 			sl.ReportError(input.Scope, "scope", "Scope", "scope_required", "")
 		}
+	}
+}
+
+func validateUpdateUser(sl validator.StructLevel) {
+	input := sl.Current().Interface().(dtos.UpdateUserDto)
+
+	if input.FirstName == nil && input.LastName == nil && input.Username == nil {
+		sl.ReportError(input, "_error", "", "at_least_one_field", "")
 	}
 }
 
