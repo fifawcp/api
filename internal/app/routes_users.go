@@ -10,6 +10,7 @@ func usersRoutes(c *Container) chi.Router {
 	r.Use(middlewares.Auth(c.Authenticator, c.UserService, c.Logger))
 
 	r.Get("/profile", c.UserHandler.GetProfile)
+	r.Patch("/profile", c.UserHandler.UpdateProfile)
 
 	return r
 }

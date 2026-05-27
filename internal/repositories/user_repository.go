@@ -3,6 +3,8 @@ package repositories
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/infrastructure/config"
@@ -158,6 +160,69 @@ func (r *UserRepository) GetUserByID(
 	var user domain.User
 
 	err := r.db.QueryRowContext(ctx, query, userID).Scan(
+		&user.ID,
+		&user.FirstName,
+		&user.LastName,
+		&user.Username,
+		&user.Email,
+		&user.Role,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		return nil, handleDBError(err, resourceUser)
+	}
+
+	return &user, nil
+}
+
+func (r *UserRepository) UpdateUser(
+	ctx context.Context,
+	userID string,
+	updates domain.UserUpdate,
+) (*domain.User, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	setClauses := []string{}
+	args := []any{}
+	argIndex := 1
+
+	if updates.FirstName != nil {
+		setClauses = append(setClauses, fmt.Sprintf("first_name = $%d", argIndex))
+		args = append(args, *updates.FirstName)
+		argIndex++
+	}
+	if updates.LastName != nil {
+		setClauses = append(setClauses, fmt.Sprintf("last_name = $%d", argIndex))
+		args = append(args, *updates.LastName)
+		argIndex++
+	}
+	if updates.Username != nil {
+		setClauses = append(setClauses, fmt.Sprintf("username = $%d", argIndex))
+		args = append(args, *updates.Username)
+		argIndex++
+	}
+
+	if len(setClauses) == 0 {
+		return r.GetUserByID(ctx, userID)
+	}
+
+	// No BEFORE UPDATE trigger exists on users, so bump updated_at explicitly.
+	setClauses = append(setClauses, "updated_at = NOW()")
+	args = append(args, userID)
+
+	query := fmt.Sprintf(`UPDATE users
+		SET %s
+		WHERE id = $%d
+		RETURNING id, first_name, last_name, username, email, role, created_at, updated_at`,
+		strings.Join(setClauses, ", "),
+		argIndex,
+	)
+
+	var user domain.User
+
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(
 		&user.ID,
 		&user.FirstName,
 		&user.LastName,

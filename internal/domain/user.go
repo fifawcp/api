@@ -23,10 +23,17 @@ type User struct {
 	UpdatedAt time.Time `json:"updated_at" example:"2026-01-15T10:30:00Z"`
 }
 
+type UserUpdate struct {
+	FirstName *string
+	LastName  *string
+	Username  *string
+}
+
 type UserRepository interface {
 	CreateUser(ctx context.Context, user *User) error
 	GetUserByIdentifier(ctx context.Context, identifier string) (*User, error)
 	GetUserByID(ctx context.Context, userID string) (*User, error)
+	UpdateUser(ctx context.Context, userID string, updates UserUpdate) (*User, error)
 }
 
 type UserStorage interface {

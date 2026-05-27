@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/dtos"
+	"github.com/fifawcp/api/internal/infrastructure/validator"
 	"github.com/fifawcp/api/internal/test/mocks"
 	"github.com/fifawcp/api/internal/test/testutils"
 	"github.com/stretchr/testify/assert"
@@ -16,6 +18,7 @@ func newTestUserHandler(s *mocks.MockUserService) *UserHandler {
 	return NewUserHandler(
 		s,
 		&mocks.MockLogger{},
+		validator.NewValidator(),
 	)
 }
 
@@ -69,5 +72,65 @@ func TestUserHandler_GetProfile(t *testing.T) {
 		assert.Equal(t, authenticatedUser.LastName, resp.Data.LastName)
 		assert.Equal(t, authenticatedUser.Email, resp.Data.Email)
 		assert.Equal(t, authenticatedUser.Username, resp.Data.Username)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestUserHandler_UpdateProfile
+// ---------------------------------------------------------------------------
+func TestUserHandler_UpdateProfile(t *testing.T) {
+	t.Parallel()
+
+	authenticatedUser := testutils.CreateTestUser()
+
+	t.Run("returns 200 with updated user on success", func(t *testing.T) {
+		t.Parallel()
+
+		newFirstName := "Updated"
+		updatedUser := &domain.User{ID: authenticatedUser.ID, FirstName: newFirstName}
+
+		s := &mocks.MockUserService{
+			UpdateUserFunc: func(ctx context.Context, userID string, payload *dtos.UpdateUserDto) (*domain.User, error) {
+				assert.Equal(t, authenticatedUser.ID, userID)
+				assert.NotNil(t, payload.FirstName)
+				assert.Equal(t, newFirstName, *payload.FirstName)
+				return updatedUser, nil
+			},
+		}
+		h := newTestUserHandler(s)
+
+		req := testutils.MakeJSONRequest(
+			t, http.MethodPatch, "/users/profile",
+			dtos.UpdateUserDto{FirstName: &newFirstName},
+			testutils.WithAuthUser(authenticatedUser),
+		)
+		w := httptest.NewRecorder()
+
+		h.UpdateProfile(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp struct {
+			Data domain.User `json:"data"`
+		}
+		testutils.ParseJSONResponse(t, w, &resp)
+		assert.Equal(t, newFirstName, resp.Data.FirstName)
+	})
+
+	t.Run("returns 400 when no fields are provided", func(t *testing.T) {
+		t.Parallel()
+
+		h := newTestUserHandler(&mocks.MockUserService{})
+
+		req := testutils.MakeJSONRequest(
+			t, http.MethodPatch, "/users/profile",
+			dtos.UpdateUserDto{},
+			testutils.WithAuthUser(authenticatedUser),
+		)
+		w := httptest.NewRecorder()
+
+		h.UpdateProfile(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }

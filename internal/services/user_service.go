@@ -5,11 +5,13 @@ import (
 	"fmt"
 
 	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/dtos"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
 )
 
 type UserServiceInterface interface {
 	GetUser(ctx context.Context, userID string) (*domain.User, error)
+	UpdateUser(ctx context.Context, userID string, payload *dtos.UpdateUserDto) (*domain.User, error)
 }
 
 type UserService struct {
@@ -63,4 +65,28 @@ func (s *UserService) GetUser(ctx context.Context, userID string) (*domain.User,
 	}
 
 	return user, nil
+}
+
+func (s *UserService) UpdateUser(
+	ctx context.Context,
+	userID string,
+	payload *dtos.UpdateUserDto,
+) (*domain.User, error) {
+	updatedUser, err := s.userRepository.UpdateUser(ctx, userID, domain.UserUpdate{
+		FirstName: payload.FirstName,
+		LastName:  payload.LastName,
+		Username:  payload.Username,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.userStorage.SetUser(ctx, updatedUser); err != nil {
+		s.logger.Error(
+			fmt.Sprintf("failed to refresh cache for user with ID: %s", userID),
+			logging.Error, err.Error(),
+		)
+	}
+
+	return updatedUser, nil
 }

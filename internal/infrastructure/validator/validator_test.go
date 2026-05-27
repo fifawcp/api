@@ -67,6 +67,23 @@ func TestValidateStruct_InvalidEmail(t *testing.T) {
 	assert.Equal(t, "must be a valid email address", field.Message)
 }
 
+func TestValidateStruct_UpdateUserDto(t *testing.T) {
+	t.Run("rejects an all-nil update", func(t *testing.T) {
+		result := v.ValidateStruct(dtos.UpdateUserDto{})
+		require.NotNil(t, result)
+		field, ok := result["_error"]
+
+		require.True(t, ok)
+		assert.Equal(t, "AT_LEAST_ONE_FIELD", field.Code)
+	})
+
+	t.Run("accepts an update with one field", func(t *testing.T) {
+		username := "johndoe"
+		result := v.ValidateStruct(dtos.UpdateUserDto{Username: &username})
+		assert.Nil(t, result)
+	})
+}
+
 func TestValidateStruct_MinLength(t *testing.T) {
 	type testStruct struct {
 		Name string `json:"name" validate:"required,min=2"`
