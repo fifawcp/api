@@ -1,6 +1,7 @@
 tmp/
 .env
 .vscode/
+.DS_Store
 
 coverage.out
 coverage.html
@@ -11,5 +12,8 @@ bin/
 *.dll
 *.so
 *.dylib
+/seed
 
 docs/
+web/
+dev/

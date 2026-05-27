@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -63,7 +63,6 @@ func (r *OTPStorage) GetOTP(
 	}
 
 	var otp domain.OTP
-
 	if err := json.Unmarshal([]byte(data), &otp); err != nil {
 		return nil, err
 	}
@@ -81,13 +80,11 @@ func (r *OTPStorage) IncrementAttempts(
 
 	key := r.createKey(purpose, identifier)
 
-	// Get current data
 	otp, err := r.GetOTP(ctx, identifier, purpose)
 	if err != nil {
 		return err
 	}
 
-	// Increment attempts
 	otp.Attempts++
 
 	// Update in Redis (preserve TTL)
@@ -104,6 +101,7 @@ func (r *OTPStorage) DeleteOTP(
 	defer cancel()
 
 	key := r.createKey(purpose, identifier)
+
 	return r.redis.Del(ctx, key).Err()
 }
 

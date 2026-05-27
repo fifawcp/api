@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ncondes/fifawcp/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/redis/go-redis/v9"
 )
 

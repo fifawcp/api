@@ -6,50 +6,45 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
-	"github.com/ncondes/fifawcp/internal/packages/testutils"
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/dtos"
+	"github.com/fifawcp/api/internal/infrastructure/validator"
+	"github.com/fifawcp/api/internal/test/mocks"
+	"github.com/fifawcp/api/internal/test/testutils"
 	"github.com/stretchr/testify/assert"
 )
 
-func newTestUserHandler(s *testutils.MockUserService) *UserHandler {
+func newTestUserHandler(s *mocks.MockUserService) *UserHandler {
 	return NewUserHandler(
 		s,
-		logging.NewNoopLogger(),
+		&mocks.MockLogger{},
+		validator.NewValidator(),
 	)
 }
 
 // ---------------------------------------------------------------------------
 // TestUserHandler_GetProfile
 // ---------------------------------------------------------------------------
-
 func TestUserHandler_GetProfile(t *testing.T) {
 	t.Parallel()
 
 	makeGetProfileReq := func(t *testing.T, user *domain.User) *http.Request {
 		t.Helper()
 
-		req := testutils.MakeJSONRequest(t, http.MethodGet, "/user/profile", nil)
-
-		if user != nil {
-			// Inject the authenticated user into the request context
-			req = withAuthUser(req, user)
-		}
+		req := testutils.MakeJSONRequest(
+			t, http.MethodGet, "/user/profile", nil,
+			testutils.WithAuthUser(user),
+		)
 
 		return req
 	}
 
-	authenticatedUser := &domain.User{
-		FirstName: "John",
-		LastName:  "Doe",
-		Email:     "john.doe@example.com",
-		Username:  "johndoe",
-	}
+	authenticatedUser := testutils.CreateTestUser()
 
 	t.Run("returns 200 with user profile on success", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockUserService{
+		s := &mocks.MockUserService{
 			GetUserFunc: func(
 				ctx context.Context,
 				userID string,
@@ -78,33 +73,64 @@ func TestUserHandler_GetProfile(t *testing.T) {
 		assert.Equal(t, authenticatedUser.Email, resp.Data.Email)
 		assert.Equal(t, authenticatedUser.Username, resp.Data.Username)
 	})
+}
 
-	// t.Run("returns 500 on internal server error", func(t *testing.T) {
-	// 	t.Parallel()
+// ---------------------------------------------------------------------------
+// TestUserHandler_UpdateProfile
+// ---------------------------------------------------------------------------
+func TestUserHandler_UpdateProfile(t *testing.T) {
+	t.Parallel()
 
-	// 	s := &testutils.MockAuthService{
-	// 		DeleteSessionFunc: func(
-	// 			ctx context.Context,
-	// 			sessionID string,
-	// 			userID string,
-	// 		) error {
-	// 			return errors.New("db error")
-	// 		},
-	// 	}
-	// 	h := newTestAuthHandler(s)
+	authenticatedUser := testutils.CreateTestUser()
 
-	// 	req := makeDeleteReq(t, authenticatedUser)
-	// 	w := httptest.NewRecorder()
+	t.Run("returns 200 with updated user on success", func(t *testing.T) {
+		t.Parallel()
 
-	// 	h.DeleteSession(w, req)
+		newFirstName := "Updated"
+		updatedUser := &domain.User{ID: authenticatedUser.ID, FirstName: newFirstName}
 
-	// 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+		s := &mocks.MockUserService{
+			UpdateUserFunc: func(ctx context.Context, userID string, payload *dtos.UpdateUserDto) (*domain.User, error) {
+				assert.Equal(t, authenticatedUser.ID, userID)
+				assert.NotNil(t, payload.FirstName)
+				assert.Equal(t, newFirstName, *payload.FirstName)
+				return updatedUser, nil
+			},
+		}
+		h := newTestUserHandler(s)
 
-	// 	var resp struct {
-	// 		Error string `json:"error"`
-	// 	}
+		req := testutils.MakeJSONRequest(
+			t, http.MethodPatch, "/users/profile",
+			dtos.UpdateUserDto{FirstName: &newFirstName},
+			testutils.WithAuthUser(authenticatedUser),
+		)
+		w := httptest.NewRecorder()
 
-	// 	testutils.ParseJSONResponse(t, w, &resp)
-	// 	assert.Equal(t, "internal server error", resp.Error)
-	// })
+		h.UpdateProfile(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp struct {
+			Data domain.User `json:"data"`
+		}
+		testutils.ParseJSONResponse(t, w, &resp)
+		assert.Equal(t, newFirstName, resp.Data.FirstName)
+	})
+
+	t.Run("returns 400 when no fields are provided", func(t *testing.T) {
+		t.Parallel()
+
+		h := newTestUserHandler(&mocks.MockUserService{})
+
+		req := testutils.MakeJSONRequest(
+			t, http.MethodPatch, "/users/profile",
+			dtos.UpdateUserDto{},
+			testutils.WithAuthUser(authenticatedUser),
+		)
+		w := httptest.NewRecorder()
+
+		h.UpdateProfile(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
 }

@@ -10,245 +10,404 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/handlers"
+	"github.com/fifawcp/api/internal/infrastructure/auth"
+	"github.com/fifawcp/api/internal/infrastructure/cache"
+	"github.com/fifawcp/api/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/db"
+	"github.com/fifawcp/api/internal/infrastructure/football"
+	"github.com/fifawcp/api/internal/infrastructure/logging"
+	"github.com/fifawcp/api/internal/infrastructure/mailer"
+	"github.com/fifawcp/api/internal/infrastructure/oauth"
+	"github.com/fifawcp/api/internal/infrastructure/ratelimit"
+	"github.com/fifawcp/api/internal/infrastructure/scheduler"
+	"github.com/fifawcp/api/internal/infrastructure/validator"
+	"github.com/fifawcp/api/internal/jobs"
+	"github.com/fifawcp/api/internal/repositories"
+	"github.com/fifawcp/api/internal/services"
+	"github.com/fifawcp/api/internal/storage"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
-	"github.com/ncondes/fifawcp/internal/handlers"
-	"github.com/ncondes/fifawcp/internal/infrastructure/auth"
-	"github.com/ncondes/fifawcp/internal/infrastructure/config"
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
-	"github.com/ncondes/fifawcp/internal/infrastructure/mailer"
-	"github.com/ncondes/fifawcp/internal/infrastructure/middlewares"
-	"github.com/ncondes/fifawcp/internal/infrastructure/scheduler"
-	"github.com/ncondes/fifawcp/internal/infrastructure/validator"
-	"github.com/ncondes/fifawcp/internal/jobs"
-	"github.com/ncondes/fifawcp/internal/repositories"
-	"github.com/ncondes/fifawcp/internal/services"
-	"github.com/ncondes/fifawcp/internal/storage"
 	"github.com/redis/go-redis/v9"
-	httpSwagger "github.com/swaggo/http-swagger"
 )
 
-type AppContainer struct {
-	Config        *config.Config
-	Logger        logging.Logger
-	AuthHandler   *handlers.AuthHandler
-	UserHandler   *handlers.UserHandler
-	UserService   services.UserServiceInterface
-	Authenticator auth.Authenticator
-	Scheduler     scheduler.Scheduler
-	RateLimiters  *RateLimiters
+type Container struct {
+	shutdownServer func(*http.Server) error
+
+	// infrastructure
+	db          *sql.DB
+	redis       *redis.Client
+	Config      *config.Config
+	Logger      logging.Logger
+	AuditLogger logging.AuditLogger
+
+	// core deps
+	validator            *validator.Validator
+	mailer               mailer.Mailer
+	Authenticator        auth.Authenticator
+	Scheduler            scheduler.Scheduler
+	GoogleOauthConfig    domain.OAuth2Client
+	OIDCIdentityVerifier domain.IDTokenVerifier
+
+	// repositories
+	userRepository             domain.UserRepository
+	sessionRepository          domain.SessionRepository
+	refreshTokenRepository     domain.RefreshTokenRepository
+	boardRepository            domain.BoardRepository
+	boardMemberRepository      domain.BoardMemberRepository
+	groupStandingRepository    domain.GroupStandingRepository
+	matchRepository            domain.MatchRepository
+	matchFairPlayRepository    domain.MatchFairPlayRepository
+	matchAPIFixtureRepository  domain.MatchAPIFixtureRepository
+	oauthAccountRepository     domain.OAuthAccountRepository
+	teamRepository             domain.TeamRepository
+	pickemRepository           domain.PickemRepository
+	matchScorePickRepository   domain.MatchScorePickRepository
+	scoreEventRepository       domain.ScoreEventRepository
+	competitionRepository      domain.CompetitionRepository
+	competitionScoreRepository domain.CompetitionScoreRepository
+
+	// startup data loaded once at startup; consumed by services
+	teams                   []*domain.Team
+	teamLookup              *domain.TeamLookup
+	firstKickoff            time.Time
+	globalPickemCompetition *domain.Competition
+	globalMatchCompetition  *domain.Competition
+
+	// storages
+	otpStorage        *storage.OTPStorage
+	userStorage       *storage.UserStorage
+	oauthStateStorage *storage.OAuthStorage
+
+	// services
+	authService               services.AuthServiceInterface
+	boardService              services.BoardServiceInterface
+	groupStandingService      services.GroupStandingServiceInterface
+	matchService              services.MatchServiceInterface
+	matchScorePickService     services.MatchScorePickServiceInterface
+	oauthService              services.OAuthServiceInterface
+	UserService               services.UserServiceInterface
+	BoardMemberService        services.BoardMemberServiceInterface
+	pickemService             services.PickemServiceInterface
+	pickemScoringService      services.ScoringServiceInterface
+	competitionService        services.CompetitionServiceInterface
+	competitionScoringService services.CompetitionScoringServiceInterface
+	dashboardService          services.DashboardServiceInterface
+
+	// handlers
+	RateLimiters       *RateLimiters
+	AuthHandler        *handlers.AuthHandler
+	OAuthHandler       *handlers.OAuthHandler
+	UserHandler        *handlers.UserHandler
+	BoardHandler       *handlers.BoardHandler
+	GroupHandler       *handlers.GroupStandingHandler
+	MatchHandler       *handlers.MatchHandler
+	AdminHandler       *handlers.AdminHandler
+	PickemHandler      *handlers.PickemHandler
+	CompetitionHandler *handlers.CompetitionHandler
+	DashboardHandler   *handlers.DashboardHandler
 }
 
-func NewAppContainer(
-	cfg *config.Config,
-	logger logging.Logger,
-	db *sql.DB,
-	redis *redis.Client,
-	validator *validator.Validator,
-	authenticator auth.Authenticator,
-	mailer mailer.Mailer,
-	scheduler scheduler.Scheduler,
-) *AppContainer {
-	// Repositories
-	userRepository := repositories.NewUserRepository(db, cfg)
-	sessionRepository := repositories.NewSessionRepository(db, cfg)
-	refreshTokenRepository := repositories.NewRefreshTokenRepository(db, cfg)
+func NewContainer(cfg *config.Config) (*Container, error) {
+	c := &Container{Config: cfg}
 
-	// Storages
-	otpStorage := storage.NewOTPStorage(redis, cfg)
-	userStorage := storage.NewUserStorage(redis, cfg)
+	if err := c.initInfrastructure(cfg); err != nil {
+		return nil, fmt.Errorf("infrastructure: %w", err)
+	}
+	if err := c.initCoreDeps(cfg); err != nil {
+		return nil, fmt.Errorf("core dependencies: %w", err)
+	}
+	c.initRepositories()
+	c.initStorages()
+	if err := c.initStartupData(); err != nil {
+		return nil, fmt.Errorf("startup data: %w", err)
+	}
+	c.initServices()
+	c.initHandlers()
+	c.initJobs()
 
-	// Services
-	authService := services.NewAuthService(
-		userRepository,
-		sessionRepository,
-		refreshTokenRepository,
-		otpStorage,
-		logger,
-		cfg,
-		authenticator,
-		mailer,
+	c.RateLimiters = newRateLimiters(c.redis, &cfg.RateLimit)
+	c.shutdownServer = c.ShutdownServer
+
+	return c, nil
+}
+
+func (c *Container) initInfrastructure(cfg *config.Config) error {
+	c.Logger = logging.NewSlogLogger(cfg)
+	c.AuditLogger = logging.NewAuditLogger(c.Logger)
+
+	pgDB, err := db.NewPostgresDB(
+		cfg.DB.Address,
+		cfg.DB.MaxOpenConns,
+		cfg.DB.MaxIdleConns,
+		cfg.DB.MaxLifetime,
 	)
-	userService := services.NewUserService(userRepository, userStorage, logger)
+	if err != nil {
+		c.Logger.Error(
+			"Error connecting to database",
+			logging.Error, err.Error(),
+		)
+		return fmt.Errorf("connecting to postgres: %w", err)
+	}
+	c.db = pgDB
+	c.Logger.Info("Connected to database successfully")
 
-	// Handlers
-	authHandler := handlers.NewAuthHandler(authService, logger, validator, cfg)
-	userHandler := handlers.NewUserHandler(userService, logger)
+	redisClient, err := cache.NewRedisClient(cfg)
+	if err != nil {
+		c.Logger.Error(
+			"Error connecting to Redis",
+			logging.Error, err.Error(),
+		)
+		return fmt.Errorf("connecting to Redis: %w", err)
+	}
+	c.redis = redisClient
+	c.Logger.Info("Connected to Redis successfully")
 
-	// Jobs
-	cleanupSessionsJob := jobs.NewCleanupSessionsJob(sessionRepository, logger)
+	return nil
+}
 
-	// Schedule jobs
-	if err := scheduler.RegisterJob(cfg.Cron.CleanupSessionsSchedule, cleanupSessionsJob); err != nil {
-		logger.Error(
+func (c *Container) initCoreDeps(cfg *config.Config) error {
+	c.validator = validator.NewValidator()
+	c.Authenticator = auth.NewJWTAuthenticator(
+		cfg.JWT.Secret,
+		cfg.JWT.Audience,
+		cfg.JWT.Issuer,
+		cfg.JWT.AccessTokenExpiry,
+		cfg.JWT.RefreshTokenExpiry,
+	)
+	c.mailer = mailer.NewResendMailer(cfg)
+	c.Scheduler = scheduler.NewCronScheduler(c.Logger)
+
+	googleOIDCProvider, err := oauth.NewOIDCProvider(cfg.Auth.GoogleOAuth.Issuer)
+	if err != nil {
+		c.Logger.Error(
+			"Error creating Google OIDC provider",
+			logging.Error, err.Error(),
+		)
+		return fmt.Errorf("creating OIDC provider: %w", err)
+	}
+	c.GoogleOauthConfig = oauth.NewGoogleOAuth2Client(googleOIDCProvider, cfg.Auth.GoogleOAuth)
+	c.OIDCIdentityVerifier = oauth.NewGoogleIDTokenVerifier(googleOIDCProvider, cfg.Auth.GoogleOAuth)
+
+	return nil
+}
+
+func (c *Container) initRepositories() {
+	c.userRepository = repositories.NewUserRepository(c.db, c.Config)
+	c.sessionRepository = repositories.NewSessionRepository(c.db, c.Config)
+	c.refreshTokenRepository = repositories.NewRefreshTokenRepository(c.db, c.Config)
+	c.boardRepository = repositories.NewBoardRepository(c.db, c.Config)
+	c.boardMemberRepository = repositories.NewBoardMemberRepository(c.db, c.Config)
+	c.oauthAccountRepository = repositories.NewOAuthAccountRepository(c.db, c.Config)
+	c.teamRepository = repositories.NewTeamRepository(c.db, c.Config)
+	c.pickemRepository = repositories.NewPickemRepository(c.db, c.Config)
+	c.matchScorePickRepository = repositories.NewMatchScorePickRepository(c.db, c.Config)
+	c.scoreEventRepository = repositories.NewScoreEventRepository(c.db, c.Config)
+
+	c.teamLookup = domain.NewTeamLookup(nil)
+	c.matchRepository = repositories.NewMatchRepository(c.db, c.Config, c.teamLookup)
+	c.groupStandingRepository = repositories.NewGroupStandingRepository(c.db, c.Config, c.teamLookup)
+	c.matchFairPlayRepository = repositories.NewMatchFairPlayRepository(c.db, c.Config)
+	c.matchAPIFixtureRepository = repositories.NewMatchAPIFixtureRepository(c.db, c.Config)
+	c.competitionRepository = repositories.NewCompetitionRepository(c.db, c.Config)
+	c.competitionScoreRepository = repositories.NewCompetitionScoreRepository(c.db, c.Config)
+}
+
+func (c *Container) initStartupData() error {
+	teams, err := c.teamRepository.GetAllTeams(context.Background())
+	if err != nil {
+		return fmt.Errorf("loading team catalog: %w", err)
+	}
+	c.teams = teams
+	c.teamLookup.Set(teams)
+
+	firstKickoff, err := c.matchRepository.GetFirstGroupStageMatchKickoff(context.Background())
+	if err != nil {
+		return fmt.Errorf("loading first group stage match kickoff: %w", err)
+	}
+	c.firstKickoff = firstKickoff
+
+	globalPickemCompetition, globalMatchCompetition, err := c.competitionRepository.GetGlobalCompetitions(context.Background())
+	if err != nil {
+		return fmt.Errorf("loading global competitions: %w", err)
+	}
+	c.globalPickemCompetition = globalPickemCompetition
+	c.globalMatchCompetition = globalMatchCompetition
+
+	return nil
+}
+
+func (c *Container) initStorages() {
+	c.otpStorage = storage.NewOTPStorage(c.redis, c.Config)
+	c.userStorage = storage.NewUserStorage(c.redis, c.Config)
+	c.oauthStateStorage = storage.NewOAuthStorage(c.redis, c.Config)
+}
+
+func (c *Container) initServices() {
+	c.authService = services.NewAuthService(
+		c.userRepository, c.sessionRepository, c.refreshTokenRepository,
+		c.otpStorage, c.Logger, c.Config, c.Authenticator, c.mailer,
+	)
+	c.UserService = services.NewUserService(c.userRepository, c.userStorage, c.Logger)
+	c.boardService = services.NewBoardService(c.boardRepository, c.competitionRepository)
+	c.BoardMemberService = services.NewBoardMemberService(
+		c.boardRepository, c.boardMemberRepository,
+	)
+	c.groupStandingService = services.NewGroupStandingService(
+		c.groupStandingRepository, c.matchRepository, c.matchFairPlayRepository, c.Logger,
+	)
+	c.pickemScoringService = services.NewScoringService(
+		c.pickemRepository, c.matchScorePickRepository, c.scoreEventRepository,
+		c.matchRepository, c.groupStandingRepository,
+		c.Config, c.Logger,
+	)
+	c.pickemService = services.NewPickemService(
+		c.pickemRepository, c.teams, c.firstKickoff, c.Config, c.Logger,
+	)
+	c.matchScorePickService = services.NewMatchScorePickService(
+		c.matchScorePickRepository, c.matchRepository,
+	)
+
+	c.competitionScoringService = services.NewCompetitionScoringService(
+		c.competitionRepository, c.competitionScoreRepository, c.Config, c.Logger,
+	)
+	c.competitionService = services.NewCompetitionService(
+		c.boardRepository, c.competitionRepository, c.competitionScoreRepository,
+	)
+
+	c.matchService = services.NewMatchService(
+		c.matchRepository, c.groupStandingRepository,
+		c.groupStandingService, c.pickemScoringService, c.competitionScoringService, c.Logger,
+	)
+	c.oauthService = services.NewOAuthService(
+		c.oauthStateStorage, c.GoogleOauthConfig, c.OIDCIdentityVerifier,
+		c.oauthAccountRepository, c.userRepository, c.authService,
+	)
+	c.dashboardService = services.NewDashboardService(
+		c.pickemService,
+		c.matchScorePickRepository,
+		c.matchRepository,
+		c.competitionScoreRepository,
+		c.globalPickemCompetition,
+		c.globalMatchCompetition,
+	)
+}
+
+func (c *Container) initHandlers() {
+	c.AuthHandler = handlers.NewAuthHandler(c.authService, c.Logger, c.validator, c.Config)
+	c.UserHandler = handlers.NewUserHandler(c.UserService, c.Logger, c.validator)
+	c.BoardHandler = handlers.NewBoardHandler(c.boardService, c.BoardMemberService, c.Config, c.validator, c.Logger)
+	c.GroupHandler = handlers.NewGroupStandingHandler(c.groupStandingService, c.Logger)
+	c.MatchHandler = handlers.NewMatchHandler(c.matchService, c.matchScorePickService, c.Logger, c.validator)
+	c.AdminHandler = handlers.NewAdminHandler(c.matchService, c.groupStandingService, c.pickemScoringService, c.Logger, c.AuditLogger, c.validator)
+	c.OAuthHandler = handlers.NewOAuthHandler(c.oauthService, c.Logger, c.Config)
+	c.PickemHandler = handlers.NewPickemHandler(c.pickemService, c.Logger, c.validator)
+	c.CompetitionHandler = handlers.NewCompetitionHandler(c.competitionService, c.Config, c.validator, c.Logger)
+	c.DashboardHandler = handlers.NewDashboardHandler(c.dashboardService, c.Logger)
+}
+
+func (c *Container) initJobs() {
+	if err := c.Scheduler.RegisterJob(c.Config.Cron.CleanupSessionsSchedule, jobs.NewCleanupSessionsJob(c.sessionRepository, c.refreshTokenRepository, c.Config.JWT.RefreshGraceWindow, c.Logger)); err != nil {
+		c.Logger.Error(
 			"failed to register job",
 			"job", "cleanup:expired-sessions",
-			"error", err,
+			logging.Error, err.Error(),
 		)
 	}
 
-	rls := newRateLimiters(redis, &cfg.RateLimit)
+	footballClient := football.NewFootballClient(c.Config.FootballAPI)
+	syncMatchResultsJob := jobs.NewSyncMatchResultsJob(
+		c.matchService,
+		footballClient,
+		c.matchFairPlayRepository,
+		c.matchAPIFixtureRepository,
+		c.Logger,
+	)
 
-	return &AppContainer{
-		Config:        cfg,
-		Logger:        logger,
-		AuthHandler:   authHandler,
-		UserHandler:   userHandler,
-		UserService:   userService,
-		Authenticator: authenticator,
-		Scheduler:     scheduler,
-		RateLimiters:  rls,
+	// Run once at startup to register timers for upcoming matches and backfill any
+	// matches whose sync window has already passed (e.g. after a server restart)
+	go syncMatchResultsJob.Run(context.Background())
+
+	// Re-run at midnight to pick up newly-assigned knockout teams and re-register timers
+	if err := c.Scheduler.RegisterJob(c.Config.Cron.SyncMatchResultsSchedule, syncMatchResultsJob); err != nil {
+		c.Logger.Error(
+			"failed to register job",
+			"job", "sync:match_results",
+			logging.Error, err.Error(),
+		)
 	}
 }
 
-func (app *AppContainer) NewRouter() *chi.Mux {
-	r := chi.NewRouter()
+func (c *Container) Cleanup() {
+	if c.db != nil {
+		c.db.Close()
+	}
 
-	r.Use(middleware.RequestID)                         // Add a request ID to the context
-	r.Use(middleware.RealIP)                            // Get the real IP address of the client
-	r.Use(middleware.Recoverer)                         // Recover from panics without crashing the server
-	r.Use(middlewares.LogRequestMiddleware(app.Logger)) // Log requests
-
-	// Set a timeout value on the request context (ctx), that will signal
-	// through ctx.Done() that the request has timed out and further
-	// processing should be stopped.
-	r.Use(middleware.Timeout(app.Config.Server.ContextTimeout))
-
-	// Security headers
-	r.Use(middlewares.SecurityHeadersMiddleware(app.Config))
-
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   app.Config.Server.CORS.AllowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
-		AllowCredentials: true,
-		MaxAge:           300, // Maximum value not ignored by any of major browsers
-	}))
-
-	// TODO: Metrics
-
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/swagger/index.html", http.StatusMovedPermanently)
-	})
-	r.Get("/swagger", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/swagger/index.html", http.StatusMovedPermanently)
-	})
-	r.Get("/swagger/*", httpSwagger.Handler(
-		httpSwagger.URL(app.Config.APIBaseURL+"/swagger/doc.json"),
-	))
-
-	r.Route("/debug", func(r chi.Router) {
-		if !app.Config.IsProd() {
-			debugHandler := handlers.NewDebugHandler(app.Config)
-			r.Get("/auth/otp/request/{identifier}", debugHandler.RequestOtp)
-		}
-	})
-
-	// API routes
-	r.Route("/api", func(r chi.Router) {
-		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		})
-
-		r.Route("/auth", func(r chi.Router) {
-			r.With(middlewares.RateLimitByIPMiddleware(
-				app.RateLimiters.StrictIP,
-				"auth:otp:request",
-				app.Logger,
-			)).Post("/otp/request", app.AuthHandler.RequestOtp)
-
-			r.With(
-				middlewares.RateLimitByIPMiddleware(
-					app.RateLimiters.ModerateIP,
-					"auth:token",
-					app.Logger,
-				),
-				middlewares.RequestInfoMiddleware(),
-			).Post("/token", app.AuthHandler.Authenticate)
-
-			r.With(middlewares.RateLimitByIPMiddleware(
-				app.RateLimiters.RelaxedIP,
-				"auth:token:refresh",
-				app.Logger,
-			)).Post("/token/refresh", app.AuthHandler.RefreshToken)
-
-			r.Post("/logout", app.AuthHandler.Logout)
-			r.Post("/logout/all", app.AuthHandler.LogoutAll)
-			r.Get("/sessions", app.AuthHandler.GetSessions)
-			r.With(middlewares.AuthMiddleware(
-				app.Authenticator,
-				app.UserService,
-				app.Logger,
-			)).Delete("/sessions/{id}", app.AuthHandler.DeleteSession)
-		})
-
-		r.Route("/users", func(r chi.Router) {
-			r.Use(middlewares.AuthMiddleware(app.Authenticator, app.UserService, app.Logger))
-			r.Get("/profile", app.UserHandler.GetProfile)
-		})
-	})
-
-	return r
+	if c.redis != nil {
+		c.redis.Close()
+	}
 }
 
-func (app *AppContainer) StartServer(r *chi.Mux) error {
-
+func (c *Container) StartServer(r *chi.Mux) error {
 	server := &http.Server{
 		Handler:      r,
-		Addr:         ":" + app.Config.Port,
-		WriteTimeout: app.Config.Server.WriteTimeout,
-		ReadTimeout:  app.Config.Server.ReadTimeout,
-		IdleTimeout:  app.Config.Server.IdleTimeout,
+		Addr:         ":" + c.Config.Port,
+		WriteTimeout: c.Config.Server.WriteTimeout,
+		ReadTimeout:  c.Config.Server.ReadTimeout,
+		IdleTimeout:  c.Config.Server.IdleTimeout,
 	}
 
-	// Channel to listen for OS interrupt signals
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	// Channel to receive server errors
 	serverErrors := make(chan error, 1)
 
-	// Jobs start ticking immediately alongside the server
-	app.Scheduler.Start()
+	c.Scheduler.Start()
 
-	// Start server in a goroutine so we can listen for shutdown signals concurrently
 	go func() {
-		app.Logger.Info("Starting server", "port", app.Config.Port)
+		c.Logger.Info("Starting server", "port", c.Config.Port)
 		serverErrors <- server.ListenAndServe()
 	}()
 
-	// Block until we receive an interrupt signal or server error
 	select {
 	case err := <-serverErrors:
-		// Server failed to start or encountered an error
-		if err != nil {
-			// Stop the scheduler if the server fails to start
-			app.Scheduler.Stop()
-			return fmt.Errorf("server error: %w", err)
-		}
-
+		c.Scheduler.Stop()
+		return fmt.Errorf("server error: %w", err)
 	case sig := <-quit:
-		// Received shutdown signal (Ctrl+C or kill command)
-		app.Logger.Info("Shutting down server", "signal", sig)
+		c.Logger.Info("Shutting down server", "signal", sig)
+		return c.shutdownServer(server)
+	}
+}
 
-		// Create context with 5-second timeout for graceful shutdown
-		// This gives in-flight requests time to complete
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+func (c *Container) ShutdownServer(server *http.Server) error {
+	ctx, cancel := context.WithTimeout(context.Background(), c.Config.Server.ShutdownTimeout)
+	defer cancel()
 
-		// Stop the scheduler before shutting down the server
-		app.Scheduler.Stop()
+	c.Scheduler.Stop()
 
-		// Attempt graceful shutdown
-		if err := server.Shutdown(ctx); err != nil {
-			// If graceful shutdown fails, force close the server
-			server.Close()
-			return fmt.Errorf("server shutdown failed: %w", err)
-		}
-
-		app.Logger.Info("Server stopped gracefully")
+	if err := server.Shutdown(ctx); err != nil {
+		server.Close()
+		return fmt.Errorf("server shutdown failed: %w", err)
 	}
 
+	c.Logger.Info("Server stopped gracefully")
 	return nil
+}
+
+type RateLimiters struct {
+	StrictIP   ratelimit.RateLimiter
+	ModerateIP ratelimit.RateLimiter
+	RelaxedIP  ratelimit.RateLimiter
+}
+
+func newRateLimiters(rc *redis.Client, cfg *config.RateLimitConfig) *RateLimiters {
+	if !cfg.Enabled || rc == nil {
+		return &RateLimiters{}
+	}
+
+	return &RateLimiters{
+		StrictIP:   ratelimit.NewRedisRateLimiter(rc, cfg.StrictIP),
+		ModerateIP: ratelimit.NewRedisRateLimiter(rc, cfg.ModerateIP),
+		RelaxedIP:  ratelimit.NewRedisRateLimiter(rc, cfg.RelaxedIP),
+	}
 }

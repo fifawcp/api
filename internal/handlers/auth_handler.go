@@ -3,14 +3,14 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/fifawcp/api/internal/dtos"
+	"github.com/fifawcp/api/internal/httpctx"
+	"github.com/fifawcp/api/internal/httpx"
+	"github.com/fifawcp/api/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/logging"
+	"github.com/fifawcp/api/internal/infrastructure/validator"
+	"github.com/fifawcp/api/internal/services"
 	"github.com/go-chi/chi/v5"
-	"github.com/ncondes/fifawcp/internal/dtos"
-	"github.com/ncondes/fifawcp/internal/infrastructure/config"
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
-	"github.com/ncondes/fifawcp/internal/infrastructure/middlewares"
-	"github.com/ncondes/fifawcp/internal/infrastructure/validator"
-	"github.com/ncondes/fifawcp/internal/packages/httputils"
-	"github.com/ncondes/fifawcp/internal/services"
 )
 
 type AuthHandler struct {
@@ -44,16 +44,16 @@ func NewAuthHandler(
 //	@Produce		json
 //	@Param			body	body	dtos.RequestOtpDto	true	"OTP request payload"
 //	@Success		204
-//	@Failure		400	{object}	httputils.ErrorResponse	"Invalid request body or validation error"
-//	@Failure		401	{object}	httputils.ErrorResponse	"Invalid credentials"
-//	@Failure		409	{object}	httputils.ErrorResponse	"User already exists"
-//	@Failure		429	{object}	httputils.ErrorResponse	"Too many attempts or cooldown active"
-//	@Failure		500	{object}	httputils.ErrorResponse	"Internal server error"
+//	@Failure		400	{object}	httpx.ErrorResponse	"Invalid request body or validation error"
+//	@Failure		401	{object}	httpx.ErrorResponse	"Invalid credentials"
+//	@Failure		409	{object}	httpx.ErrorResponse	"User already exists"
+//	@Failure		429	{object}	httpx.ErrorResponse	"Too many attempts or cooldown active"
+//	@Failure		500	{object}	httpx.ErrorResponse	"Internal server error"
 //	@Router			/auth/otp/request [post]
 func (h *AuthHandler) RequestOtp(w http.ResponseWriter, r *http.Request) {
 	var payload dtos.RequestOtpDto
 
-	if err := httputils.ReadAndValidateJSON(w, r, &payload, h.validator); err != nil {
+	if err := httpx.ReadAndValidateJSON(w, r, &payload, h.validator); err != nil {
 		return
 	}
 
@@ -62,7 +62,37 @@ func (h *AuthHandler) RequestOtp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusNoContent, nil)
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
+}
+
+// VerifyOtp godoc
+//
+//	@Summary		Verify OTP
+//	@Description	Validates a 6-digit OTP for a given identifier and purpose (registration or login).
+//	@Description	Does NOT create a session or return tokens — only verifies the OTP.
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body	dtos.VerifyOtpDto	true	"Verify OTP payload"
+//	@Success		204
+//	@Failure		400	{object}	httpx.ErrorResponse	"Invalid request body or validation error"
+//	@Failure		401	{object}	httpx.ErrorResponse	"OTP invalid or expired"
+//	@Failure		429	{object}	httpx.ErrorResponse	"Too many attempts"
+//	@Failure		500	{object}	httpx.ErrorResponse	"Internal server error"
+//	@Router			/auth/otp/verify [post]
+func (h *AuthHandler) VerifyOtp(w http.ResponseWriter, r *http.Request) {
+	var payload dtos.VerifyOtpDto
+
+	if err := httpx.ReadAndValidateJSON(w, r, &payload, h.validator); err != nil {
+		return
+	}
+
+	if err := h.authService.VerifyOTP(r.Context(), &payload); err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
 }
 
 // Authenticate godoc
@@ -75,22 +105,22 @@ func (h *AuthHandler) RequestOtp(w http.ResponseWriter, r *http.Request) {
 //	@Tags			auth
 //	@Accept			json
 //	@Produce		json
-//	@Param			body	body		dtos.AuthenticationInputDto						true	"Authentication payload"
-//	@Success		200		{object}	httputils.Response{data=dtos.AuthenticationDto}	"Access token and user info. Refresh token set as HttpOnly cookie."
-//	@Failure		400		{object}	httputils.ErrorResponse							"Invalid request body or validation error"
-//	@Failure		401		{object}	httputils.ErrorResponse							"OTP invalid or expired, or invalid credentials"
-//	@Failure		409		{object}	httputils.ErrorResponse							"User already exists or username already taken"
-//	@Failure		429		{object}	httputils.ErrorResponse							"Too many OTP attempts or cooldown active"
-//	@Failure		500		{object}	httputils.ErrorResponse							"Internal server error"
+//	@Param			body	body		dtos.AuthenticationInputDto					true	"Authentication payload"
+//	@Success		200		{object}	httpx.Response{data=dtos.AuthenticationDto}	"Access token and user info. Refresh token set as HttpOnly cookie."
+//	@Failure		400		{object}	httpx.ErrorResponse							"Invalid request body or validation error"
+//	@Failure		401		{object}	httpx.ErrorResponse							"OTP invalid or expired, or invalid credentials"
+//	@Failure		409		{object}	httpx.ErrorResponse							"User already exists or username already taken"
+//	@Failure		429		{object}	httpx.ErrorResponse							"Too many OTP attempts or cooldown active"
+//	@Failure		500		{object}	httpx.ErrorResponse							"Internal server error"
 //	@Router			/auth/token [post]
 func (h *AuthHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 	var body dtos.AuthenticationInputDto
 
-	if err := httputils.ReadAndValidateJSON(w, r, &body, h.validator); err != nil {
+	if err := httpx.ReadAndValidateJSON(w, r, &body, h.validator); err != nil {
 		return
 	}
 
-	requestInfo := middlewares.GetRequestInfo(r.Context())
+	requestInfo := httpctx.GetRequestInfo(r.Context())
 
 	authenticationResponse, err := h.authService.Authenticate(r.Context(), &body, *requestInfo)
 	if err != nil {
@@ -98,13 +128,13 @@ func (h *AuthHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.SetRefreshTokenCookie(
+	httpx.SetRefreshTokenCookie(
 		w,
 		authenticationResponse.Auth.RefreshToken,
 		authenticationResponse.Auth.ExpiresAt,
 		h.cfg.IsProd(),
 	)
-	httputils.RespondWithData(w, http.StatusOK, authenticationResponse)
+	httpx.RespondWithData(w, http.StatusOK, authenticationResponse)
 }
 
 // RefreshToken godoc
@@ -115,14 +145,14 @@ func (h *AuthHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 //	@Description	The new refresh token is set as an HttpOnly cookie. Must be called with `credentials: 'include'` from the frontend.
 //	@Tags			auth
 //	@Produce		json
-//	@Success		200	{object}	httputils.Response{data=dtos.AuthData}	"New access token. New refresh token set as HttpOnly cookie."
-//	@Failure		401	{object}	httputils.ErrorResponse					"Missing cookie, or refresh token invalid or expired"
-//	@Failure		500	{object}	httputils.ErrorResponse					"Internal server error"
+//	@Success		200	{object}	httpx.Response{data=dtos.AuthData}	"New access token. New refresh token set as HttpOnly cookie."
+//	@Failure		401	{object}	httpx.ErrorResponse					"Missing cookie, or refresh token invalid or expired"
+//	@Failure		500	{object}	httpx.ErrorResponse					"Internal server error"
 //	@Router			/auth/token/refresh [post]
 func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
-	refreshToken, err := httputils.GetRefreshTokenFromCookie(r)
+	refreshToken, err := httpx.GetRefreshTokenFromCookie(r)
 	if err != nil {
-		httputils.RespondWithError(w, http.StatusUnauthorized, err)
+		httpx.RespondWithError(w, r, http.StatusUnauthorized, "MISSING_REFRESH_TOKEN", "missing refresh token")
 		return
 	}
 
@@ -132,13 +162,13 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.SetRefreshTokenCookie(
+	httpx.SetRefreshTokenCookie(
 		w,
 		authResponse.RefreshToken,
 		authResponse.ExpiresAt,
 		h.cfg.IsProd(),
 	)
-	httputils.RespondWithData(w, http.StatusOK, authResponse)
+	httpx.RespondWithData(w, http.StatusOK, authResponse)
 }
 
 // Logout godoc
@@ -149,13 +179,14 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 //	@Tags			auth
 //	@Produce		json
 //	@Success		204
-//	@Failure		401	{object}	httputils.ErrorResponse	"Missing cookie, or refresh token invalid or expired"
-//	@Failure		500	{object}	httputils.ErrorResponse	"Internal server error"
+//	@Failure		401	{object}	httpx.ErrorResponse	"Missing cookie, or refresh token invalid or expired"
+//	@Failure		500	{object}	httpx.ErrorResponse	"Internal server error"
 //	@Router			/auth/logout [post]
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	refreshToken, err := httputils.GetRefreshTokenFromCookie(r)
+	refreshToken, err := httpx.GetRefreshTokenFromCookie(r)
 	if err != nil {
-		httputils.RespondWithError(w, http.StatusUnauthorized, err)
+		// TODO: move code somewhere, and use var error
+		httpx.RespondWithError(w, r, http.StatusUnauthorized, "MISSING_REFRESH_TOKEN", "missing refresh token")
 		return
 	}
 
@@ -164,8 +195,8 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.ClearRefreshTokenCookie(w, h.cfg.IsProd())
-	httputils.RespondWithData(w, http.StatusNoContent, nil)
+	httpx.ClearRefreshTokenCookie(w, h.cfg.IsProd())
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
 }
 
 // LogoutAll godoc
@@ -176,13 +207,13 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 //	@Tags			auth
 //	@Produce		json
 //	@Success		204
-//	@Failure		401	{object}	httputils.ErrorResponse	"Missing cookie, or refresh token invalid or expired"
-//	@Failure		500	{object}	httputils.ErrorResponse	"Internal server error"
+//	@Failure		401	{object}	httpx.ErrorResponse	"Missing cookie, or refresh token invalid or expired"
+//	@Failure		500	{object}	httpx.ErrorResponse	"Internal server error"
 //	@Router			/auth/logout/all [post]
 func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
-	refreshToken, err := httputils.GetRefreshTokenFromCookie(r)
+	refreshToken, err := httpx.GetRefreshTokenFromCookie(r)
 	if err != nil {
-		httputils.RespondWithError(w, http.StatusUnauthorized, err)
+		httpx.RespondWithError(w, r, http.StatusUnauthorized, "MISSING_REFRESH_TOKEN", "missing refresh token")
 		return
 	}
 
@@ -191,8 +222,8 @@ func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.ClearRefreshTokenCookie(w, h.cfg.IsProd())
-	httputils.RespondWithData(w, http.StatusNoContent, nil)
+	httpx.ClearRefreshTokenCookie(w, h.cfg.IsProd())
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
 }
 
 // GetSessions godoc
@@ -202,14 +233,14 @@ func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
 //	@Description	Each session includes device info, IP address, and usage timestamps.
 //	@Tags			auth
 //	@Produce		json
-//	@Success		200	{object}	httputils.Response{data=[]domain.Session}	"List of active sessions"
-//	@Failure		401	{object}	httputils.ErrorResponse						"Missing cookie, or refresh token invalid or expired"
-//	@Failure		500	{object}	httputils.ErrorResponse						"Internal server error"
+//	@Success		200	{object}	httpx.Response{data=[]domain.Session}	"List of active sessions"
+//	@Failure		401	{object}	httpx.ErrorResponse						"Missing cookie, or refresh token invalid or expired"
+//	@Failure		500	{object}	httpx.ErrorResponse						"Internal server error"
 //	@Router			/auth/sessions [get]
 func (h *AuthHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
-	refreshToken, err := httputils.GetRefreshTokenFromCookie(r)
+	refreshToken, err := httpx.GetRefreshTokenFromCookie(r)
 	if err != nil {
-		httputils.RespondWithError(w, http.StatusUnauthorized, err)
+		httpx.RespondWithError(w, r, http.StatusUnauthorized, "MISSING_REFRESH_TOKEN", "missing refresh token")
 		return
 	}
 
@@ -219,7 +250,7 @@ func (h *AuthHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusOK, sessions)
+	httpx.RespondWithData(w, http.StatusOK, sessions)
 }
 
 // DeleteSession godoc
@@ -231,14 +262,14 @@ func (h *AuthHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 //	@Produce		json
 //	@Param			id	path	string	true	"Session ID (UUID)"
 //	@Success		204
-//	@Failure		401	{object}	httputils.ErrorResponse	"Missing or invalid Bearer token"
-//	@Failure		404	{object}	httputils.ErrorResponse	"Session not found or not owned by authenticated user"
-//	@Failure		500	{object}	httputils.ErrorResponse	"Internal server error"
+//	@Failure		401	{object}	httpx.ErrorResponse	"Missing or invalid Bearer token"
+//	@Failure		404	{object}	httpx.ErrorResponse	"Session not found or not owned by authenticated user"
+//	@Failure		500	{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/auth/sessions/{id} [delete]
 func (h *AuthHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
-	user := middlewares.GetAuthenticatedUser(r.Context())
+	user := httpctx.GetAuthenticatedUser(r.Context())
 
 	if err := h.authService.DeleteSession(
 		r.Context(),
@@ -249,5 +280,5 @@ func (h *AuthHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.RespondWithData(w, http.StatusNoContent, nil)
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
 }

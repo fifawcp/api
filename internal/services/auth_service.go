@@ -2,31 +2,30 @@ package services
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"math/big"
+	"fmt"
 	"time"
 
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/dtos"
-	"github.com/ncondes/fifawcp/internal/infrastructure/auth"
-	"github.com/ncondes/fifawcp/internal/infrastructure/config"
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
-	"github.com/ncondes/fifawcp/internal/infrastructure/mailer"
-	"github.com/ncondes/fifawcp/internal/packages/totp"
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/dtos"
+	"github.com/fifawcp/api/internal/infrastructure/auth"
+	"github.com/fifawcp/api/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/logging"
+	"github.com/fifawcp/api/internal/infrastructure/mailer"
+	"github.com/fifawcp/api/internal/infrastructure/totp"
 )
 
 type AuthServiceInterface interface {
 	RequestOtp(ctx context.Context, payload *dtos.RequestOtpDto) error
+	VerifyOTP(ctx context.Context, payload *dtos.VerifyOtpDto) error
 	Authenticate(ctx context.Context, payload *dtos.AuthenticationInputDto, requestInfo dtos.RequestInfo) (*dtos.AuthenticationDto, error)
 	RefreshToken(ctx context.Context, refreshToken string) (*dtos.AuthData, error)
 	Logout(ctx context.Context, refreshToken string) error
 	LogoutAll(ctx context.Context, refreshToken string) error
 	GetSessions(ctx context.Context, refreshToken string) ([]domain.Session, error)
 	DeleteSession(ctx context.Context, sessionID string, userID string) error
+	IssueAuthentication(ctx context.Context, user *domain.User, requestInfo dtos.RequestInfo) (*dtos.AuthenticationDto, error)
 }
 
 type AuthService struct {
@@ -97,17 +96,51 @@ func (s *AuthService) RequestOtp(
 	return nil
 }
 
+func (s *AuthService) VerifyOTP(
+	ctx context.Context,
+	payload *dtos.VerifyOtpDto,
+) error {
+	// ! Non-prod env bypass
+	if !s.cfg.IsProd() && payload.OTP == totp.Generate(payload.Identifier, s.cfg.JWT.Secret) {
+		return nil
+	}
+
+	// Get OTP from Redis
+	otp, err := s.otpStorage.GetOTP(ctx, payload.Identifier, *payload.Purpose)
+	if err != nil {
+		return err
+	}
+
+	// Check attempts
+	if otp.Attempts >= s.cfg.Auth.MaxOTPAttempts-1 {
+		// Error can be ignored as it will eventually be deleted by TTL
+		s.otpStorage.DeleteOTP(ctx, payload.Identifier, *payload.Purpose)
+		return domain.ErrOTPTooManyAttempts
+	}
+
+	// Verify OTP
+	if otp.OTPHash != hashToken(payload.OTP) {
+		s.otpStorage.IncrementAttempts(ctx, payload.Identifier, *payload.Purpose)
+		return domain.ErrOTPInvalidOrExpired
+	}
+
+	return nil
+}
+
 func (s *AuthService) Authenticate(
 	ctx context.Context,
 	payload *dtos.AuthenticationInputDto,
 	requestInfo dtos.RequestInfo,
 ) (*dtos.AuthenticationDto, error) {
 	// Verify OTP
-	if err := s.verifyOTP(
+	verifyDTO := dtos.VerifyOtpDto{
+		Purpose:    &payload.Purpose,
+		OTP:        payload.OTP,
+		Identifier: payload.Identifier,
+	}
+	if err := s.VerifyOTP(
 		ctx,
-		payload.Identifier,
-		payload.Purpose,
-		payload.OTP,
+		&verifyDTO,
 	); err != nil {
 		return nil, err
 	}
@@ -134,13 +167,102 @@ func (s *AuthService) Authenticate(
 		// Send welcome email (non-blocking failure — don't fail registration if email fails)
 		if err := s.mailer.SendWelcomeEmail(ctx, user.Email, user.FirstName); err != nil {
 			s.logger.Error(
-				"failed to send welcome email",
-				"error", err,
-				"email", user.Email,
+				fmt.Sprintf("failed to send welcome email to %s", user.Email),
+				logging.Error, err.Error(),
 			)
 		}
 	}
 
+	authentication, err := s.IssueAuthentication(ctx, user, requestInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	// Delete OTP from Redis
+	// In case of error we can ignore it as it will expire anyway
+	s.otpStorage.DeleteOTP(ctx, payload.Identifier, payload.Purpose)
+
+	return authentication, nil
+}
+
+func (s *AuthService) RefreshToken(
+	ctx context.Context,
+	refreshTokenString string,
+) (*dtos.AuthData, error) {
+	// Validate refresh token
+	refreshToken, err := s.refreshTokenRepository.GetRefreshTokenByTokenHash(ctx, hashToken(refreshTokenString))
+	if err != nil {
+		if errors.Is(err, domain.ErrRefreshTokenNotFound) {
+			return nil, domain.ErrRefreshTokenInvalidOrExpired
+		}
+
+		return nil, err
+	}
+
+	// A token already superseded by rotation is honored only inside the grace
+	// window — this lets concurrent refreshes (e.g. the web middleware and client
+	// racing on the same cookie) both succeed instead of logging the user out.
+	// Reuse past the window is treated as invalid.
+	if refreshToken.RotatedAt != nil && time.Since(*refreshToken.RotatedAt) > s.cfg.JWT.RefreshGraceWindow {
+		return nil, domain.ErrRefreshTokenInvalidOrExpired
+	}
+
+	// Generate access token
+	accessTokenResult, err := s.authenticator.GenerateToken(refreshToken.UserID, auth.AccessTokenType)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate refresh token
+	refreshTokenResult, err := s.authenticator.GenerateToken(refreshToken.UserID, auth.RefreshTokenType)
+	if err != nil {
+		return nil, err
+	}
+
+	refreshTokenExpiresAt := refreshTokenResult.ExpiresAt
+	if refreshTokenExpiresAt.After(refreshToken.SessionExpiresAt) {
+		refreshTokenExpiresAt = refreshToken.SessionExpiresAt
+	}
+
+	// Rotate refresh token
+	if err := s.refreshTokenRepository.RotateRefreshToken(ctx, refreshToken.TokenHash, &domain.RefreshToken{
+		UserID:    refreshToken.UserID,
+		SessionID: refreshToken.SessionID,
+		TokenHash: hashToken(refreshTokenResult.Token),
+		ExpiresAt: refreshTokenExpiresAt,
+	}); err != nil {
+		return nil, err
+	}
+
+	// Update session last_used_at
+	if err := s.sessionRepository.UpdateLastUsedAt(ctx, refreshToken.SessionID); err != nil {
+		return nil, err
+	}
+
+	return &dtos.AuthData{
+		AccessToken:  accessTokenResult.Token,
+		RefreshToken: refreshTokenResult.Token,
+		ExpiresAt:    refreshTokenResult.ExpiresAt,
+	}, nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
+	return s.sessionRepository.DeleteSession(ctx, hashToken(refreshToken))
+}
+
+func (s *AuthService) LogoutAll(ctx context.Context, refreshToken string) error {
+	return s.sessionRepository.DeleteAllSessions(ctx, hashToken(refreshToken))
+}
+
+func (s *AuthService) GetSessions(ctx context.Context, refreshToken string) ([]domain.Session, error) {
+	return s.sessionRepository.GetSessions(ctx, hashToken(refreshToken))
+}
+
+func (s *AuthService) DeleteSession(ctx context.Context, sessionID string, userID string) error {
+	return s.sessionRepository.DeleteSessionById(ctx, sessionID, userID)
+}
+
+func (s *AuthService) IssueAuthentication(ctx context.Context, user *domain.User, requestInfo dtos.RequestInfo) (*dtos.AuthenticationDto, error) {
 	// Create session
 	deviceInfoJson, err := json.Marshal(requestInfo.DeviceInfo)
 	if err != nil {
@@ -175,7 +297,7 @@ func (s *AuthService) Authenticate(
 	refreshToken := &domain.RefreshToken{
 		UserID:    user.ID,
 		SessionID: session.ID,
-		TokenHash: s.hashToken(refreshTokenResult.Token),
+		TokenHash: hashToken(refreshTokenResult.Token),
 		ExpiresAt: refreshTokenResult.ExpiresAt,
 	}
 
@@ -183,86 +305,14 @@ func (s *AuthService) Authenticate(
 		return nil, err
 	}
 
-	// Delete OTP from Redis
-	// In case of error we can ignore it as it will expire anyway
-	s.otpStorage.DeleteOTP(ctx, payload.Identifier, payload.Purpose)
-
-	authData := dtos.AuthData{
-		AccessToken:  accessTokenResult.Token,
-		RefreshToken: refreshTokenResult.Token,
-		ExpiresAt:    refreshTokenResult.ExpiresAt,
-	}
-
-	authentication := &dtos.AuthenticationDto{
-		Auth: authData,
+	return &dtos.AuthenticationDto{
 		User: user,
-	}
-
-	return authentication, nil
-}
-
-func (s *AuthService) RefreshToken(
-	ctx context.Context,
-	refreshTokenString string,
-) (*dtos.AuthData, error) {
-	// Validate refresh token
-	refreshToken, err := s.refreshTokenRepository.GetRefreshTokenByTokenHash(ctx, s.hashToken(refreshTokenString))
-	if err != nil {
-		if errors.Is(err, domain.ErrRefreshTokenNotFound) {
-			return nil, domain.ErrRefreshTokenInvalidOrExpired
-		}
-
-		return nil, err
-	}
-
-	// Generate access token
-	accessTokenResult, err := s.authenticator.GenerateToken(refreshToken.UserID, auth.AccessTokenType)
-	if err != nil {
-		return nil, err
-	}
-
-	// Generate refresh token
-	refreshTokenResult, err := s.authenticator.GenerateToken(refreshToken.UserID, auth.RefreshTokenType)
-	if err != nil {
-		return nil, err
-	}
-
-	// Rotate refresh token
-	if err := s.refreshTokenRepository.RotateRefreshToken(ctx, refreshToken.TokenHash, &domain.RefreshToken{
-		UserID:    refreshToken.UserID,
-		SessionID: refreshToken.SessionID,
-		TokenHash: s.hashToken(refreshTokenResult.Token),
-		ExpiresAt: refreshTokenResult.ExpiresAt,
-	}); err != nil {
-		return nil, err
-	}
-
-	// Update session last_used_at
-	if err := s.sessionRepository.UpdateLastUsedAt(ctx, refreshToken.SessionID); err != nil {
-		return nil, err
-	}
-
-	return &dtos.AuthData{
-		AccessToken:  accessTokenResult.Token,
-		RefreshToken: refreshTokenResult.Token,
-		ExpiresAt:    refreshTokenResult.ExpiresAt,
+		Auth: dtos.AuthData{
+			AccessToken:  accessTokenResult.Token,
+			RefreshToken: refreshTokenResult.Token,
+			ExpiresAt:    refreshTokenResult.ExpiresAt,
+		},
 	}, nil
-}
-
-func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
-	return s.sessionRepository.DeleteSession(ctx, s.hashToken(refreshToken))
-}
-
-func (s *AuthService) LogoutAll(ctx context.Context, refreshToken string) error {
-	return s.sessionRepository.DeleteAllSessions(ctx, s.hashToken(refreshToken))
-}
-
-func (s *AuthService) GetSessions(ctx context.Context, refreshToken string) ([]domain.Session, error) {
-	return s.sessionRepository.GetSessions(ctx, s.hashToken(refreshToken))
-}
-
-func (s *AuthService) DeleteSession(ctx context.Context, sessionID string, userID string) error {
-	return s.sessionRepository.DeleteSessionById(ctx, sessionID, userID)
 }
 
 func (s *AuthService) validateUserForPurpose(
@@ -283,7 +333,6 @@ func (s *AuthService) validateUserForPurpose(
 
 	case domain.OTPPurposeLogin:
 		if err != nil {
-			s.logger.Warn("Login failed: user not found", "identifier", identifier)
 			return nil, domain.ErrInvalidCredentials
 		}
 	}
@@ -296,8 +345,8 @@ func (s *AuthService) generateAndStoreOTP(
 	identifier string,
 	purpose domain.OTPPurpose,
 ) (string, error) {
-	plainOtp := s.generateOTP(6)
-	otpHash := s.hashToken(plainOtp)
+	plainOtp := generateOTP(6)
+	otpHash := hashToken(plainOtp)
 	otp := &domain.OTP{
 		Identifier: identifier,
 		Purpose:    purpose,
@@ -313,66 +362,10 @@ func (s *AuthService) generateAndStoreOTP(
 	// Log OTP in development for debugging
 	if !s.cfg.IsProd() {
 		s.logger.Info(
-			"[DEBUG] OTP",
-			"purpose", purpose,
-			"identifier", identifier,
-			"otp", plainOtp,
+			fmt.Sprintf("TOTP issued to identifier: %s for purpose: %s", identifier, string(purpose)),
+			"TOTP", plainOtp,
 		)
 	}
 
 	return plainOtp, nil
-}
-
-func (s *AuthService) generateOTP(length int) string {
-	const digits = "0123456789"
-	otp := make([]byte, length)
-
-	for i := range otp {
-		// Generate a random number between 0 and len(digits)
-		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(digits))))
-		if err != nil {
-			return ""
-		}
-		// Convert the random number to a byte and add it to the OTP
-		otp[i] = digits[num.Int64()]
-	}
-
-	return string(otp)
-}
-
-func (s *AuthService) hashToken(token string) string {
-	hash := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(hash[:])
-}
-
-func (s *AuthService) verifyOTP(
-	ctx context.Context,
-	identifier string,
-	purpose domain.OTPPurpose,
-	plainOtp string,
-) error {
-	// ! Non-prod env bypass
-	if !s.cfg.IsProd() && plainOtp == totp.Generate(identifier, s.cfg.JWT.Secret) {
-		return nil
-	}
-
-	// Get OTP from Redis
-	otp, err := s.otpStorage.GetOTP(ctx, identifier, purpose)
-	if err != nil {
-		return err
-	}
-
-	// Check attempts
-	if otp.Attempts >= s.cfg.Auth.MaxOTPAttempts-1 {
-		s.otpStorage.DeleteOTP(ctx, identifier, purpose)
-		return domain.ErrOTPTooManyAttempts
-	}
-
-	// Verify OTP
-	if otp.OTPHash != s.hashToken(plainOtp) {
-		s.otpStorage.IncrementAttempts(ctx, identifier, purpose)
-		return domain.ErrOTPInvalidOrExpired
-	}
-
-	return nil
 }

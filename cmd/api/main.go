@@ -2,20 +2,15 @@ package main
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
+	"time"
 
+	"github.com/fifawcp/api/docs"
+	"github.com/fifawcp/api/internal/app"
+	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/joho/godotenv"
-	"github.com/ncondes/fifawcp/docs"
-	"github.com/ncondes/fifawcp/internal/app"
-	"github.com/ncondes/fifawcp/internal/infrastructure/auth"
-	"github.com/ncondes/fifawcp/internal/infrastructure/cache"
-	"github.com/ncondes/fifawcp/internal/infrastructure/config"
-	"github.com/ncondes/fifawcp/internal/infrastructure/db"
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
-	"github.com/ncondes/fifawcp/internal/infrastructure/mailer"
-	"github.com/ncondes/fifawcp/internal/infrastructure/scheduler"
-	"github.com/ncondes/fifawcp/internal/infrastructure/validator"
 )
 
 const version = "0.0.1"
@@ -29,99 +24,35 @@ const version = "0.0.1"
 //	@host
 //	@BasePath	/api
 
-//	@tag.name			auth
-//	@tag.description	OTP request, token exchange, refresh, logout, and session management
-
-//	@tag.name			users
-//	@tag.description	Authenticated user profile and data
-
-//	@tag.name			debug
-//	@tag.description	Non-production only. These endpoints are not registered in production.
-
 // @securityDefinitions.apikey	BearerAuth
 // @in							header
 // @name						Authorization
 // @description				Enter your JWT token in format: Bearer {token}
 func main() {
-	// Load environment variables from .env
 	godotenv.Load()
 
-	// Create config
+	time.Local = time.UTC
+
 	cfg := config.NewConfig()
 
-	// Configure Swagger docs at runtime
 	if u, err := url.Parse(cfg.APIBaseURL); err == nil {
 		docs.SwaggerInfo.Host = u.Host
 	}
 	docs.SwaggerInfo.BasePath = "/api"
 	docs.SwaggerInfo.Version = version
 
-	// Create Logger
-	logger := logging.NewSlogLogger(cfg)
-
-	// Connect to Database
-	db, err := db.NewPostgresDB(
-		cfg.DB.Address,
-		cfg.DB.MaxOpenConns,
-		cfg.DB.MaxIdleConns,
-		cfg.DB.MaxLifetime,
-	)
+	container, err := app.NewContainer(cfg)
 	if err != nil {
-		logger.Error("Error connecting to database", "error", err)
-		return
+		log.Fatal(err)
 	}
-	defer db.Close()
-	logger.Info("Connected to database successfully")
+	defer container.Cleanup()
 
-	// Create Redis client
-	redis, err := cache.NewRedisClient(cfg)
-	if err != nil {
-		logger.Error("Error connecting to Redis", "error", err)
-		return
-	}
-	defer redis.Close()
-	logger.Info("Connected to Redis successfully")
+	router := container.NewRouter()
 
-	// Create validator
-	validator := validator.NewValidator()
-
-	// Create JWT authenticator
-	jwtAuthenticator := auth.NewJWTAuthenticator(
-		cfg.JWT.Secret,
-		cfg.JWT.Audience,
-		cfg.JWT.Issuer,
-		cfg.JWT.AccessTokenExpiry,
-		cfg.JWT.RefreshTokenExpiry,
-	)
-
-	// Create Mailer
-	resendMailer := mailer.NewResendMailer(cfg)
-
-	// Create scheduler
-	scheduler := scheduler.NewCronScheduler(logger)
-
-	// Create app container
-	app := app.NewAppContainer(
-		cfg,
-		logger,
-		db,
-		redis,
-		validator,
-		jwtAuthenticator,
-		resendMailer,
-		scheduler,
-	)
-
-	// Create router
-	router := app.NewRouter()
-
-	// Start server
-	if err := app.StartServer(router); err != nil {
+	if err := container.StartServer(router); err != nil {
 		if errors.Is(err, http.ErrServerClosed) {
-			logger.Info("Server stopped")
 			return
 		}
-
-		logger.Error("Server error", "error", err)
+		log.Fatal(err)
 	}
 }

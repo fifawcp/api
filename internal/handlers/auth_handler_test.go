@@ -9,57 +9,62 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/dtos"
+	"github.com/fifawcp/api/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/validator"
+	"github.com/fifawcp/api/internal/test/mocks"
+	"github.com/fifawcp/api/internal/test/testutils"
 	"github.com/go-chi/chi/v5"
-	"github.com/ncondes/fifawcp/internal/domain"
-	"github.com/ncondes/fifawcp/internal/dtos"
-	"github.com/ncondes/fifawcp/internal/infrastructure/logging"
-	"github.com/ncondes/fifawcp/internal/infrastructure/middlewares"
-	"github.com/ncondes/fifawcp/internal/infrastructure/validator"
-	"github.com/ncondes/fifawcp/internal/packages/testutils"
 	"github.com/stretchr/testify/assert"
 )
 
-func newTestAuthHandler(s *testutils.MockAuthService) *AuthHandler {
+func newTestAuthHandler(s *mocks.MockAuthService) *AuthHandler {
+	cfg := &config.Config{
+		Auth: config.AuthConfig{
+			SessionTTL:     24 * time.Hour,
+			OTPTTL:         10 * time.Minute,
+			OTPCooldown:    30 * time.Second,
+			MaxOTPAttempts: 5,
+		},
+		Server: config.ServerConfig{
+			ShutdownTimeout: 200 * time.Millisecond,
+		},
+	}
 	return NewAuthHandler(
 		s,
-		logging.NewNoopLogger(),
+		&mocks.MockLogger{},
 		validator.NewValidator(),
-		testutils.NewTestConfig(),
+		cfg,
 	)
-}
-
-func withRequestInfo(req *http.Request, info *dtos.RequestInfo) *http.Request {
-	ctx := context.WithValue(req.Context(), middlewares.RequestInfoContextKey, info)
-	return req.WithContext(ctx)
-}
-
-func withAuthUser(req *http.Request, user *domain.User) *http.Request {
-	ctx := context.WithValue(req.Context(), middlewares.AuthenticatedUserContextKey, user)
-	return req.WithContext(ctx)
 }
 
 // ---------------------------------------------------------------------------
 // TestAuthHandler_RequestOtp
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_RequestOtp(t *testing.T) {
 	t.Parallel()
 
 	loginPurpose := domain.OTPPurposeLogin
 	registrationPurpose := domain.OTPPurposeRegistration
 
+	makeRequestOtpReq := func(t *testing.T, body any) *http.Request {
+		t.Helper()
+
+		return testutils.MakeJSONRequest(
+			t, http.MethodPost, "/auth/otp/request", body,
+		)
+	}
+
 	t.Run("returns 204 on success (login)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error { return nil },
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(
-			t,
-			http.MethodPost,
-			"/auth/otp/request",
+		req := makeRequestOtpReq(t,
 			dtos.RequestOtpDto{
 				Identifier: "john@example.com",
 				Purpose:    &loginPurpose,
@@ -74,15 +79,12 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 	t.Run("returns 204 on success (registration)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error { return nil },
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(
-			t,
-			http.MethodPost,
-			"/auth/otp/request",
+		req := makeRequestOtpReq(t,
 			dtos.RequestOtpDto{
 				Identifier: "john@example.com",
 				Purpose:    &registrationPurpose,
@@ -97,37 +99,37 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 	t.Run("returns 400 when validation fails", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestAuthHandler(&testutils.MockAuthService{})
+		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		testCases := []struct {
-			name        string
-			payload     map[string]any
-			expectedKey string
-			expectedMsg string
+			name         string
+			payload      map[string]any
+			expectedKey  string
+			expectedCode string
 		}{
 			{
-				name:        "missing identifier",
-				payload:     map[string]any{"purpose": "login"},
-				expectedKey: "identifier",
-				expectedMsg: "identifier is required",
+				name:         "missing identifier",
+				payload:      map[string]any{"purpose": "login"},
+				expectedKey:  "identifier",
+				expectedCode: "REQUIRED",
 			},
 			{
-				name:        "missing purpose",
-				payload:     map[string]any{"identifier": "john@example.com"},
-				expectedKey: "purpose",
-				expectedMsg: "purpose is required",
+				name:         "missing purpose",
+				payload:      map[string]any{"identifier": "john@example.com"},
+				expectedKey:  "purpose",
+				expectedCode: "REQUIRED",
 			},
 			{
-				name:        "invalid purpose value",
-				payload:     map[string]any{"identifier": "john@example.com", "purpose": "unknown"},
-				expectedKey: "purpose",
-				expectedMsg: "purpose is invalid",
+				name:         "invalid purpose value",
+				payload:      map[string]any{"identifier": "john@example.com", "purpose": "unknown"},
+				expectedKey:  "purpose",
+				expectedCode: "INVALID_OPTION",
 			},
 			{
-				name:        "identifier too long",
-				payload:     map[string]any{"identifier": strings.Repeat("a", 256), "purpose": "login"},
-				expectedKey: "identifier",
-				expectedMsg: "identifier must be at most 255 characters",
+				name:         "identifier too long",
+				payload:      map[string]any{"identifier": strings.Repeat("a", 256), "purpose": "login"},
+				expectedKey:  "identifier",
+				expectedCode: "MAX_LENGTH",
 			},
 		}
 
@@ -135,20 +137,24 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
 
-				req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request", tc.payload)
+				req := makeRequestOtpReq(t, tc.payload)
 				w := httptest.NewRecorder()
 				h.RequestOtp(w, req)
 
 				assert.Equal(t, http.StatusBadRequest, w.Code)
 
 				var resp struct {
-					Error   string            `json:"error"`
-					Details map[string]string `json:"details"`
+					Error struct {
+						Code   string `json:"code"`
+						Fields map[string]struct {
+							Code string `json:"code"`
+						} `json:"fields"`
+					} `json:"error"`
 				}
 
 				testutils.ParseJSONResponse(t, w, &resp)
-				assert.Equal(t, "validation failed", resp.Error)
-				assert.Equal(t, tc.expectedMsg, resp.Details[tc.expectedKey])
+				assert.Equal(t, "VALIDATION_FAILED", resp.Error.Code)
+				assert.Equal(t, tc.expectedCode, resp.Error.Fields[tc.expectedKey].Code)
 			})
 		}
 	})
@@ -156,14 +162,14 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 	t.Run("returns 409 when user already exists (registration)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error {
 				return domain.ErrUserAlreadyExists
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request", dtos.RequestOtpDto{
+		req := makeRequestOtpReq(t, dtos.RequestOtpDto{
 			Identifier: "john@example.com",
 			Purpose:    &registrationPurpose,
 		})
@@ -173,24 +179,26 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		assert.Equal(t, http.StatusConflict, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrUserAlreadyExists.Error(), resp.Error)
+		assert.Equal(t, "USER_ALREADY_EXISTS", resp.Error.Code)
 	})
 
 	t.Run("returns 401 when user already exists (login)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error {
 				return domain.ErrInvalidCredentials
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request", dtos.RequestOtpDto{
+		req := makeRequestOtpReq(t, dtos.RequestOtpDto{
 			Identifier: "john@example.com",
 			Purpose:    &loginPurpose,
 		})
@@ -200,24 +208,26 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrInvalidCredentials.Error(), resp.Error)
+		assert.Equal(t, "INVALID_CREDENTIALS", resp.Error.Code)
 	})
 
 	t.Run("returns 429 when OTP cooldown is active", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error {
 				return domain.ErrOtpCooldown(30 * time.Second)
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request", dtos.RequestOtpDto{
+		req := makeRequestOtpReq(t, dtos.RequestOtpDto{
 			Identifier: "john@example.com",
 			Purpose:    &loginPurpose,
 		})
@@ -227,11 +237,13 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		assert.Equal(t, http.StatusTooManyRequests, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrOtpCooldown(30*time.Second).Error(), resp.Error)
+		assert.Equal(t, "OTP_COOLDOWN", resp.Error.Code)
 	})
 
 	t.Run("does not write a response when request context is cancelled", func(t *testing.T) {
@@ -240,15 +252,14 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // already cancelled
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error {
 				return context.Canceled
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request",
-			map[string]any{"identifier": "john@example.com", "purpose": "login"})
+		req := makeRequestOtpReq(t, map[string]any{"identifier": "john@example.com", "purpose": "login"})
 		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()
 
@@ -260,14 +271,14 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error {
 				return errors.New("database connection error")
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request", dtos.RequestOtpDto{
+		req := makeRequestOtpReq(t, dtos.RequestOtpDto{
 			Identifier: "john@example.com",
 			Purpose:    &loginPurpose,
 		})
@@ -277,41 +288,20 @@ func TestAuthHandler_RequestOtp(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "internal server error", resp.Error)
+		assert.Equal(t, "INTERNAL_SERVER_ERROR", resp.Error.Code)
 	})
 
-	t.Run("does not write a response when request context is cancelled", func(t *testing.T) {
-		t.Parallel()
-
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-
-		s := &testutils.MockAuthService{
-			RequestOtpFunc: func(context.Context, *dtos.RequestOtpDto) error {
-				return context.Canceled
-			},
-		}
-		h := newTestAuthHandler(s)
-
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/otp/request",
-			map[string]any{"identifier": "john@example.com", "purpose": "login"})
-		req = req.WithContext(ctx)
-		w := httptest.NewRecorder()
-
-		h.RequestOtp(w, req)
-
-		assert.Empty(t, w.Body.String())
-	})
 }
 
 // ---------------------------------------------------------------------------
 // TestAuthHandler_Authenticate
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_Authenticate(t *testing.T) {
 	t.Parallel()
 
@@ -328,8 +318,12 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 
 	makeAuthReq := func(t *testing.T, body any) *http.Request {
 		t.Helper()
-		req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/token", body)
-		req = withRequestInfo(req, defaultRequestInfo)
+
+		req := testutils.MakeJSONRequest(
+			t, http.MethodPost, "/auth/token", body,
+			testutils.WithRequestInfo(defaultRequestInfo),
+		)
+
 		return req
 	}
 
@@ -339,12 +333,9 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		expectedAccessToken := "access-token-value"
 		expectedRefreshToken := "refresh-token-value"
 		expectedExpiresAt := time.Now().Add(7 * 24 * time.Hour)
-		expectedUser := &domain.User{
-			ID:    "user-123",
-			Email: "john@example.com",
-		}
+		expectedUser := testutils.CreateTestUser()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -398,14 +389,9 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		expectedAccessToken := "access-token-value"
 		expectedRefreshToken := "refresh-token-value"
 		expectedExpiresAt := time.Now().Add(time.Hour)
-		expectedUser := &domain.User{
-			Email:     "jane@example.com",
-			Username:  "janedoe",
-			FirstName: "Jane",
-			LastName:  "Doe",
-		}
+		expectedUser := testutils.CreateTestUser()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -424,14 +410,14 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		h := newTestAuthHandler(s)
 
 		req := makeAuthReq(t, map[string]any{
-			"identifier": "jane@example.com",
+			"identifier": expectedUser.Email,
 			"purpose":    "registration",
 			"otp":        "123456",
 			"user": map[string]any{
-				"email":      "jane@example.com",
-				"username":   "janedoe",
-				"first_name": "Jane",
-				"last_name":  "Doe",
+				"email":      expectedUser.Email,
+				"username":   expectedUser.Username,
+				"first_name": expectedUser.FirstName,
+				"last_name":  expectedUser.LastName,
 			},
 		})
 		w := httptest.NewRecorder()
@@ -465,49 +451,49 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 	t.Run("returns 400 when validation fails", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestAuthHandler(&testutils.MockAuthService{})
+		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		testCases := []struct {
-			name        string
-			payload     map[string]any
-			expectedKey string
-			expectedMsg string
+			name         string
+			payload      map[string]any
+			expectedKey  string
+			expectedCode string
 		}{
 			{
-				name:        "missing identifier",
-				payload:     map[string]any{"purpose": "login", "otp": "123456"},
-				expectedKey: "identifier",
-				expectedMsg: "identifier is required",
+				name:         "missing identifier",
+				payload:      map[string]any{"purpose": "login", "otp": "123456"},
+				expectedKey:  "identifier",
+				expectedCode: "REQUIRED",
 			},
 			{
-				name:        "identifier too long",
-				payload:     map[string]any{"identifier": strings.Repeat("a", 256), "purpose": "login"},
-				expectedKey: "identifier",
-				expectedMsg: "identifier must be at most 255 characters",
+				name:         "identifier too long",
+				payload:      map[string]any{"identifier": strings.Repeat("a", 256), "purpose": "login"},
+				expectedKey:  "identifier",
+				expectedCode: "MAX_LENGTH",
 			},
 			{
-				name:        "missing otp",
-				payload:     map[string]any{"identifier": "john@example.com", "purpose": "login"},
-				expectedKey: "otp",
-				expectedMsg: "otp is required",
+				name:         "missing otp",
+				payload:      map[string]any{"identifier": "john@example.com", "purpose": "login"},
+				expectedKey:  "otp",
+				expectedCode: "REQUIRED",
 			},
 			{
-				name:        "otp too short",
-				payload:     map[string]any{"identifier": "john@example.com", "purpose": "login", "otp": "12345"},
-				expectedKey: "otp",
-				expectedMsg: "otp must be at least 6 characters",
+				name:         "otp too short",
+				payload:      map[string]any{"identifier": "john@example.com", "purpose": "login", "otp": "12345"},
+				expectedKey:  "otp",
+				expectedCode: "MIN_LENGTH",
 			},
 			{
-				name:        "otp too long",
-				payload:     map[string]any{"identifier": "john@example.com", "purpose": "login", "otp": "1234567"},
-				expectedKey: "otp",
-				expectedMsg: "otp must be at most 6 characters",
+				name:         "otp too long",
+				payload:      map[string]any{"identifier": "john@example.com", "purpose": "login", "otp": "1234567"},
+				expectedKey:  "otp",
+				expectedCode: "MAX_LENGTH",
 			},
 			{
-				name:        "invalid purpose",
-				payload:     map[string]any{"identifier": "john@example.com", "purpose": "unknown", "otp": "123456"},
-				expectedKey: "purpose",
-				expectedMsg: "purpose is invalid",
+				name:         "invalid purpose",
+				payload:      map[string]any{"identifier": "john@example.com", "purpose": "unknown", "otp": "123456"},
+				expectedKey:  "purpose",
+				expectedCode: "INVALID_OPTION",
 			},
 
 			{
@@ -517,8 +503,8 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 					"purpose":    "registration",
 					"otp":        "123456",
 				},
-				expectedKey: "User",
-				expectedMsg: "User is required",
+				expectedKey:  "user",
+				expectedCode: "REQUIRED",
 			},
 		}
 
@@ -526,8 +512,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
 
-				req := testutils.MakeJSONRequest(t, http.MethodPost, "/auth/token", tc.payload)
-				req = withRequestInfo(req, defaultRequestInfo)
+				req := makeAuthReq(t, tc.payload)
 				w := httptest.NewRecorder()
 
 				h.Authenticate(w, req)
@@ -535,13 +520,17 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 				assert.Equal(t, http.StatusBadRequest, w.Code)
 
 				var resp struct {
-					Error   string            `json:"error"`
-					Details map[string]string `json:"details"`
+					Error struct {
+						Code   string `json:"code"`
+						Fields map[string]struct {
+							Code string `json:"code"`
+						} `json:"fields"`
+					} `json:"error"`
 				}
 
 				testutils.ParseJSONResponse(t, w, &resp)
-				assert.Equal(t, "validation failed", resp.Error)
-				assert.Equal(t, tc.expectedMsg, resp.Details[tc.expectedKey])
+				assert.Equal(t, "VALIDATION_FAILED", resp.Error.Code)
+				assert.Equal(t, tc.expectedCode, resp.Error.Fields[tc.expectedKey].Code)
 			})
 		}
 	})
@@ -549,7 +538,7 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 	t.Run("returns 401 when OTP is invalid or expired", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -572,17 +561,19 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrOTPInvalidOrExpired.Error(), resp.Error)
+		assert.Equal(t, "OTP_INVALID_OR_EXPIRED", resp.Error.Code)
 	})
 
 	t.Run("returns 401 when invalid credentials", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -605,17 +596,19 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrInvalidCredentials.Error(), resp.Error)
+		assert.Equal(t, "INVALID_CREDENTIALS", resp.Error.Code)
 	})
 
 	t.Run("returns 409 when user already exists (registration)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -644,17 +637,19 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusConflict, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrUserAlreadyExists.Error(), resp.Error)
+		assert.Equal(t, "USER_ALREADY_EXISTS", resp.Error.Code)
 	})
 
 	t.Run("returns 409 when username already taken (registration)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -683,17 +678,19 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusConflict, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrUsernameAlreadyExists.Error(), resp.Error)
+		assert.Equal(t, "USERNAME_ALREADY_EXISTS", resp.Error.Code)
 	})
 
 	t.Run("returns 429 when too many OTP attempts (login)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -716,17 +713,19 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusTooManyRequests, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrOTPTooManyAttempts.Error(), resp.Error)
+		assert.Equal(t, "OTP_TOO_MANY_ATTEMPTS", resp.Error.Code)
 	})
 
 	t.Run("returns 429 when too many OTP attempts (registration)", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -755,17 +754,19 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusTooManyRequests, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrOTPTooManyAttempts.Error(), resp.Error)
+		assert.Equal(t, "OTP_TOO_MANY_ATTEMPTS", resp.Error.Code)
 	})
 
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			AuthenticateFunc: func(
 				context.Context,
 				*dtos.AuthenticationInputDto,
@@ -788,23 +789,30 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "internal server error", resp.Error)
+		assert.Equal(t, "INTERNAL_SERVER_ERROR", resp.Error.Code)
 	})
 }
 
 // ---------------------------------------------------------------------------
 // TestAuthHandler_RefreshToken
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_RefreshToken(t *testing.T) {
 	t.Parallel()
 
 	const cookieName = "refresh_token"
 	const existingToken = "existing-refresh-token"
+
+	makeRefreshTokenReq := func(t *testing.T, cookieValue string) *http.Request {
+		t.Helper()
+
+		return testutils.MakeRequestWithCookie(t, http.MethodPost, "/auth/token/refresh", cookieName, cookieValue)
+	}
 
 	t.Run("returns 200 and rotates the refresh token cookie", func(t *testing.T) {
 		t.Parallel()
@@ -812,7 +820,7 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 		newToken := "new-refresh-token"
 		expiresAt := time.Now().Add(7 * 24 * time.Hour)
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RefreshTokenFunc: func(context.Context, string) (*dtos.AuthData, error) {
 				return &dtos.AuthData{
 					AccessToken:  "new-access-token",
@@ -823,13 +831,7 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/token/refresh",
-			cookieName,
-			existingToken,
-		)
+		req := makeRefreshTokenReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.RefreshToken(w, req)
@@ -854,7 +856,7 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 	t.Run("returns 401 when refresh token cookie is missing", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestAuthHandler(&testutils.MockAuthService{})
+		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		req := httptest.NewRequest(http.MethodPost, "/auth/token/refresh", nil)
 		w := httptest.NewRecorder()
@@ -864,30 +866,26 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "missing refresh token", resp.Error)
+		assert.Equal(t, "MISSING_REFRESH_TOKEN", resp.Error.Code)
 	})
 
 	t.Run("returns 401 when refresh token is invalid or expired", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RefreshTokenFunc: func(context.Context, string) (*dtos.AuthData, error) {
 				return nil, domain.ErrRefreshTokenInvalidOrExpired
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/token/refresh",
-			cookieName,
-			existingToken,
-		)
+		req := makeRefreshTokenReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.RefreshToken(w, req)
@@ -895,30 +893,26 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrRefreshTokenInvalidOrExpired.Error(), resp.Error)
+		assert.Equal(t, "REFRESH_TOKEN_INVALID_OR_EXPIRED", resp.Error.Code)
 	})
 
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			RefreshTokenFunc: func(context.Context, string) (*dtos.AuthData, error) {
 				return nil, errors.New("db error")
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/token/refresh",
-			cookieName,
-			existingToken,
-		)
+		req := makeRefreshTokenReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.RefreshToken(w, req)
@@ -930,28 +924,27 @@ func TestAuthHandler_RefreshToken(t *testing.T) {
 // ---------------------------------------------------------------------------
 // TestAuthHandler_Logout
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_Logout(t *testing.T) {
 	t.Parallel()
 
 	const cookieName = "refresh_token"
 	const existingToken = "valid-refresh-token"
 
+	makeLogoutReq := func(t *testing.T, cookieValue string) *http.Request {
+		t.Helper()
+
+		return testutils.MakeRequestWithCookie(t, http.MethodPost, "/auth/logout", cookieName, cookieValue)
+	}
+
 	t.Run("returns 204 and clears the refresh token cookie", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			LogoutFunc: func(context.Context, string) error { return nil },
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/logout",
-			cookieName,
-			existingToken,
-		)
+		req := makeLogoutReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.Logout(w, req)
@@ -968,7 +961,7 @@ func TestAuthHandler_Logout(t *testing.T) {
 	t.Run("returns 401 when refresh token cookie is missing", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestAuthHandler(&testutils.MockAuthService{})
+		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
 		w := httptest.NewRecorder()
@@ -978,30 +971,26 @@ func TestAuthHandler_Logout(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "missing refresh token", resp.Error)
+		assert.Equal(t, "MISSING_REFRESH_TOKEN", resp.Error.Code)
 	})
 
 	t.Run("returns 401 when refresh token is invalid or expired", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			LogoutFunc: func(context.Context, string) error {
 				return domain.ErrRefreshTokenInvalidOrExpired
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/logout",
-			cookieName,
-			existingToken,
-		)
+		req := makeLogoutReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.Logout(w, req)
@@ -1009,30 +998,26 @@ func TestAuthHandler_Logout(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrRefreshTokenInvalidOrExpired.Error(), resp.Error)
+		assert.Equal(t, "REFRESH_TOKEN_INVALID_OR_EXPIRED", resp.Error.Code)
 	})
 
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			LogoutFunc: func(context.Context, string) error {
 				return errors.New("db error")
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/logout",
-			cookieName,
-			existingToken,
-		)
+		req := makeLogoutReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.Logout(w, req)
@@ -1044,28 +1029,27 @@ func TestAuthHandler_Logout(t *testing.T) {
 // ---------------------------------------------------------------------------
 // TestAuthHandler_LogoutAll
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_LogoutAll(t *testing.T) {
 	t.Parallel()
 
 	const cookieName = "refresh_token"
 	const existingToken = "valid-refresh-token"
 
+	makeLogoutAllReq := func(t *testing.T, cookieValue string) *http.Request {
+		t.Helper()
+
+		return testutils.MakeRequestWithCookie(t, http.MethodPost, "/auth/logout/all", cookieName, cookieValue)
+	}
+
 	t.Run("returns 204 and clears the refresh token cookie", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			LogoutAllFunc: func(context.Context, string) error { return nil },
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/logout/all",
-			cookieName,
-			existingToken,
-		)
+		req := makeLogoutAllReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.LogoutAll(w, req)
@@ -1082,7 +1066,7 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 	t.Run("returns 401 when refresh token cookie is missing", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestAuthHandler(&testutils.MockAuthService{})
+		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		req := httptest.NewRequest(http.MethodPost, "/auth/logout/all", nil)
 		w := httptest.NewRecorder()
@@ -1092,30 +1076,26 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "missing refresh token", resp.Error)
+		assert.Equal(t, "MISSING_REFRESH_TOKEN", resp.Error.Code)
 	})
 
 	t.Run("returns 401 when refresh token is invalid or expired", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			LogoutAllFunc: func(context.Context, string) error {
 				return domain.ErrRefreshTokenInvalidOrExpired
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/logout/all",
-			cookieName,
-			existingToken,
-		)
+		req := makeLogoutAllReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.LogoutAll(w, req)
@@ -1123,30 +1103,26 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrRefreshTokenInvalidOrExpired.Error(), resp.Error)
+		assert.Equal(t, "REFRESH_TOKEN_INVALID_OR_EXPIRED", resp.Error.Code)
 	})
 
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			LogoutAllFunc: func(context.Context, string) error {
 				return errors.New("db error")
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodPost,
-			"/auth/logout/all",
-			cookieName,
-			existingToken,
-		)
+		req := makeLogoutAllReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.LogoutAll(w, req)
@@ -1154,23 +1130,30 @@ func TestAuthHandler_LogoutAll(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "internal server error", resp.Error)
+		assert.Equal(t, "INTERNAL_SERVER_ERROR", resp.Error.Code)
 	})
 }
 
 // ---------------------------------------------------------------------------
 // TestAuthHandler_GetSessions
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_GetSessions(t *testing.T) {
 	t.Parallel()
 
 	const cookieName = "refresh_token"
 	const existingToken = "valid-refresh-token"
+
+	makeGetSessionsReq := func(t *testing.T, cookieValue string) *http.Request {
+		t.Helper()
+
+		return testutils.MakeRequestWithCookie(t, http.MethodGet, "/auth/sessions", cookieName, cookieValue)
+	}
 
 	t.Run("returns 200 with a list of sessions", func(t *testing.T) {
 		t.Parallel()
@@ -1191,20 +1174,14 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 			},
 		}
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			GetSessionsFunc: func(context.Context, string) ([]domain.Session, error) {
 				return expectedSessions, nil
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodGet,
-			"/auth/sessions",
-			cookieName,
-			existingToken,
-		)
+		req := makeGetSessionsReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.GetSessions(w, req)
@@ -1236,7 +1213,7 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 	t.Run("returns 401 when refresh token cookie is missing", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestAuthHandler(&testutils.MockAuthService{})
+		h := newTestAuthHandler(&mocks.MockAuthService{})
 
 		req := httptest.NewRequest(http.MethodGet, "/auth/sessions", nil)
 		w := httptest.NewRecorder()
@@ -1246,29 +1223,25 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "missing refresh token", resp.Error)
+		assert.Equal(t, "MISSING_REFRESH_TOKEN", resp.Error.Code)
 	})
 
 	t.Run("returns 401 when refresh token is invalid or expired", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			GetSessionsFunc: func(context.Context, string) ([]domain.Session, error) {
 				return nil, domain.ErrRefreshTokenInvalidOrExpired
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodGet,
-			"/auth/sessions",
-			cookieName,
-			existingToken,
-		)
+		req := makeGetSessionsReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.GetSessions(w, req)
@@ -1276,30 +1249,26 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrRefreshTokenInvalidOrExpired.Error(), resp.Error)
+		assert.Equal(t, "REFRESH_TOKEN_INVALID_OR_EXPIRED", resp.Error.Code)
 	})
 
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			GetSessionsFunc: func(context.Context, string) ([]domain.Session, error) {
 				return nil, errors.New("db error")
 			},
 		}
 		h := newTestAuthHandler(s)
 
-		req := testutils.MakeRequestWithCookie(
-			t,
-			http.MethodGet,
-			"/auth/sessions",
-			cookieName,
-			existingToken,
-		)
+		req := makeGetSessionsReq(t, existingToken)
 		w := httptest.NewRecorder()
 
 		h.GetSessions(w, req)
@@ -1307,18 +1276,19 @@ func TestAuthHandler_GetSessions(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "internal server error", resp.Error)
+		assert.Equal(t, "INTERNAL_SERVER_ERROR", resp.Error.Code)
 	})
 }
 
 // ---------------------------------------------------------------------------
 // TestAuthHandler_DeleteSession
 // ---------------------------------------------------------------------------
-
 func TestAuthHandler_DeleteSession(t *testing.T) {
 	t.Parallel()
 
@@ -1326,7 +1296,11 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 
 	makeDeleteReq := func(t *testing.T, user *domain.User) *http.Request {
 		t.Helper()
-		req := httptest.NewRequest(http.MethodDelete, "/auth/sessions/"+sessionID, nil)
+
+		req := testutils.MakeJSONRequest(
+			t, http.MethodDelete, "/auth/sessions/"+sessionID, nil,
+			testutils.WithAuthUser(user),
+		)
 
 		// chi normally injects URL params during routing; in tests we must
 		// build the route context manually and attach it to the request.
@@ -1334,24 +1308,17 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 		rctx.URLParams.Add("id", sessionID)
 		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
-		if user != nil {
-			// Inject the authenticated user into the request context
-			req = withAuthUser(req, user)
-		}
-
 		return req
 	}
 
-	authenticatedUser := &domain.User{
-		ID: "user-123",
-	}
+	authenticatedUser := testutils.CreateTestUser()
 
 	t.Run("returns 204 on success", func(t *testing.T) {
 		t.Parallel()
 
 		var capturedSessionID, capturedUserID string
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			DeleteSessionFunc: func(
 				ctx context.Context,
 				sessionID string,
@@ -1377,7 +1344,7 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 	t.Run("returns 404 when session is not found", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			DeleteSessionFunc: func(
 				ctx context.Context,
 				sessionID string,
@@ -1396,17 +1363,19 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.ErrSessionNotFound.Error(), resp.Error)
+		assert.Equal(t, "SESSION_NOT_FOUND", resp.Error.Code)
 	})
 
 	t.Run("returns 500 on internal server error", func(t *testing.T) {
 		t.Parallel()
 
-		s := &testutils.MockAuthService{
+		s := &mocks.MockAuthService{
 			DeleteSessionFunc: func(
 				ctx context.Context,
 				sessionID string,
@@ -1425,10 +1394,12 @@ func TestAuthHandler_DeleteSession(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 
 		var resp struct {
-			Error string `json:"error"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
 		}
 
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "internal server error", resp.Error)
+		assert.Equal(t, "INTERNAL_SERVER_ERROR", resp.Error.Code)
 	})
 }

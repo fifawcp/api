@@ -1,0 +1,20 @@
+FROM golang:1.26.2-alpine
+
+WORKDIR /app
+
+# Development dependencies:
+# - make: run existing Makefile targets in-container
+# - gcc/musl-dev: required for `go test -race` (CGO-enabled)
+# - git: needed by some go module operations
+RUN apk add --no-cache make gcc musl-dev git
+
+# Install CLI tools used by development workflow.
+RUN go install github.com/air-verse/air@latest && \
+    go install github.com/swaggo/swag/cmd/swag@latest && \
+    go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+
+# Ensure installed Go tools are available in PATH.
+ENV PATH="/go/bin:${PATH}"
+
+# Default command for hot-reload development.
+CMD ["air", "-c", ".air.docker.toml"]

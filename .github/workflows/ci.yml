@@ -38,7 +38,7 @@ jobs:
 
       # Generate docs so the local docs package exists before any Go tooling runs.
       - name: Generate docs
-        run: make docs
+        run: make swagger-inner
 
       # Ensures all module checksums match what is recorded in go.sum.
       - name: Verify dependencies
@@ -80,7 +80,7 @@ jobs:
 
       # Regenerates the OpenAPI spec under ./docs from handler annotations.
       - name: Generate docs
-        run: make docs
+        run: make swagger-inner
 
       # Full compilation check — catches missing symbols, type errors, etc.
       - name: Build
@@ -100,5 +100,5 @@ jobs:
           cache: true
 
       # -race detects data races; -count=1 disables the test result cache.
-      - name: Run unit tests with coverage
-        run: make test-coverage
+      - name: Run unit tests
+        run: make test-unit-inner

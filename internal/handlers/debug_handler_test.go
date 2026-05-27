@@ -6,13 +6,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/fifawcp/api/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/test/testutils"
 	"github.com/go-chi/chi/v5"
-	"github.com/ncondes/fifawcp/internal/packages/testutils"
 	"github.com/stretchr/testify/assert"
 )
 
 func newTestDebugHandler() *DebugHandler {
-	return NewDebugHandler(testutils.NewTestConfig())
+	cfg := &config.Config{}
+	return NewDebugHandler(cfg)
 }
 
 // ---------------------------------------------------------------------------
@@ -45,7 +47,7 @@ func TestDebugHandler_RequestOtp(t *testing.T) {
 		req := makeRequestOtpReq(t)
 
 		w := httptest.NewRecorder()
-		h.RequestOtp(w, req)
+		h.RequestTotp(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
@@ -58,7 +60,7 @@ func TestDebugHandler_RequestOtp(t *testing.T) {
 		assert.IsType(t, "", resp.Data["otp"])
 		assert.NotEmpty(t, resp.Data["otp"])
 
-		assert.IsType(t, float64(1), resp.Data["expiresIn"])
-		assert.NotEmpty(t, resp.Data["expiresIn"])
+		assert.IsType(t, float64(1), resp.Data["expires_in"])
+		assert.NotEmpty(t, resp.Data["expires_in"])
 	})
 }

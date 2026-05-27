@@ -4,29 +4,47 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ncondes/fifawcp/internal/infrastructure/env"
+	"github.com/fifawcp/api/internal/infrastructure/env"
 )
 
 type Config struct {
-	APIBaseURL string
-	Server     ServerConfig
-	Port       string
-	Env        string
-	DB         DBConfig
-	Redis      RedisConfig
-	JWT        JWTConfig
-	Auth       AuthConfig
-	Mailer     MailerConfig
-	Cron       CronConfig
-	RateLimit  RateLimitConfig
+	APIBaseURL  string
+	Server      ServerConfig
+	Port        string
+	Env         string
+	DB          DBConfig
+	Redis       RedisConfig
+	JWT         JWTConfig
+	Auth        AuthConfig
+	Mailer      MailerConfig
+	Cron        CronConfig
+	RateLimit   RateLimitConfig
+	Scoring     ScoringConfig
+	FootballAPI FootballAPIConfig
+}
+
+type ScoringConfig struct {
+	GroupPositionExact int
+	GroupQualifies     int
+	BestThird          int
+	RoundOf32          int
+	RoundOf16          int
+	Quarterfinals      int
+	Semifinals         int
+	ThirdPlace         int
+	Final              int
+	MatchScoreExact    int
+	MatchScoreOutcome  int
 }
 
 type ServerConfig struct {
-	ContextTimeout time.Duration
-	WriteTimeout   time.Duration
-	ReadTimeout    time.Duration
-	IdleTimeout    time.Duration
-	CORS           CORSConfig
+	ContextTimeout    time.Duration
+	WriteTimeout      time.Duration
+	ReadTimeout       time.Duration
+	IdleTimeout       time.Duration
+	ShutdownTimeout   time.Duration
+	CORS              CORSConfig
+	TrustedProxyCIDRs []string
 }
 
 type CORSConfig struct {
@@ -56,6 +74,7 @@ type JWTConfig struct {
 	Issuer             string
 	AccessTokenExpiry  time.Duration
 	RefreshTokenExpiry time.Duration
+	RefreshGraceWindow time.Duration
 }
 
 type AuthConfig struct {
@@ -63,6 +82,16 @@ type AuthConfig struct {
 	OTPTTL         time.Duration
 	MaxOTPAttempts int
 	OTPCooldown    time.Duration
+	GoogleOAuth    OAuthConfig
+}
+
+type OAuthConfig struct {
+	ClientID          string
+	ClientSecret      string
+	RedirectURL       string
+	StateTTL          time.Duration
+	ReturnToAllowlist []string
+	Issuer            string
 }
 
 type MailerConfig struct {
@@ -71,7 +100,13 @@ type MailerConfig struct {
 }
 
 type CronConfig struct {
-	CleanupSessionsSchedule string
+	CleanupSessionsSchedule  string
+	SyncMatchResultsSchedule string
+}
+
+type FootballAPIConfig struct {
+	Key     string
+	BaseURL string
 }
 
 type RateLimitConfig struct {
@@ -92,10 +127,12 @@ func NewConfig() *Config {
 		Port:       env.GetString("PORT", "8080"),
 		Env:        env.GetString("ENV", "development"),
 		Server: ServerConfig{
-			ContextTimeout: env.GetDuration("SERVER_CONTEXT_TIMEOUT", 30*time.Second),
-			WriteTimeout:   env.GetDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
-			ReadTimeout:    env.GetDuration("SERVER_READ_TIMEOUT", 30*time.Second),
-			IdleTimeout:    env.GetDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
+			ContextTimeout:    env.GetDuration("SERVER_CONTEXT_TIMEOUT", 30*time.Second),
+			WriteTimeout:      env.GetDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
+			ReadTimeout:       env.GetDuration("SERVER_READ_TIMEOUT", 30*time.Second),
+			IdleTimeout:       env.GetDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
+			ShutdownTimeout:   env.GetDuration("SERVER_SHUTDOWN_TIMEOUT", 3*time.Second),
+			TrustedProxyCIDRs: strings.Split(env.GetString("TRUSTED_PROXY_CIDRS", ""), ","),
 			CORS: CORSConfig{
 				AllowedOrigins: strings.Split(env.GetString("CORS_ALLOWED_ORIGINS", "*"), ","),
 			},
@@ -121,19 +158,33 @@ func NewConfig() *Config {
 			Issuer:             env.GetString("JWT_ISSUER", "fifa-wcp"),
 			AccessTokenExpiry:  env.GetDuration("JWT_ACCESS_TOKEN_EXPIRY", 15*time.Minute),
 			RefreshTokenExpiry: env.GetDuration("JWT_REFRESH_TOKEN_EXPIRY", 7*24*time.Hour),
+			RefreshGraceWindow: env.GetDuration("JWT_REFRESH_GRACE_WINDOW", 10*time.Second),
 		},
 		Auth: AuthConfig{
 			SessionTTL:     env.GetDuration("AUTH_SESSION_TTL", 7*24*time.Hour),
 			OTPTTL:         env.GetDuration("AUTH_OTP_TTL", 10*time.Minute),
 			MaxOTPAttempts: env.GetInt("AUTH_MAX_OTP_ATTEMPTS", 3),
 			OTPCooldown:    env.GetDuration("AUTH_OTP_COOLDOWN", 30*time.Second),
+			GoogleOAuth: OAuthConfig{
+				ClientID:          env.GetString("GOOGLE_OAUTH_CLIENT_ID", ""),
+				ClientSecret:      env.GetString("GOOGLE_OAUTH_CLIENT_SECRET", ""),
+				RedirectURL:       env.GetString("GOOGLE_OAUTH_REDIRECT_URL", ""),
+				StateTTL:          env.GetDuration("GOOGLE_OAUTH_STATE_TTL", 10*time.Minute),
+				ReturnToAllowlist: strings.Split(env.GetString("GOOGLE_OAUTH_RETURN_TO_ALLOWLIST", "*"), ","),
+				Issuer:            env.GetString("GOOGLE_OAUTH_ISSUER", "https://accounts.google.com"),
+			},
 		},
 		Mailer: MailerConfig{
 			APIKey:      env.GetString("MAILER_API_KEY", ""),
 			FromAddress: env.GetString("MAILER_FROM_ADDRESS", ""),
 		},
 		Cron: CronConfig{
-			CleanupSessionsSchedule: env.GetString("CRON_CLEANUP_SESSIONS_SCHEDULE", "0 0 * * *"), // Every day at midnight
+			CleanupSessionsSchedule:  env.GetString("CRON_CLEANUP_SESSIONS_SCHEDULE", "0 0 * * *"),   // Every day at midnight
+			SyncMatchResultsSchedule: env.GetString("CRON_SYNC_MATCH_RESULTS_SCHEDULE", "0 0 * * *"), // Every day at midnight (planning-only run)
+		},
+		FootballAPI: FootballAPIConfig{
+			Key:     env.GetString("FOOTBALL_API_KEY", ""),
+			BaseURL: env.GetString("FOOTBALL_API_BASE_URL", "https://v3.football.api-sports.io"),
 		},
 		RateLimit: RateLimitConfig{
 			Enabled: env.GetBool("RATE_LIMIT_ENABLED", true),
@@ -149,6 +200,19 @@ func NewConfig() *Config {
 				RequestsPerWindow: env.GetInt("RATE_LIMIT_RELAXED_IP_REQUESTS_PER_WINDOW", 60),
 				Window:            env.GetDuration("RATE_LIMIT_RELAXED_IP_WINDOW", 1*time.Hour),
 			},
+		},
+		Scoring: ScoringConfig{
+			GroupPositionExact: env.GetInt("SCORING_GROUP_POSITION_EXACT", 3),
+			GroupQualifies:     env.GetInt("SCORING_GROUP_QUALIFIES", 1),
+			BestThird:          env.GetInt("SCORING_BEST_THIRD", 2),
+			RoundOf32:          env.GetInt("SCORING_ROUND_OF_32", 4),
+			RoundOf16:          env.GetInt("SCORING_ROUND_OF_16", 6),
+			Quarterfinals:      env.GetInt("SCORING_QUARTERFINALS", 8),
+			Semifinals:         env.GetInt("SCORING_SEMIFINALS", 12),
+			ThirdPlace:         env.GetInt("SCORING_THIRD_PLACE", 16),
+			Final:              env.GetInt("SCORING_FINAL", 20),
+			MatchScoreExact:    env.GetInt("SCORING_MATCH_SCORE_EXACT", 5),
+			MatchScoreOutcome:  env.GetInt("SCORING_MATCH_SCORE_OUTCOME", 2),
 		},
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ncondes/fifawcp/internal/domain"
+	"github.com/fifawcp/api/internal/domain"
 )
 
 type RequestOtpDto struct {
@@ -14,6 +14,20 @@ type RequestOtpDto struct {
 }
 
 func (dto *RequestOtpDto) Normalize() {
+	dto.Identifier = strings.TrimSpace(dto.Identifier)
+
+	if isEmail(dto.Identifier) {
+		dto.Identifier = strings.ToLower(dto.Identifier)
+	}
+}
+
+type VerifyOtpDto struct {
+	Identifier string             `json:"identifier" validate:"required,max=255" example:"john.doe@example.com"`
+	Purpose    *domain.OTPPurpose `json:"purpose" validate:"required,oneof=registration login" example:"registration" swaggertype:"string" enums:"registration,login"`
+	OTP        string             `json:"otp" validate:"required,min=6,max=6" example:"123456"`
+}
+
+func (dto *VerifyOtpDto) Normalize() {
 	dto.Identifier = strings.TrimSpace(dto.Identifier)
 
 	if isEmail(dto.Identifier) {

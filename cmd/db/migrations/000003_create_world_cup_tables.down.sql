@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS group_standings;
+DROP TABLE IF EXISTS matches;
+DROP TABLE IF EXISTS teams;
