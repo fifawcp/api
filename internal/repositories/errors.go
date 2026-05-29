@@ -34,6 +34,8 @@ const (
 	resourceMatchFairPlay    resourceType = "match_fair_play"
 	resourceCompetition      resourceType = "competition"
 	resourceCompetitionScore resourceType = "competition_score"
+	resourcePlayer           resourceType = "player"
+	resourceAwardPick        resourceType = "award_pick"
 )
 
 func handleDBError(
@@ -83,6 +85,8 @@ func translateSQLNoRowsError(err error, resource resourceType) error {
 		return domain.ErrMatchAPIFixtureNotFound
 	case resourceCompetition:
 		return domain.ErrCompetitionNotFound
+	case resourcePlayer:
+		return domain.ErrPlayerNotFound
 	default:
 		return err
 	}

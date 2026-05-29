@@ -11,6 +11,7 @@ import (
 type CompetitionScoringServiceInterface interface {
 	RecomputeForMatches(ctx context.Context, result *domain.ScoreMatchesResult) error
 	RecomputeForBestThirds(ctx context.Context, affectedUserIDs []string) error
+	RecomputeForAwards(ctx context.Context, affectedUserIDs []string) error
 }
 
 type CompetitionScoringService struct {
@@ -76,6 +77,14 @@ func (s *CompetitionScoringService) RecomputeForMatches(ctx context.Context, res
 }
 
 func (s *CompetitionScoringService) RecomputeForBestThirds(ctx context.Context, affectedUserIDs []string) error {
+	if len(affectedUserIDs) == 0 {
+		return nil
+	}
+
+	return s.recomputeAllPickems(ctx, affectedUserIDs)
+}
+
+func (s *CompetitionScoringService) RecomputeForAwards(ctx context.Context, affectedUserIDs []string) error {
 	if len(affectedUserIDs) == 0 {
 		return nil
 	}

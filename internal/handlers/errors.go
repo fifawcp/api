@@ -77,6 +77,11 @@ const (
 	codeGroupPicksRequired         = "GROUP_PICKS_REQUIRED"
 	codeTeamGroupMismatch          = "TEAM_GROUP_MISMATCH"
 	codeCannotTransferToSelf       = "CANNOT_TRANSFER_OWNERSHIP_TO_SELF"
+	codeAwardsLocked               = "AWARDS_LOCKED"
+	codeInvalidAwardType           = "INVALID_AWARD_TYPE"
+	codeAwardPlayerIneligible      = "AWARD_PLAYER_INELIGIBLE"
+	codeAwardWinnersIncomplete     = "AWARD_WINNERS_INCOMPLETE"
+	codePlayerNotFound             = "PLAYER_NOT_FOUND"
 
 	// 502 Bad Gateway
 	codeMissingIDToken = "MISSING_ID_TOKEN"
@@ -214,6 +219,16 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.BadRequest(w, r, codeTeamGroupMismatch, domain.ErrTeamGroupMismatch.Error())
 	case errors.Is(err, domain.ErrBestThirdsNotScoreable):
 		httpx.BadRequest(w, r, codeBestThirdsNotScoreable, domain.ErrBestThirdsNotScoreable.Error())
+	case errors.Is(err, domain.ErrAwardsLocked):
+		httpx.BadRequest(w, r, codeAwardsLocked, domain.ErrAwardsLocked.Error())
+	case errors.Is(err, domain.ErrInvalidAwardType):
+		httpx.BadRequest(w, r, codeInvalidAwardType, domain.ErrInvalidAwardType.Error())
+	case errors.Is(err, domain.ErrAwardPlayerIneligible):
+		httpx.BadRequest(w, r, codeAwardPlayerIneligible, domain.ErrAwardPlayerIneligible.Error())
+	case errors.Is(err, domain.ErrAwardWinnersIncomplete):
+		httpx.BadRequest(w, r, codeAwardWinnersIncomplete, domain.ErrAwardWinnersIncomplete.Error())
+	case errors.Is(err, domain.ErrPlayerNotFound):
+		httpx.NotFound(w, r, codePlayerNotFound, domain.ErrPlayerNotFound.Error())
 	case errors.Is(err, domain.ErrCannotTransferOwnershipToSelf):
 		httpx.BadRequest(w, r, codeCannotTransferToSelf, domain.ErrCannotTransferOwnershipToSelf.Error())
 	case errors.Is(err, domain.ErrCompetitionNameAlreadyExists):

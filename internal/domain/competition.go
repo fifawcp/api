@@ -53,6 +53,7 @@ type PickemScore struct {
 	GroupQualifierHits  int `json:"group_qualifier_hits" example:"3"`
 	BestThirdHits       int `json:"best_third_hits" example:"2"`
 	BracketHits         int `json:"bracket_hits" example:"5"`
+	AwardHits           int `json:"award_hits" example:"1"`
 }
 
 type MatchScore struct {

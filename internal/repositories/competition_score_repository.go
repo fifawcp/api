@@ -149,15 +149,16 @@ func (r *CompetitionScoreRepository) BatchUpsertPickemScores(
 				COUNT(*) FILTER (WHERE se.source_type = 'group_standing_pick' AND se.points = $3)::int AS group_exact_count,
 				COUNT(*) FILTER (WHERE se.source_type = 'group_standing_pick' AND se.points = $4)::int AS group_qualifier_count,
 				COUNT(*) FILTER (WHERE se.source_type = 'best_third_pick')::int                        AS best_third_hits_count,
-				COUNT(*) FILTER (WHERE se.source_type = 'bracket_pick')::int                           AS bracket_hits_count
+				COUNT(*) FILTER (WHERE se.source_type = 'bracket_pick')::int                           AS bracket_hits_count,
+				COUNT(*) FILTER (WHERE se.source_type = 'award_pick')::int                             AS award_hits_count
 			FROM score_events se
 			WHERE se.user_id = ANY($2::uuid[])
-			  AND se.source_type IN ('group_standing_pick', 'best_third_pick', 'bracket_pick')
+			  AND se.source_type IN ('group_standing_pick', 'best_third_pick', 'bracket_pick', 'award_pick')
 			GROUP BY se.user_id
 		)
 		INSERT INTO competition_pickem_scores (
 			competition_id, user_id, total_points,
-			group_exact_positions, group_qualifier_hits, best_third_hits, bracket_hits, updated_at
+			group_exact_positions, group_qualifier_hits, best_third_hits, bracket_hits, award_hits, updated_at
 		)
 		SELECT
 			comp_id,
@@ -167,6 +168,7 @@ func (r *CompetitionScoreRepository) BatchUpsertPickemScores(
 			c.group_qualifier_count,
 			c.best_third_hits_count,
 			c.bracket_hits_count,
+			c.award_hits_count,
 			NOW()
 		FROM computed c
 		CROSS JOIN UNNEST($1::bigint[]) AS comp_id
@@ -181,6 +183,7 @@ func (r *CompetitionScoreRepository) BatchUpsertPickemScores(
 			group_qualifier_hits  = EXCLUDED.group_qualifier_hits,
 			best_third_hits       = EXCLUDED.best_third_hits,
 			bracket_hits          = EXCLUDED.bracket_hits,
+			award_hits            = EXCLUDED.award_hits,
 			updated_at            = EXCLUDED.updated_at
 	`
 
@@ -244,10 +247,12 @@ func (r *CompetitionScoreRepository) getPickemLeaderboard(
 				cps.group_qualifier_hits,
 				cps.best_third_hits,
 				cps.bracket_hits,
+				cps.award_hits,
 				RANK() OVER (
 					ORDER BY
 						cps.total_points          DESC,
 						cps.bracket_hits          DESC,
+						cps.award_hits            DESC,
 						cps.best_third_hits       DESC,
 						cps.group_exact_positions DESC,
 						cps.group_qualifier_hits  DESC,
@@ -271,7 +276,7 @@ func (r *CompetitionScoreRepository) getPickemLeaderboard(
 		SELECT
 			user_id, username, first_name, last_name, role, joined_at,
 			rank, total_points,
-			group_exact_positions, group_qualifier_hits, best_third_hits, bracket_hits,
+			group_exact_positions, group_qualifier_hits, best_third_hits, bracket_hits, award_hits,
 			total
 		FROM filtered
 		ORDER BY rank ASC, joined_at ASC, user_id ASC
@@ -307,6 +312,7 @@ func (r *CompetitionScoreRepository) getPickemLeaderboard(
 			&score.GroupQualifierHits,
 			&score.BestThirdHits,
 			&score.BracketHits,
+			&score.AwardHits,
 			&total,
 		); err != nil {
 			return nil, handleDBError(err, resourceCompetitionScore)
@@ -358,6 +364,7 @@ func (r *CompetitionScoreRepository) GetUserPickemStats(
 					ORDER BY
 						cps.total_points          DESC,
 						cps.bracket_hits          DESC,
+						cps.award_hits            DESC,
 						cps.best_third_hits       DESC,
 						cps.group_exact_positions DESC,
 						cps.group_qualifier_hits  DESC,

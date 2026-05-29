@@ -66,6 +66,8 @@ type Container struct {
 	scoreEventRepository       domain.ScoreEventRepository
 	competitionRepository      domain.CompetitionRepository
 	competitionScoreRepository domain.CompetitionScoreRepository
+	playerRepository           domain.PlayerRepository
+	awardPickRepository        domain.AwardPickRepository
 
 	// startup data loaded once at startup; consumed by services
 	teams                   []*domain.Team
@@ -93,6 +95,8 @@ type Container struct {
 	competitionService        services.CompetitionServiceInterface
 	competitionScoringService services.CompetitionScoringServiceInterface
 	dashboardService          services.DashboardServiceInterface
+	playerService             services.PlayerServiceInterface
+	awardService              services.AwardServiceInterface
 
 	// handlers
 	RateLimiters       *RateLimiters
@@ -106,6 +110,8 @@ type Container struct {
 	PickemHandler      *handlers.PickemHandler
 	CompetitionHandler *handlers.CompetitionHandler
 	DashboardHandler   *handlers.DashboardHandler
+	PlayerHandler      *handlers.PlayerHandler
+	AwardHandler       *handlers.AwardHandler
 }
 
 func NewContainer(cfg *config.Config) (*Container, error) {
@@ -211,6 +217,8 @@ func (c *Container) initRepositories() {
 	c.matchAPIFixtureRepository = repositories.NewMatchAPIFixtureRepository(c.db, c.Config)
 	c.competitionRepository = repositories.NewCompetitionRepository(c.db, c.Config)
 	c.competitionScoreRepository = repositories.NewCompetitionScoreRepository(c.db, c.Config)
+	c.playerRepository = repositories.NewPlayerRepository(c.db, c.Config, c.teamLookup)
+	c.awardPickRepository = repositories.NewAwardPickRepository(c.db, c.Config)
 }
 
 func (c *Container) initStartupData() error {
@@ -258,6 +266,7 @@ func (c *Container) initServices() {
 	)
 	c.pickemScoringService = services.NewScoringService(
 		c.pickemRepository, c.matchScorePickRepository, c.scoreEventRepository,
+		c.awardPickRepository,
 		c.matchRepository, c.groupStandingRepository,
 		c.Config, c.Logger,
 	)
@@ -291,6 +300,13 @@ func (c *Container) initServices() {
 		c.globalPickemCompetition,
 		c.globalMatchCompetition,
 	)
+
+	c.playerService = services.NewPlayerService(c.playerRepository)
+	c.awardService = services.NewAwardService(
+		c.awardPickRepository, c.playerRepository,
+		c.pickemScoringService, c.competitionScoringService,
+		c.firstKickoff, c.Config, c.Logger,
+	)
 }
 
 func (c *Container) initHandlers() {
@@ -299,11 +315,13 @@ func (c *Container) initHandlers() {
 	c.BoardHandler = handlers.NewBoardHandler(c.boardService, c.BoardMemberService, c.Config, c.validator, c.Logger)
 	c.GroupHandler = handlers.NewGroupStandingHandler(c.groupStandingService, c.Logger)
 	c.MatchHandler = handlers.NewMatchHandler(c.matchService, c.matchScorePickService, c.Logger, c.validator)
-	c.AdminHandler = handlers.NewAdminHandler(c.matchService, c.groupStandingService, c.pickemScoringService, c.Logger, c.AuditLogger, c.validator)
+	c.AdminHandler = handlers.NewAdminHandler(c.matchService, c.groupStandingService, c.pickemScoringService, c.awardService, c.Logger, c.AuditLogger, c.validator)
 	c.OAuthHandler = handlers.NewOAuthHandler(c.oauthService, c.Logger, c.Config)
 	c.PickemHandler = handlers.NewPickemHandler(c.pickemService, c.Logger, c.validator)
 	c.CompetitionHandler = handlers.NewCompetitionHandler(c.competitionService, c.Config, c.validator, c.Logger)
 	c.DashboardHandler = handlers.NewDashboardHandler(c.dashboardService, c.Logger)
+	c.PlayerHandler = handlers.NewPlayerHandler(c.playerService, c.Logger)
+	c.AwardHandler = handlers.NewAwardHandler(c.awardService, c.Logger, c.validator)
 }
 
 func (c *Container) initJobs() {

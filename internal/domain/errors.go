@@ -120,3 +120,12 @@ var ErrInvalidBracketPickTeam = errors.New("picked team is not a projected parti
 var ErrGroupPicksRequired = errors.New("group picks must be complete (12 groups x 4 teams + 8 best thirds) before bracket picks")
 var ErrTeamGroupMismatch = errors.New("a submitted team does not belong to the declared group")
 var ErrBestThirdsNotScoreable = errors.New("best-thirds scoring unavailable: not all 8 third-place teams have been placed in the round of 32")
+
+// Awards
+var ErrAwardsLocked = errors.New("awards are locked: tournament has started")
+var ErrInvalidAwardType = errors.New("invalid award type")
+var ErrAwardPlayerIneligible = errors.New("player is not eligible for this award")
+var ErrAwardWinnersIncomplete = errors.New("award winners must be set for all four awards")
+
+// Player
+var ErrPlayerNotFound = errors.New("player not found")
