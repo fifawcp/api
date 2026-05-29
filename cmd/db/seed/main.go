@@ -54,12 +54,14 @@ func main() {
 	scoreEventRepository := repositories.NewScoreEventRepository(pgDB, cfg)
 	competitionRepository := repositories.NewCompetitionRepository(pgDB, cfg)
 	competitionScoreRepository := repositories.NewCompetitionScoreRepository(pgDB, cfg)
+	awardPickRepository := repositories.NewAwardPickRepository(pgDB, cfg)
 
 	groupStandingService := services.NewGroupStandingService(
 		groupStandingRepository, matchRepository, matchFairPlayRepository, logger,
 	)
 	scoringService := services.NewScoringService(
 		pickemRepository, matchScorePickRepository, scoreEventRepository,
+		awardPickRepository,
 		matchRepository, groupStandingRepository,
 		cfg, logger,
 	)
@@ -81,7 +83,8 @@ func main() {
 	seeder := NewSeeder(
 		pgDB, logger,
 		userRepository, boardRepository, boardMemberRepository, pickemRepository,
-		matchRepository, matchService, pickemService, boardService, competitionService,
+		matchRepository, awardPickRepository,
+		matchService, pickemService, boardService, competitionService,
 	)
 
 	flush := flag.Bool("flush", false, "")

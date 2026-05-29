@@ -14,12 +14,14 @@ var bestThirdSlotMatchIDs = []int64{74, 77, 79, 80, 81, 82, 85, 87}
 type ScoringServiceInterface interface {
 	ScoreMatches(ctx context.Context, matchIDs []int64) (*domain.ScoreMatchesResult, error)
 	ScoreBestThirds(ctx context.Context) ([]string, error)
+	ScoreAwards(ctx context.Context) ([]string, error)
 }
 
 type ScoringService struct {
 	pickemRepository         domain.PickemRepository
 	matchScorePickRepository domain.MatchScorePickRepository
 	scoreEventRepository     domain.ScoreEventRepository
+	awardPickRepository      domain.AwardPickRepository
 	matchRepository          domain.MatchRepository
 	groupStandingRepository  domain.GroupStandingRepository
 	cfg                      *config.Config
@@ -30,6 +32,7 @@ func NewScoringService(
 	pickemRepository domain.PickemRepository,
 	matchScorePickRepository domain.MatchScorePickRepository,
 	scoreEventRepository domain.ScoreEventRepository,
+	awardPickRepository domain.AwardPickRepository,
 	matchRepository domain.MatchRepository,
 	groupStandingRepository domain.GroupStandingRepository,
 	cfg *config.Config,
@@ -39,6 +42,7 @@ func NewScoringService(
 		pickemRepository:         pickemRepository,
 		matchScorePickRepository: matchScorePickRepository,
 		scoreEventRepository:     scoreEventRepository,
+		awardPickRepository:      awardPickRepository,
 		matchRepository:          matchRepository,
 		groupStandingRepository:  groupStandingRepository,
 		cfg:                      cfg,
@@ -234,6 +238,63 @@ func (s *ScoringService) ScoreBestThirds(ctx context.Context) ([]string, error) 
 	)
 
 	return userIDs, nil
+}
+
+func (s *ScoringService) ScoreAwards(ctx context.Context) ([]string, error) {
+	winners, err := s.awardPickRepository.GetAwardWinners(ctx)
+	if err != nil {
+		s.logger.Error("failed to get award winners",
+			logging.Error, err.Error(),
+		)
+		return nil, err
+	}
+
+	if len(winners) == 0 {
+		return nil, nil
+	}
+
+	points := s.cfg.Scoring.Award
+	scoreEvents := []*domain.ScoreEvent{}
+	affectedUserIDs := make(map[string]struct{})
+
+	for _, winner := range winners {
+		picks, err := s.awardPickRepository.GetAwardPicksByPlayer(ctx, winner.AwardType, winner.PlayerID)
+		if err != nil {
+			s.logger.Error("failed to get award picks by player",
+				logging.Error, err.Error(),
+				"award_type", string(winner.AwardType),
+				"player_id", winner.PlayerID,
+			)
+			return nil, err
+		}
+
+		for _, pick := range picks {
+			scoreEvents = append(scoreEvents, &domain.ScoreEvent{
+				UserID:     pick.UserID,
+				SourceType: domain.ScoreSourceAwardPick,
+				SourceRef:  string(winner.AwardType),
+				Points:     points,
+			})
+			affectedUserIDs[pick.UserID] = struct{}{}
+		}
+	}
+
+	if err := s.scoreEventRepository.BatchUpsertScoreEvents(ctx, scoreEvents); err != nil {
+		s.logger.Error("failed to upsert award score events",
+			logging.Error, err.Error(),
+			"award_score_events_count", len(scoreEvents),
+			"affected_user_count", len(affectedUserIDs),
+		)
+		return nil, err
+	}
+
+	s.logger.Info(
+		"scoring run completed for award picks",
+		"award_winners_count", len(winners),
+		"affected_user_count", len(affectedUserIDs),
+	)
+
+	return userIDSetToSlice(affectedUserIDs), nil
 }
 
 func (s *ScoringService) scoreMatchScorePicks(ctx context.Context, match *domain.Match) ([]*domain.ScoreEvent, map[string]struct{}, error) {

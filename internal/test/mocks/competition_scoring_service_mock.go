@@ -9,6 +9,7 @@ import (
 type MockCompetitionScoringService struct {
 	RecomputeForMatchesFunc    func(ctx context.Context, result *domain.ScoreMatchesResult) error
 	RecomputeForBestThirdsFunc func(ctx context.Context, affectedUserIDs []string) error
+	RecomputeForAwardsFunc     func(ctx context.Context, affectedUserIDs []string) error
 }
 
 func (m *MockCompetitionScoringService) RecomputeForMatches(ctx context.Context, result *domain.ScoreMatchesResult) error {
@@ -23,4 +24,11 @@ func (m *MockCompetitionScoringService) RecomputeForBestThirds(ctx context.Conte
 		return m.RecomputeForBestThirdsFunc(ctx, affectedUserIDs)
 	}
 	panic("RecomputeForBestThirds called unexpectedly")
+}
+
+func (m *MockCompetitionScoringService) RecomputeForAwards(ctx context.Context, affectedUserIDs []string) error {
+	if m.RecomputeForAwardsFunc != nil {
+		return m.RecomputeForAwardsFunc(ctx, affectedUserIDs)
+	}
+	panic("RecomputeForAwards called unexpectedly")
 }

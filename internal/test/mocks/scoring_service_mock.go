@@ -9,6 +9,7 @@ import (
 type MockScoringService struct {
 	ScoreMatchesFunc    func(ctx context.Context, matchIDs []int64) (*domain.ScoreMatchesResult, error)
 	ScoreBestThirdsFunc func(ctx context.Context) ([]string, error)
+	ScoreAwardsFunc     func(ctx context.Context) ([]string, error)
 }
 
 func (m *MockScoringService) ScoreMatches(ctx context.Context, matchIDs []int64) (*domain.ScoreMatchesResult, error) {
@@ -23,4 +24,11 @@ func (m *MockScoringService) ScoreBestThirds(ctx context.Context) ([]string, err
 		return m.ScoreBestThirdsFunc(ctx)
 	}
 	panic("ScoreBestThirds called unexpectedly")
+}
+
+func (m *MockScoringService) ScoreAwards(ctx context.Context) ([]string, error) {
+	if m.ScoreAwardsFunc != nil {
+		return m.ScoreAwardsFunc(ctx)
+	}
+	panic("ScoreAwards called unexpectedly")
 }

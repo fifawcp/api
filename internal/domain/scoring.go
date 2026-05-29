@@ -12,6 +12,7 @@ const (
 	ScoreSourceBestThirdPick     ScoreSourceType = "best_third_pick"
 	ScoreSourceBracketPick       ScoreSourceType = "bracket_pick"
 	ScoreSourceMatchScorePick    ScoreSourceType = "match_score_pick"
+	ScoreSourceAwardPick         ScoreSourceType = "award_pick"
 )
 
 type ScoreEvent struct {
