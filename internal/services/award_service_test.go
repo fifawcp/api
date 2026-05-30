@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -116,6 +117,35 @@ func TestAwardService_SaveAwardPicks_RejectsYoungPlayerOverCutoff(t *testing.T) 
 	assert.ErrorIs(t, err, domain.ErrAwardPlayerIneligible)
 }
 
+func TestAwardService_SaveAwardPicks_AcceptsYoungPlayerWithUnknownAge(t *testing.T) {
+	t.Parallel()
+
+	playerWithoutAge := &domain.Player{
+		ID:       42,
+		Name:     gofakeit.Name(),
+		Team:     &domain.Team{FifaCode: "BRA"},
+		Position: domain.PlayerPositionAttacker,
+		Age:      nil, // article didn't include this player's ESPN profile → DOB unknown
+	}
+
+	playerRepo := &mocks.MockPlayerRepository{
+		GetPlayersByIDsFunc: func(ctx context.Context, ids []int64) ([]*domain.Player, error) {
+			return []*domain.Player{playerWithoutAge}, nil
+		},
+	}
+	awardRepo := &mocks.MockAwardPickRepository{
+		UpsertAwardPicksFunc: func(ctx context.Context, userID string, picks []*domain.UserAwardPick) error {
+			return nil
+		},
+	}
+	service := newTestAwardService(awardRepo, playerRepo, nil, nil, futureLock())
+
+	picks := []*domain.UserAwardPick{{AwardType: domain.AwardYoungPlayer, PlayerID: 42}}
+	_, err := service.SaveAwardPicks(context.Background(), gofakeit.UUID(), picks)
+
+	assert.NoError(t, err)
+}
+
 func TestAwardService_SaveAwardPicks_RejectsUnknownPlayer(t *testing.T) {
 	t.Parallel()
 
@@ -222,6 +252,66 @@ func TestAwardService_GetUserAwards_SignalsLockAfterDeadline(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.True(t, awards.IsLocked)
+}
+
+// ---------------------------------------------------------------------------
+// GetPopularPicks
+// ---------------------------------------------------------------------------
+
+func TestAwardService_GetPopularPicks_FansOutPerAwardAndPropagatesLimit(t *testing.T) {
+	t.Parallel()
+
+	var calls []callRecord
+	var mu sync.Mutex
+	playerByID := map[int64]*domain.Player{
+		1: attacker(1),
+		2: goalkeeper(2),
+		3: youngAttacker(3),
+	}
+
+	awardRepo := &mocks.MockAwardPickRepository{
+		GetPopularPicksFunc: func(ctx context.Context, awardType domain.AwardType, limit int, youngMaxAge int) ([]domain.PopularAwardPick, error) {
+			mu.Lock()
+			calls = append(calls, callRecord{awardType, limit, youngMaxAge})
+			mu.Unlock()
+			switch awardType {
+			case domain.AwardGoldenBoot:
+				return []domain.PopularAwardPick{{Player: playerByID[1], PicksCount: 5}}, nil
+			case domain.AwardGoldenBall:
+				return []domain.PopularAwardPick{{Player: playerByID[1], PicksCount: 3}}, nil
+			case domain.AwardGoldenGlove:
+				return []domain.PopularAwardPick{{Player: playerByID[2], PicksCount: 7}}, nil
+			case domain.AwardYoungPlayer:
+				return []domain.PopularAwardPick{{Player: playerByID[3], PicksCount: 4}}, nil
+			}
+			return nil, nil
+		},
+	}
+	service := newTestAwardService(awardRepo, &mocks.MockPlayerRepository{}, nil, nil, futureLock())
+
+	result, err := service.GetPopularPicks(context.Background(), 10)
+
+	assert.NoError(t, err)
+	assert.Len(t, calls, len(domain.AwardTypes))
+
+	awardsCalled := make(map[domain.AwardType]bool, len(calls))
+	for _, c := range calls {
+		awardsCalled[c.awardType] = true
+		assert.Equal(t, 10, c.limit)
+		assert.Equal(t, YoungPlayerMaxAge, c.youngMaxAge)
+	}
+	for _, awardType := range domain.AwardTypes {
+		assert.True(t, awardsCalled[awardType], "expected fan-out call for %q", awardType)
+		assert.Len(t, result[awardType], 1, "expected one pick row for %q", awardType)
+	}
+	assert.Equal(t, 7, result[domain.AwardGoldenGlove][0].PicksCount)
+	assert.Equal(t, int64(2), result[domain.AwardGoldenGlove][0].Player.ID)
+}
+
+type callRecord struct {
+	awardType   domain.AwardType
+	limit       int
+	youngMaxAge int
 }
 
 // ---------------------------------------------------------------------------

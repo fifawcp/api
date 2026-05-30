@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/dtos"
@@ -11,6 +13,25 @@ import (
 	"github.com/fifawcp/api/internal/infrastructure/validator"
 	"github.com/fifawcp/api/internal/services"
 )
+
+const (
+	popularLimitDefault = 10
+	popularLimitMax     = 50
+)
+
+var errPopularLimitOutOfRange = errors.New("limit must be between 1 and 50")
+
+func parsePopularLimit(r *http.Request) (int, error) {
+	raw := r.URL.Query().Get("limit")
+	if raw == "" {
+		return popularLimitDefault, nil
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil || parsed < 1 || parsed > popularLimitMax {
+		return 0, errPopularLimitOutOfRange
+	}
+	return parsed, nil
+}
 
 type AwardHandler struct {
 	awardService services.AwardServiceInterface
@@ -46,6 +67,34 @@ func (h *AwardHandler) GetUserAwards(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.RespondWithData(w, http.StatusOK, awards)
+}
+
+// GetPopularPicks godoc
+//
+//	@Summary		Get popular award picks
+//	@Description	Returns the most-picked players per award (across all users), ranked desc by pick count then alphabetically. Eligibility is enforced per award: Golden Glove restricts to goalkeepers; Young Player restricts to players within the age cap (unknown ages are treated as eligible). Boot and Ball draw from the full catalog. Useful for the awards picker UI's "top choices" section.
+//	@Tags			awards
+//	@Produce		json
+//	@Param			limit	query		int	false	"Top-N per award (1-50)"	default(10)
+//	@Success		200		{object}	domain.PopularPicksByAward	"Top picks grouped by award type"
+//	@Failure		400		{object}	httpx.ErrorResponse			"Invalid limit"
+//	@Failure		401		{object}	httpx.ErrorResponse			"Missing or invalid Bearer token"
+//	@Security		BearerAuth
+//	@Router			/awards/popular [get]
+func (h *AwardHandler) GetPopularPicks(w http.ResponseWriter, r *http.Request) {
+	limit, err := parsePopularLimit(r)
+	if err != nil {
+		httpx.BadRequest(w, r, codeInvalidQueryParam, err.Error())
+		return
+	}
+
+	picks, err := h.awardService.GetPopularPicks(r.Context(), limit)
+	if err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	httpx.RespondWithData(w, http.StatusOK, picks)
 }
 
 // SaveAwardPicks godoc

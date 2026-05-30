@@ -10,6 +10,7 @@ func awardRoutes(c *Container) chi.Router {
 	r.Use(middlewares.Auth(c.Authenticator, c.UserService, c.Logger))
 
 	r.Get("/", c.AwardHandler.GetUserAwards)
+	r.Get("/popular", c.AwardHandler.GetPopularPicks)
 	r.Put("/", c.AwardHandler.SaveAwardPicks)
 
 	return r

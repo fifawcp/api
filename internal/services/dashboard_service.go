@@ -13,6 +13,7 @@ type DashboardServiceInterface interface {
 
 type DashboardService struct {
 	pickemService            PickemServiceInterface
+	awardService             AwardServiceInterface
 	matchScorePickRepository domain.MatchScorePickRepository
 	matchRepository          domain.MatchRepository
 	competitionScoreRepo     domain.CompetitionScoreRepository
@@ -22,6 +23,7 @@ type DashboardService struct {
 
 func NewDashboardService(
 	pickemService PickemServiceInterface,
+	awardService AwardServiceInterface,
 	matchScorePickRepository domain.MatchScorePickRepository,
 	matchRepository domain.MatchRepository,
 	competitionScoreRepo domain.CompetitionScoreRepository,
@@ -30,6 +32,7 @@ func NewDashboardService(
 ) *DashboardService {
 	return &DashboardService{
 		pickemService:            pickemService,
+		awardService:             awardService,
 		matchScorePickRepository: matchScorePickRepository,
 		matchRepository:          matchRepository,
 		competitionScoreRepo:     competitionScoreRepo,
@@ -51,6 +54,7 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 		matchStats     domain.CompetitionUserStats
 		matchPicksMade int
 		pickemProgress *domain.PickemProgress
+		userAwards     *domain.UserAwards
 	)
 
 	eg, egCtx := errgroup.WithContext(ctx)
@@ -91,6 +95,10 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 			pickemProgress, err = s.pickemService.GetUserPickemProgress(egCtx, userID)
 			return
 		})
+		eg.Go(func() (err error) {
+			userAwards, err = s.awardService.GetUserAwards(egCtx, userID)
+			return
+		})
 	}
 
 	if err := eg.Wait(); err != nil {
@@ -124,6 +132,7 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 		dashboard.Progress = &domain.DashboardProgress{
 			MatchPicks: stepProgress(matchPicksMade, 104),
 			Pickem:     *pickemProgress,
+			Awards:     userAwards.Progress,
 		}
 	}
 

@@ -10,6 +10,7 @@ type MockAwardPickRepository struct {
 	GetAwardPicksFunc         func(ctx context.Context, userID string) ([]*domain.UserAwardPick, error)
 	UpsertAwardPicksFunc      func(ctx context.Context, userID string, picks []*domain.UserAwardPick) error
 	GetAwardPicksByPlayerFunc func(ctx context.Context, awardType domain.AwardType, playerID int64) ([]*domain.UserAwardPick, error)
+	GetPopularPicksFunc       func(ctx context.Context, awardType domain.AwardType, limit int, youngPlayerMaxAge int) ([]domain.PopularAwardPick, error)
 	UpsertAwardWinnersFunc    func(ctx context.Context, winners []*domain.AwardWinner) error
 	GetAwardWinnersFunc       func(ctx context.Context) ([]*domain.AwardWinner, error)
 }
@@ -40,6 +41,13 @@ func (m *MockAwardPickRepository) UpsertAwardWinners(ctx context.Context, winner
 		return m.UpsertAwardWinnersFunc(ctx, winners)
 	}
 	panic("UpsertAwardWinners called unexpectedly")
+}
+
+func (m *MockAwardPickRepository) GetPopularPicks(ctx context.Context, awardType domain.AwardType, limit int, youngPlayerMaxAge int) ([]domain.PopularAwardPick, error) {
+	if m.GetPopularPicksFunc != nil {
+		return m.GetPopularPicksFunc(ctx, awardType, limit, youngPlayerMaxAge)
+	}
+	panic("GetPopularPicks called unexpectedly")
 }
 
 func (m *MockAwardPickRepository) GetAwardWinners(ctx context.Context) ([]*domain.AwardWinner, error) {
