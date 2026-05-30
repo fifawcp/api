@@ -21,7 +21,7 @@ func NewPlayerRepository(db *sql.DB, cfg *config.Config, teams *domain.TeamLooku
 	return &PlayerRepository{db: db, cfg: cfg, teams: teams}
 }
 
-const playerSelectColumns = `id, team_fifa_code, name, first_name, last_name, age, nationality, position, photo_url, club_name, club_logo_url`
+const playerSelectColumns = `id, team_fifa_code, name, first_name, last_name, age, position, club_name`
 
 const playerSearchHaystack = `unaccent(name || ' ' || COALESCE(first_name, '') || ' ' || COALESCE(last_name, ''))`
 
@@ -138,7 +138,7 @@ func (r *PlayerRepository) UpsertPlayers(ctx context.Context, players []*domain.
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
 
-	const columnsPerRow = 11
+	const columnsPerRow = 8
 	values := make([]string, 0, len(players))
 	args := make([]any, 0, len(players)*columnsPerRow)
 	argIndex := 1
@@ -150,10 +150,9 @@ func (r *PlayerRepository) UpsertPlayers(ctx context.Context, players []*domain.
 		}
 		values = append(values, "("+strings.Join(placeholders, ",")+")")
 
-		clubName, clubLogoURL := "", ""
+		clubName := ""
 		if player.Club != nil {
 			clubName = player.Club.Name
-			clubLogoURL = player.Club.LogoURL
 		}
 
 		args = append(args,
@@ -163,19 +162,15 @@ func (r *PlayerRepository) UpsertPlayers(ctx context.Context, players []*domain.
 			nullableString(player.FirstName),
 			nullableString(player.LastName),
 			nullableInt(player.Age),
-			nullableString(player.Nationality),
 			string(player.Position),
-			nullableString(player.PhotoURL),
 			nullableString(clubName),
-			nullableString(clubLogoURL),
 		)
 		argIndex += columnsPerRow
 	}
 
 	query := `
 		INSERT INTO players (
-			id, team_fifa_code, name, first_name, last_name, age, nationality,
-			position, photo_url, club_name, club_logo_url
+			id, team_fifa_code, name, first_name, last_name, age, position, club_name
 		) VALUES ` + strings.Join(values, ",") + `
 		ON CONFLICT (id) DO UPDATE SET
 			team_fifa_code = EXCLUDED.team_fifa_code,
@@ -183,11 +178,8 @@ func (r *PlayerRepository) UpsertPlayers(ctx context.Context, players []*domain.
 			first_name     = EXCLUDED.first_name,
 			last_name      = EXCLUDED.last_name,
 			age            = EXCLUDED.age,
-			nationality    = EXCLUDED.nationality,
 			position       = EXCLUDED.position,
-			photo_url      = EXCLUDED.photo_url,
-			club_name      = EXCLUDED.club_name,
-			club_logo_url  = EXCLUDED.club_logo_url`
+			club_name      = EXCLUDED.club_name`
 
 	if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
 		return handleDBError(err, resourcePlayer)
@@ -202,17 +194,13 @@ func (r *PlayerRepository) scanPlayerInto(rows *sql.Rows, player *domain.Player,
 		firstName    sql.NullString
 		lastName     sql.NullString
 		age          sql.NullInt32
-		nationality  sql.NullString
-		photoURL     sql.NullString
 		clubName     sql.NullString
-		clubLogoURL  sql.NullString
 		position     string
 	)
 
 	dest := []any{
 		&player.ID, &teamFifaCode, &player.Name,
-		&firstName, &lastName, &age, &nationality,
-		&position, &photoURL, &clubName, &clubLogoURL,
+		&firstName, &lastName, &age, &position, &clubName,
 	}
 	if total != nil {
 		dest = append(dest, total)
@@ -230,10 +218,8 @@ func (r *PlayerRepository) scanPlayerInto(rows *sql.Rows, player *domain.Player,
 		value := int(age.Int32)
 		player.Age = &value
 	}
-	player.Nationality = nationality.String
-	player.PhotoURL = photoURL.String
 	if clubName.Valid {
-		player.Club = &domain.PlayerClub{Name: clubName.String, LogoURL: clubLogoURL.String}
+		player.Club = &domain.PlayerClub{Name: clubName.String}
 	}
 
 	return nil

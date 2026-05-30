@@ -12,6 +12,7 @@ import (
 
 func newTestDashboardService(
 	pickemService PickemServiceInterface,
+	awardService AwardServiceInterface,
 	matchScorePickRepo domain.MatchScorePickRepository,
 	matchRepository domain.MatchRepository,
 	competitionScoreRepo domain.CompetitionScoreRepository,
@@ -20,6 +21,7 @@ func newTestDashboardService(
 ) DashboardServiceInterface {
 	return NewDashboardService(
 		pickemService,
+		awardService,
 		matchScorePickRepo,
 		matchRepository,
 		competitionScoreRepo,
@@ -110,8 +112,16 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 			},
 		}
 
+		awardSvc := &mocks.MockAwardService{
+			GetUserAwardsFunc: func(ctx context.Context, userID string) (*domain.UserAwards, error) {
+				return &domain.UserAwards{
+					Progress: domain.StepProgress{Completed: 4, Total: 4},
+				}, nil
+			},
+		}
+
 		pickemComp, matchComp := makeGlobalCompetitions()
-		service := newTestDashboardService(pickemSvc, matchScorePickRepo, matchRepo, competitionScoreRepo, pickemComp, matchComp)
+		service := newTestDashboardService(pickemSvc, awardSvc, matchScorePickRepo, matchRepo, competitionScoreRepo, pickemComp, matchComp)
 
 		dashboard, err := service.GetDashboard(context.Background(), "user-1")
 
@@ -133,6 +143,9 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		assert.True(t, dashboard.Progress.Pickem.Groups.IsComplete())
 		assert.True(t, dashboard.Progress.Pickem.BestThirds.IsComplete())
 		assert.True(t, dashboard.Progress.Pickem.Bracket.IsComplete())
+		assert.Equal(t, 4, dashboard.Progress.Awards.Completed)
+		assert.Equal(t, 4, dashboard.Progress.Awards.Total)
+		assert.True(t, dashboard.Progress.Awards.IsComplete())
 		assert.Len(t, dashboard.Leaderboard.Pickem.Entries, 1)
 		assert.Equal(t, "Pick'em", dashboard.Leaderboard.Pickem.CompetitionName)
 		assert.Equal(t, 100, dashboard.Leaderboard.Pickem.Entries[0].Points)
@@ -181,8 +194,16 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 			},
 		}
 
+		awardSvc := &mocks.MockAwardService{
+			GetUserAwardsFunc: func(ctx context.Context, userID string) (*domain.UserAwards, error) {
+				return &domain.UserAwards{
+					Progress: domain.StepProgress{Completed: 2, Total: 4},
+				}, nil
+			},
+		}
+
 		pickemComp, matchComp := makeGlobalCompetitions()
-		service := newTestDashboardService(pickemSvc, matchScorePickRepo, matchRepo, competitionScoreRepo, pickemComp, matchComp)
+		service := newTestDashboardService(pickemSvc, awardSvc, matchScorePickRepo, matchRepo, competitionScoreRepo, pickemComp, matchComp)
 
 		dashboard, err := service.GetDashboard(context.Background(), "user-1")
 
@@ -197,6 +218,9 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		assert.Equal(t, 104, dashboard.Progress.MatchPicks.Total)
 		assert.Equal(t, 5, dashboard.Progress.Pickem.Groups.Completed)
 		assert.False(t, dashboard.Progress.Pickem.Bracket.IsComplete())
+		assert.Equal(t, 2, dashboard.Progress.Awards.Completed)
+		assert.Equal(t, 4, dashboard.Progress.Awards.Total)
+		assert.False(t, dashboard.Progress.Awards.IsComplete())
 		assert.Empty(t, dashboard.Leaderboard.Pickem.Entries)
 		assert.Empty(t, dashboard.Leaderboard.Match.Entries)
 	})
@@ -208,6 +232,7 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		// service does not fan out user-specific queries for guests.
 		pickemSvc := &mocks.MockPickemService{}
 		matchScorePickRepo := &mocks.MockMatchScorePickRepository{}
+		awardSvc := &mocks.MockAwardService{}
 
 		kickoffTime := time.Date(2026, 6, 11, 18, 0, 0, 0, time.UTC)
 		matchRepo := &mocks.MockMatchRepository{
@@ -227,7 +252,7 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		}
 
 		pickemComp, matchComp := makeGlobalCompetitions()
-		service := newTestDashboardService(pickemSvc, matchScorePickRepo, matchRepo, competitionScoreRepo, pickemComp, matchComp)
+		service := newTestDashboardService(pickemSvc, awardSvc, matchScorePickRepo, matchRepo, competitionScoreRepo, pickemComp, matchComp)
 
 		dashboard, err := service.GetDashboard(context.Background(), "")
 

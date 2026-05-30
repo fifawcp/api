@@ -11,12 +11,13 @@ import (
 )
 
 type AwardPickRepository struct {
-	db  *sql.DB
-	cfg *config.Config
+	db    *sql.DB
+	cfg   *config.Config
+	teams *domain.TeamLookup
 }
 
-func NewAwardPickRepository(db *sql.DB, cfg *config.Config) *AwardPickRepository {
-	return &AwardPickRepository{db: db, cfg: cfg}
+func NewAwardPickRepository(db *sql.DB, cfg *config.Config, teams *domain.TeamLookup) *AwardPickRepository {
+	return &AwardPickRepository{db: db, cfg: cfg, teams: teams}
 }
 
 func (r *AwardPickRepository) GetAwardPicks(ctx context.Context, userID string) ([]*domain.UserAwardPick, error) {
@@ -137,6 +138,100 @@ func (r *AwardPickRepository) UpsertAwardWinners(ctx context.Context, winners []
 	}
 
 	return nil
+}
+
+// GetPopularPicks returns up to `limit` eligible players for the given award,
+// ordered by current pick count (descending) then by name. Unpicked-but-eligible
+// players surface with picks_count = 0, so the ranking still produces a useful
+// list before users start voting. Eligibility is enforced in SQL:
+//   - Glove → goalkeepers only
+//   - Young Player → age <= youngPlayerMaxAge, or unknown age (permissive)
+//   - Boot / Ball → every player
+func (r *AwardPickRepository) GetPopularPicks(
+	ctx context.Context,
+	awardType domain.AwardType,
+	limit int,
+	youngPlayerMaxAge int,
+) ([]domain.PopularAwardPick, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	args := []any{string(awardType), limit}
+	eligibility := ""
+	switch awardType {
+	case domain.AwardGoldenGlove:
+		eligibility = "WHERE p.position = 'goalkeeper'"
+	case domain.AwardYoungPlayer:
+		eligibility = "WHERE p.age IS NULL OR p.age <= $3"
+		args = append(args, youngPlayerMaxAge)
+	}
+
+	query := `
+		SELECT
+			p.id, p.team_fifa_code, p.name, p.first_name, p.last_name,
+			p.age, p.position, p.club_name,
+			COALESCE(c.picks_count, 0) AS picks_count
+		FROM players p
+		LEFT JOIN (
+			SELECT player_id, COUNT(*) AS picks_count
+			FROM user_award_picks
+			WHERE award_type = $1
+			GROUP BY player_id
+		) c ON c.player_id = p.id
+		` + eligibility + `
+		ORDER BY picks_count DESC, p.name ASC, p.id ASC
+		LIMIT $2`
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, handleDBError(err, resourceAwardPick)
+	}
+	defer rows.Close()
+
+	results := []domain.PopularAwardPick{}
+	for rows.Next() {
+		player, count, err := scanPopularPlayer(rows, r.teams)
+		if err != nil {
+			return nil, handleDBError(err, resourceAwardPick)
+		}
+		results = append(results, domain.PopularAwardPick{Player: player, PicksCount: count})
+	}
+
+	return results, rows.Err()
+}
+
+func scanPopularPlayer(rows *sql.Rows, teams *domain.TeamLookup) (*domain.Player, int, error) {
+	var (
+		player       domain.Player
+		teamFifaCode string
+		firstName    sql.NullString
+		lastName     sql.NullString
+		age          sql.NullInt32
+		clubName     sql.NullString
+		position     string
+		picksCount   int
+	)
+
+	if err := rows.Scan(
+		&player.ID, &teamFifaCode, &player.Name,
+		&firstName, &lastName, &age, &position, &clubName,
+		&picksCount,
+	); err != nil {
+		return nil, 0, err
+	}
+
+	player.Team = teams.Get(teamFifaCode)
+	player.Position = domain.PlayerPosition(position)
+	player.FirstName = firstName.String
+	player.LastName = lastName.String
+	if age.Valid {
+		value := int(age.Int32)
+		player.Age = &value
+	}
+	if clubName.Valid {
+		player.Club = &domain.PlayerClub{Name: clubName.String}
+	}
+	return &player, picksCount, nil
 }
 
 func (r *AwardPickRepository) GetAwardWinners(ctx context.Context) ([]*domain.AwardWinner, error) {

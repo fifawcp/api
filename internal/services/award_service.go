@@ -2,11 +2,13 @@ package services
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
+	"golang.org/x/sync/errgroup"
 )
 
 const YoungPlayerMaxAge = 21
@@ -14,6 +16,7 @@ const YoungPlayerMaxAge = 21
 type AwardServiceInterface interface {
 	GetUserAwards(ctx context.Context, userID string) (*domain.UserAwards, error)
 	SaveAwardPicks(ctx context.Context, userID string, picks []*domain.UserAwardPick) (*domain.UserAwards, error)
+	GetPopularPicks(ctx context.Context, limit int) (domain.PopularPicksByAward, error)
 	RecordWinners(ctx context.Context, winners []*domain.AwardWinner) error
 }
 
@@ -74,6 +77,33 @@ func (s *AwardService) SaveAwardPicks(
 	}
 
 	return s.buildUserAwards(ctx, picks)
+}
+
+// GetPopularPicks returns the top-`limit` eligible players per award, ranked
+// by current pick count. The four awards are fetched in parallel.
+func (s *AwardService) GetPopularPicks(ctx context.Context, limit int) (domain.PopularPicksByAward, error) {
+	result := make(domain.PopularPicksByAward, len(domain.AwardTypes))
+	var mu sync.Mutex
+
+	group, groupCtx := errgroup.WithContext(ctx)
+	for _, awardType := range domain.AwardTypes {
+		awardType := awardType
+		group.Go(func() error {
+			picks, err := s.awardRepository.GetPopularPicks(groupCtx, awardType, limit, YoungPlayerMaxAge)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			result[awardType] = picks
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // RecordWinners persists the actual award winners and kicks off async scoring:
@@ -211,7 +241,8 @@ func (s *AwardService) validateWinners(ctx context.Context, winners []*domain.Aw
 }
 
 // isPlayerEligible enforces the per-award business rules: Golden Glove needs a
-// goalkeeper; Young Player must be at or under the configured age ceiling;
+// goalkeeper; Young Player must be at or under the configured age ceiling
+// (players with an unknown age get the benefit of the doubt and are accepted);
 // Boot and Ball are open to any player.
 func (s *AwardService) isPlayerEligible(awardType domain.AwardType, player *domain.Player) bool {
 	switch awardType {
@@ -219,7 +250,7 @@ func (s *AwardService) isPlayerEligible(awardType domain.AwardType, player *doma
 		return player.Position == domain.PlayerPositionGoalkeeper
 	case domain.AwardYoungPlayer:
 		if player.Age == nil {
-			return false
+			return true
 		}
 		return *player.Age <= YoungPlayerMaxAge
 	}

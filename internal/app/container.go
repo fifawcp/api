@@ -218,7 +218,7 @@ func (c *Container) initRepositories() {
 	c.competitionRepository = repositories.NewCompetitionRepository(c.db, c.Config)
 	c.competitionScoreRepository = repositories.NewCompetitionScoreRepository(c.db, c.Config)
 	c.playerRepository = repositories.NewPlayerRepository(c.db, c.Config, c.teamLookup)
-	c.awardPickRepository = repositories.NewAwardPickRepository(c.db, c.Config)
+	c.awardPickRepository = repositories.NewAwardPickRepository(c.db, c.Config, c.teamLookup)
 }
 
 func (c *Container) initStartupData() error {
@@ -292,20 +292,22 @@ func (c *Container) initServices() {
 		c.oauthStateStorage, c.GoogleOauthConfig, c.OIDCIdentityVerifier,
 		c.oauthAccountRepository, c.userRepository, c.authService,
 	)
-	c.dashboardService = services.NewDashboardService(
-		c.pickemService,
-		c.matchScorePickRepository,
-		c.matchRepository,
-		c.competitionScoreRepository,
-		c.globalPickemCompetition,
-		c.globalMatchCompetition,
-	)
 
 	c.playerService = services.NewPlayerService(c.playerRepository)
 	c.awardService = services.NewAwardService(
 		c.awardPickRepository, c.playerRepository,
 		c.pickemScoringService, c.competitionScoringService,
 		c.firstKickoff, c.Config, c.Logger,
+	)
+
+	c.dashboardService = services.NewDashboardService(
+		c.pickemService,
+		c.awardService,
+		c.matchScorePickRepository,
+		c.matchRepository,
+		c.competitionScoreRepository,
+		c.globalPickemCompetition,
+		c.globalMatchCompetition,
 	)
 }
 

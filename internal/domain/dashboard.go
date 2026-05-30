@@ -16,6 +16,7 @@ type DashboardStats struct {
 type DashboardProgress struct {
 	MatchPicks StepProgress   `json:"match_picks"`
 	Pickem     PickemProgress `json:"pickem"`
+	Awards     StepProgress   `json:"awards"`
 }
 
 type DashboardLeaderboard struct {

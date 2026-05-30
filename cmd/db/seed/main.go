@@ -54,7 +54,7 @@ func main() {
 	scoreEventRepository := repositories.NewScoreEventRepository(pgDB, cfg)
 	competitionRepository := repositories.NewCompetitionRepository(pgDB, cfg)
 	competitionScoreRepository := repositories.NewCompetitionScoreRepository(pgDB, cfg)
-	awardPickRepository := repositories.NewAwardPickRepository(pgDB, cfg)
+	awardPickRepository := repositories.NewAwardPickRepository(pgDB, cfg, teamLookup)
 
 	groupStandingService := services.NewGroupStandingService(
 		groupStandingRepository, matchRepository, matchFairPlayRepository, logger,
