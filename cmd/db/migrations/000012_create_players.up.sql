@@ -1,4 +1,3 @@
--- unaccent normalizes diacritics so "rodriguez" matches "Rodríguez" in the player search query.
 CREATE EXTENSION IF NOT EXISTS unaccent;
 
 CREATE TABLE IF NOT EXISTS players (
@@ -17,14 +16,7 @@ CREATE TABLE IF NOT EXISTS players (
 CREATE INDEX IF NOT EXISTS idx_players_team_fifa_code ON players(team_fifa_code);
 CREATE INDEX IF NOT EXISTS idx_players_position       ON players(position);
 
--- Seed: tournament player catalog snapshotted from the ESPN Colombia
--- WC2026 squads article (id=16715015) on 2026-05-30, with per-player ages
--- enriched from ESPN profile pages and display names normalized via subagents
--- (full first+last when ≤18 chars, otherwise <initial>. <surname>).
--- Ousmane Dembélé (FRA) was hand-added — his article slot was malformed.
--- 42 of 48 national teams have rosters; the other 6 (AUS, ECU, URU, ALG,
--- IRQ, KSA) were still flagged "Convocatoria por anunciarse" — backfill
--- via a follow-up scrape once they announce.
+-- Rosters pending for: AUS, ECU, URU, ALG, IRQ, KSA
 INSERT INTO players (
   id, team_fifa_code, name, first_name, last_name, age, position, club_name
 ) VALUES
