@@ -820,7 +820,6 @@ INSERT INTO players (
   ('3802620319669719919', 'PAN', 'José Fajardo', 'José', 'Fajardo', NULL, 'attacker', NULL),
   ('4090723666486402608', 'PAN', 'Ismael Díaz', 'Ismael', 'Díaz', NULL, 'attacker', NULL),
   ('4108965116118106233', 'PAN', 'Cecilio Waterman', 'Cecilio', 'Waterman', NULL, 'attacker', NULL),
-  ('4251697792670717273', 'PAN', 'José Fajardo y Tomás Rodríguez.', NULL, NULL, NULL, 'attacker', NULL),
   ('137355', 'PAN', 'Roderick Miller', 'Roderick', 'Miller', '34', 'defender', 'Turan Tovuz'),
   ('138183', 'PAN', 'Éric Davis', 'Éric', 'Davis', '35', 'defender', 'Plaza Amador'),
   ('189775', 'PAN', 'Andrés Andrade', 'Andrés', 'Andrade', '27', 'defender', 'LASK'),
