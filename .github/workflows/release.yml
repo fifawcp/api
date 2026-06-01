@@ -83,97 +83,50 @@ jobs:
 
       # Build a raw commit log since the previous tag as a changelog starting
       # point. Edit and clean this up before publishing the draft.
-      - name: Generate commit log since last tag
-        id: log
+      # Build a clean, categorized changelog from conventional-commit subjects
+      # since the previous tag, written to NOTES.md. Empty sections are omitted.
+      # Edit the draft in the GitHub UI before publishing if you want a summary.
+      - name: Generate release notes
         env:
           VERSION: ${{ steps.ver.outputs.version }}
+          REPO: ${{ github.repository }}
         run: |
           PREV=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -vx "$VERSION" | head -1)
-          if [ -n "$PREV" ]; then
-            echo "Commits since ${PREV}:"
-            LOG=$(git log "${PREV}..${VERSION}" --oneline --no-merges)
-          else
-            echo "First release — no previous tag found."
-            LOG=$(git log "${VERSION}" --oneline --no-merges)
-            PREV="$VERSION"
-          fi
-          echo "prev=$PREV" >> "$GITHUB_OUTPUT"
-          {
-            echo "log<<EOF"
-            echo "$LOG"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          if [ -n "$PREV" ]; then RANGE="${PREV}..${VERSION}"; else RANGE="$VERSION"; fi
 
-      # Creates the draft release. Edit the body in the GitHub UI before publishing.
-      # Publishing the release will trigger deploy-prod.yml.
+          # All non-merge subjects in range, minus the release-merge noise.
+          ALL=$(git log "$RANGE" --no-merges --pretty='%s' | grep -vE '^chore: release ')
+          # Strip the conventional-commit prefix (type, optional scope, optional !).
+          strip='s/^[a-z]+(\([^)]*\))?!?:[[:space:]]*//'
+
+          FEATS=$(printf '%s\n' "$ALL" | grep -E '^feat'      | sed -E "$strip" | sed 's/^/- /')
+          FIXES=$(printf '%s\n' "$ALL" | grep -E '^fix'       | sed -E "$strip" | sed 's/^/- /')
+          OTHER=$(printf '%s\n' "$ALL" | grep -vE '^(feat|fix)' | sed -E "$strip" | sed 's/^/- /')
+          BREAKING=$(printf '%s\n' "$ALL" | grep -E '^[a-z]+(\([^)]*\))?!:' | sed -E "$strip" | sed 's/^/- /')
+
+          {
+            echo "<!-- Optional: add a one-line summary above What's changed, then publish. -->"
+            echo ""
+            echo "## What's changed"
+            echo ""
+            [ -n "$BREAKING" ] && { echo "### Breaking changes"; echo "$BREAKING"; echo ""; }
+            [ -n "$FEATS" ]    && { echo "### Features";         echo "$FEATS";    echo ""; }
+            [ -n "$FIXES" ]    && { echo "### Fixes";            echo "$FIXES";    echo ""; }
+            [ -n "$OTHER" ]    && { echo "### Other";            echo "$OTHER";    echo ""; }
+            if [ -n "$PREV" ]; then
+              echo "**Full changelog**: https://github.com/${REPO}/compare/${PREV}...${VERSION}"
+            fi
+          } > NOTES.md
+
+          echo "::group::Generated NOTES.md"
+          cat NOTES.md
+          echo "::endgroup::"
+
+      # Creates the draft release from NOTES.md. Edit + publish to deploy.
       - name: Create draft release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           tag_name: ${{ steps.ver.outputs.version }}
           name: ${{ steps.ver.outputs.version }}
-          body: |
-            <!-- Raw commit log since previous tag - replace with clean changelog below -->
-            ${{ steps.log.outputs.log }}
-
-            <!-- ============================================================ -->
-            <!-- Release Notes Template - Fill in the sections below -->
-            <!-- ============================================================ -->
-
-            # Release ${{ steps.ver.outputs.version }}
-
-            Brief summary of the release.
-
-            ## Highlights
-
-            - Highlight 1
-            - Highlight 2
-            - Highlight 3
-
-            ## What's changed
-
-            ### Features
-            - Added ...
-
-            ### Improvements
-            - Improved ...
-
-            ### Bug fixes
-            - Fixed ...
-
-            ### Testing
-            - Added/updated ...
-
-            ### Developer experience
-            - Added/updated ...
-
-            ### Internal
-            - Refactored ...
-            - Updated dependencies ...
-
-            ## Breaking changes
-
-            None.
-
-            ## Migration notes
-
-            - Run ...
-            - Update ...
-            - Verify ...
-
-            ## Deployment notes
-
-            - Required environment variables:
-              - `VAR_NAME`
-            - Infra notes:
-              - ...
-            - Operational notes:
-              - ...
-
-            ## Contributors
-
-            - @username
-
-            ## Full diff
-
-            https://github.com/${{ github.repository }}/compare/${{ steps.log.outputs.prev }}...${{ steps.ver.outputs.version }}
+          body_path: NOTES.md

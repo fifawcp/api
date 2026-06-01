@@ -1,12 +1,15 @@
 name: ci
 
-# Runs on every push and PR targeting main or develop.
+# Runs on pushes to main/develop and on PRs targeting develop.
+# PRs targeting main (i.e. develop→main release PRs) deliberately have NO
+# pull_request run — their head is develop, which already ran push CI on the
+# same commit, so a pull_request run would just duplicate it.
 # All three jobs (lint, build, test) run in parallel for faster feedback.
 on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+    branches: [develop]
 
 # Cancel any in-progress run on the same branch when a new push arrives,
 # avoiding wasted CI minutes on outdated commits.
