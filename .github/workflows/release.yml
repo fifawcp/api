@@ -1,19 +1,12 @@
 name: release
 
-# Creates a DRAFT GitHub Release (you edit + publish it; publishing triggers
-# deploy-prod). Runs on two paths, sharing one job:
-#
-#   1. AUTO (normal path) — a `develop → main` release PR is MERGED. The version
-#      is read from the PR title (`chore: release vX.Y.Z`); this workflow tags
-#      main's merge commit, then drafts the release. Used by the `release` skill:
-#      open the PR + queue auto-merge, and the rest happens here, server-side.
-#
-#   2. MANUAL (emergency path) — someone pushes a `vX.Y.Z` tag by hand. The tag
-#      already exists, so we skip tagging and just draft the release.
-#
-# Note on path 1: the tag is pushed with GITHUB_TOKEN, which by design does NOT
-# start another workflow run — so the push-tag trigger below won't double-fire.
-# That's why this same job drafts the release directly after tagging.
+# Creates a DRAFT GitHub Release (edit + publish it; publishing triggers deploy-prod).
+# Two paths, one job:
+#   1. AUTO — a develop→main release PR merges; the version is read from its title
+#      (`chore: release vX.Y.Z`), this job tags main's merge commit, then drafts.
+#   2. MANUAL — a `vX.Y.Z` tag is pushed by hand; tagging is skipped, just drafts.
+# The AUTO tag push uses GITHUB_TOKEN, which can't trigger another workflow run, so this
+# same job drafts the release directly rather than relying on the tag trigger.
 on:
   push:
     tags:
@@ -24,7 +17,6 @@ on:
 
 jobs:
   create-release:
-    # Run on a manual tag push, OR on a merged develop→main release PR.
     if: >
       github.event_name == 'push' ||
       (github.event.pull_request.merged == true &&
@@ -32,20 +24,16 @@ jobs:
        startsWith(github.event.pull_request.title, 'chore: release v'))
     runs-on: ubuntu-22.04
     timeout-minutes: 5
-
-    # Needs write access to push the tag and create the GitHub Release.
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@v6
         with:
-          # Full history + all tags so we can diff against the previous tag and
-          # reach main's merge commit.
+          # Full history/tags to diff against the previous tag and reach main's merge commit.
           fetch-depth: 0
           ref: main
 
-      # Resolve the version: from the tag (manual) or the PR title (auto).
       - name: Determine version
         id: ver
         env:
@@ -65,7 +53,6 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Releasing $VERSION"
 
-      # AUTO path only: tag main's merge commit and push it.
       - name: Tag the merge commit
         if: github.event_name == 'pull_request'
         env:
@@ -81,11 +68,6 @@ jobs:
           git tag -a "$VERSION" "$SHA" -m "Release $VERSION"
           git push origin "$VERSION"
 
-      # Build a raw commit log since the previous tag as a changelog starting
-      # point. Edit and clean this up before publishing the draft.
-      # Build a clean, categorized changelog from conventional-commit subjects
-      # since the previous tag, written to NOTES.md. Empty sections are omitted.
-      # Edit the draft in the GitHub UI before publishing if you want a summary.
       - name: Generate release notes
         env:
           VERSION: ${{ steps.ver.outputs.version }}
@@ -94,7 +76,6 @@ jobs:
           PREV=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -vx "$VERSION" | head -1)
           if [ -n "$PREV" ]; then RANGE="${PREV}..${VERSION}"; else RANGE="$VERSION"; fi
 
-          # All non-merge subjects in range, minus the release-merge noise.
           ALL=$(git log "$RANGE" --no-merges --pretty='%s' | grep -vE '^chore: release ')
           # Strip the conventional-commit prefix (type, optional scope, optional !).
           strip='s/^[a-z]+(\([^)]*\))?!?:[[:space:]]*//'
@@ -122,7 +103,6 @@ jobs:
           cat NOTES.md
           echo "::endgroup::"
 
-      # Creates the draft release from NOTES.md. Edit + publish to deploy.
       - name: Create draft release
         uses: softprops/action-gh-release@v2
         with:

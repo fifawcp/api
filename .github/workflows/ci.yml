@@ -1,25 +1,18 @@
 name: ci
 
-# Runs on pushes to main/develop and on PRs targeting develop.
-# PRs targeting main (i.e. develop→main release PRs) deliberately have NO
-# pull_request run — their head is develop, which already ran push CI on the
-# same commit, so a pull_request run would just duplicate it.
-# All three jobs (lint, build, test) run in parallel for faster feedback.
+# pull_request runs only on develop: a develop→main release PR's head is develop,
+# which already ran push CI on the same commit, so a pull_request run would duplicate it.
 on:
   push:
     branches: [main, develop]
   pull_request:
     branches: [develop]
 
-# Cancel any in-progress run on the same branch when a new push arrives,
-# avoiding wasted CI minutes on outdated commits.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Lint
-  # Static analysis: dependency hygiene, go vet, and staticcheck.
   lint:
     runs-on: ubuntu-22.04
     timeout-minutes: 5
@@ -32,40 +25,31 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod  # pins the exact Go version from go.mod
-          cache: true              # caches the module download cache between runs
+          go-version-file: go.mod
+          cache: true
 
-      # swag generates the docs package required by cmd/api imports.
       - name: Install swag
         run: go install github.com/swaggo/swag/cmd/swag@latest
 
-      # Generate docs so the local docs package exists before any Go tooling runs.
       - name: Generate docs
         run: make swagger-inner
 
-      # Ensures all module checksums match what is recorded in go.sum.
       - name: Verify dependencies
         run: go mod verify
 
-      # Runs go mod tidy and fails if it produces any changes, meaning the
-      # committed go.mod/go.sum are not in sync with the source code.
       - name: Check go mod tidy
         run: |
           go mod tidy
           git diff --exit-code go.mod go.sum
 
-      # Built-in Go static analyser — catches common mistakes at the AST level.
       - name: go vet
         run: go vet ./...
 
-      # Stricter static analysis beyond go vet (unused code, deprecated APIs, etc.).
       - name: staticcheck
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@latest
           staticcheck ./...
 
-  # Build
-  # Generates Swagger docs and verifies the project compiles cleanly.
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 5
@@ -77,20 +61,15 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # swag is not a project dependency, install it as a CI tool.
       - name: Install swag
         run: go install github.com/swaggo/swag/cmd/swag@latest
 
-      # Regenerates the OpenAPI spec under ./docs from handler annotations.
       - name: Generate docs
         run: make swagger-inner
 
-      # Full compilation check — catches missing symbols, type errors, etc.
       - name: Build
         run: go build -v ./...
 
-  # Test
-  # Runs all unit tests with the race detector enabled.
   test:
     runs-on: ubuntu-22.04
     timeout-minutes: 10
@@ -102,6 +81,5 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # -race detects data races; -count=1 disables the test result cache.
       - name: Run unit tests
         run: make test-unit-inner
