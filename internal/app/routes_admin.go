@@ -37,5 +37,9 @@ func adminRoutes(c *Container) chi.Router {
 		})
 	})
 
+	r.Route("/awards", func(r chi.Router) {
+		r.Post("/winners", c.AdminHandler.RecordAwardWinners)
+	})
+
 	return r
 }

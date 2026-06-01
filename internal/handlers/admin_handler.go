@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/dtos"
 	"github.com/fifawcp/api/internal/httpctx"
 	"github.com/fifawcp/api/internal/httpx"
@@ -16,6 +17,7 @@ type AdminHandler struct {
 	matchService         services.MatchServiceInterface
 	groupStandingService services.GroupStandingServiceInterface
 	scoringService       services.ScoringServiceInterface
+	awardService         services.AwardServiceInterface
 	logger               logging.Logger
 	auditLogger          logging.AuditLogger
 	validator            *validator.Validator
@@ -25,6 +27,7 @@ func NewAdminHandler(
 	matchService services.MatchServiceInterface,
 	groupStandingService services.GroupStandingServiceInterface,
 	scoringService services.ScoringServiceInterface,
+	awardService services.AwardServiceInterface,
 	logger logging.Logger,
 	auditLogger logging.AuditLogger,
 	validator *validator.Validator,
@@ -33,6 +36,7 @@ func NewAdminHandler(
 		matchService:         matchService,
 		groupStandingService: groupStandingService,
 		scoringService:       scoringService,
+		awardService:         awardService,
 		logger:               logger,
 		auditLogger:          auditLogger,
 		validator:            validator,
@@ -309,6 +313,62 @@ func (h *AdminHandler) RescoreBestThirds(w http.ResponseWriter, r *http.Request)
 		handleServiceError(w, r, err, h.logger)
 		return
 	}
+
+	httpx.RespondWithData(w, http.StatusNoContent, nil)
+}
+
+// RecordAwardWinners godoc
+//
+//	@Summary		Record actual award winners and score picks
+//	@Description	Persists the four actual tournament award winners (Golden Boot, Ball, Glove, Young Player). Triggers async award scoring: every user who picked correctly gets the configured flat points added to their pickem competition total. Idempotent — re-running with the same winners is a no-op. Requires authentication and admin role.
+//	@Tags			admin-awards
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body	dtos.RecordAwardWinnersDto	true	"Award winners"
+//	@Success		204		"Winners recorded; award scoring scheduled"
+//	@Failure		400		{object}	httpx.ErrorResponse	"Invalid request body, ineligible player, or missing/duplicate award type"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Forbidden - admin role required"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
+//	@Security		BearerAuth
+//	@Router			/admin/awards/winners [post]
+func (h *AdminHandler) RecordAwardWinners(w http.ResponseWriter, r *http.Request) {
+	var body dtos.RecordAwardWinnersDto
+
+	if err := httpx.ReadAndValidateJSON(w, r, &body, h.validator); err != nil {
+		return
+	}
+
+	winners := make([]*domain.AwardWinner, 0, len(body.Winners))
+	for _, winner := range body.Winners {
+		winners = append(winners, &domain.AwardWinner{
+			AwardType: domain.AwardType(winner.AwardType),
+			PlayerID:  winner.PlayerID,
+		})
+	}
+
+	if err := h.awardService.RecordWinners(r.Context(), winners); err != nil {
+		h.auditLogger.LogEvent(r.Context(), logging.Event{
+			Action:   logging.ActionRecordAwardWinners,
+			Resource: logging.ResourceAward,
+			Outcome:  logging.OutcomeFailure,
+			Metadata: map[string]any{
+				logging.Error: err.Error(),
+				"count":       len(body.Winners),
+			},
+		})
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	h.auditLogger.LogEvent(r.Context(), logging.Event{
+		Action:   logging.ActionRecordAwardWinners,
+		Resource: logging.ResourceAward,
+		Outcome:  logging.OutcomeSuccess,
+		Metadata: map[string]any{
+			"count": len(body.Winners),
+		},
+	})
 
 	httpx.RespondWithData(w, http.StatusNoContent, nil)
 }

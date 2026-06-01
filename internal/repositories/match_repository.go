@@ -239,6 +239,13 @@ func nullableInt(value *int) any {
 	return *value
 }
 
+func nullableString(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
 func buildMatchResult(
 	homeScore, awayScore, homePenalty, awayPenalty sql.NullInt64,
 	winnerFifaCode sql.NullString,

@@ -25,6 +25,7 @@ type Seeder struct {
 	boardMemberRepository domain.BoardMemberRepository
 	pickemRepository      domain.PickemRepository
 	matchRepository       domain.MatchRepository
+	awardPickRepository   domain.AwardPickRepository
 	matchService          services.MatchServiceInterface
 	pickemService         services.PickemServiceInterface
 	boardService          services.BoardServiceInterface
@@ -40,6 +41,7 @@ func NewSeeder(
 	boardMemberRepository domain.BoardMemberRepository,
 	pickemRepository domain.PickemRepository,
 	matchRepository domain.MatchRepository,
+	awardPickRepository domain.AwardPickRepository,
 	matchService services.MatchServiceInterface,
 	pickemService services.PickemServiceInterface,
 	boardService services.BoardServiceInterface,
@@ -53,6 +55,7 @@ func NewSeeder(
 		boardMemberRepository: boardMemberRepository,
 		pickemRepository:      pickemRepository,
 		matchRepository:       matchRepository,
+		awardPickRepository:   awardPickRepository,
 		matchService:          matchService,
 		pickemService:         pickemService,
 		boardService:          boardService,
@@ -304,6 +307,9 @@ func (s *Seeder) RunScenario(ctx context.Context, scenarioName string) error {
 	if err := s.seedBracketPicks(ctx, pickemUsers); err != nil {
 		return fmt.Errorf("seed bracket picks: %w", err)
 	}
+	if err := s.seedAwardPicks(ctx, pickemUsers); err != nil {
+		return fmt.Errorf("seed award picks: %w", err)
+	}
 
 	// Group-stage teams are always assigned post-migration, so these picks always land
 	// Knockout picks are seeded per-stage below, once their matchups become known via advanceBracket
@@ -374,6 +380,7 @@ func (s *Seeder) resetTournamentState(ctx context.Context) error {
 		`DELETE FROM competition_match_scores`,
 		`DELETE FROM user_bracket_picks`,
 		`DELETE FROM user_match_score_picks`,
+		`DELETE FROM user_award_picks`,
 		`DELETE FROM competition_scope_stages WHERE competition_id IN (SELECT id FROM competitions WHERE board_id NOT IN (SELECT id FROM boards WHERE privacy = 'global'))`,
 		`DELETE FROM competition_scope_teams  WHERE competition_id IN (SELECT id FROM competitions WHERE board_id NOT IN (SELECT id FROM boards WHERE privacy = 'global'))`,
 		`DELETE FROM competitions WHERE board_id NOT IN (SELECT id FROM boards WHERE privacy = 'global')`,

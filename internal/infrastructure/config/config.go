@@ -35,6 +35,7 @@ type ScoringConfig struct {
 	Final              int
 	MatchScoreExact    int
 	MatchScoreOutcome  int
+	Award              int
 }
 
 type ServerConfig struct {
@@ -213,6 +214,7 @@ func NewConfig() *Config {
 			Final:              env.GetInt("SCORING_FINAL", 20),
 			MatchScoreExact:    env.GetInt("SCORING_MATCH_SCORE_EXACT", 5),
 			MatchScoreOutcome:  env.GetInt("SCORING_MATCH_SCORE_OUTCOME", 2),
+			Award:              env.GetInt("SCORING_AWARD", 20),
 		},
 	}
 }

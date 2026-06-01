@@ -22,6 +22,7 @@ const (
 	ActionBulkUpdateMatches    AuditAction = "match.bulk_update_results"
 	ActionRecalculateStandings AuditAction = "standing.recalculate"
 	ActionResolveThirdPlace    AuditAction = "match.resolve_third_place"
+	ActionRecordAwardWinners   AuditAction = "award.record_winners"
 )
 
 type AuditResource string
@@ -29,6 +30,7 @@ type AuditResource string
 const (
 	ResourceMatch    AuditResource = "match"
 	ResourceStanding AuditResource = "standing"
+	ResourceAward    AuditResource = "award"
 )
 
 type AuditOutcome string
