@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS players (
 CREATE INDEX IF NOT EXISTS idx_players_team_fifa_code ON players(team_fifa_code);
 CREATE INDEX IF NOT EXISTS idx_players_position       ON players(position);
 
--- Rosters pending for: AUS, ECU, IRQ, KSA
+-- Rosters pending for: ECU, IRQ, KSA
 INSERT INTO players (
   id, team_fifa_code, name, first_name, last_name, age, position, club_name
 ) VALUES
@@ -72,6 +72,32 @@ INSERT INTO players (
   ('249299', 'ARG', 'Alexis Mac Allister', 'Alexis', 'Mac Allister', '27', 'midfielder', 'Liverpool'),
   ('285450', 'ARG', 'Enzo Fernández', 'Enzo', 'Fernández', '25', 'midfielder', 'Chelsea'),
   ('320760', 'ARG', 'Valentín Barco', 'Valentín', 'Barco', '21', 'midfielder', 'Strasbourg'),
+  ('1433050227500263090', 'AUS', 'Mohamed Toure', 'Mohamed', 'Toure', '21', 'attacker', 'Norwich City'),
+  ('3459715243491471475', 'AUS', 'Nestory Irankunda', 'Nestory', 'Irankunda', '20', 'attacker', 'Watford'),
+  ('3950043848056209778', 'AUS', 'Cristian Volpato', 'Cristian', 'Volpato', '22', 'attacker', 'Sassuolo'),
+  ('4750107556598127428', 'AUS', 'Tete Yengi', 'Tete', 'Yengi', NULL, 'attacker', 'Machida Zelvia'),
+  ('7077886636132269225', 'AUS', 'Mathew Leckie', 'Mathew', 'Leckie', '35', 'attacker', 'Melbourne City'),
+  ('7510703909433605156', 'AUS', 'Nishan Velupillay', 'Nishan', 'Velupillay', NULL, 'attacker', 'Melbourne Victory'),
+  ('8825746349038665950', 'AUS', 'Awer Mabil', 'Awer', 'Mabil', '30', 'attacker', 'CD Castellón'),
+  ('320828670735900486', 'AUS', 'Jordan Bos', 'Jordan', 'Bos', '23', 'defender', 'Feyenoord'),
+  ('1515282935395754699', 'AUS', 'Jason Geria', 'Jason', 'Geria', NULL, 'defender', 'Albirex Niigata'),
+  ('3199863138272605744', 'AUS', 'Jacob Italiano', 'Jacob', 'Italiano', NULL, 'defender', 'Grazer AK'),
+  ('3310896405787455648', 'AUS', 'Harry Souttar', 'Harry', 'Souttar', '27', 'defender', 'Leicester City'),
+  ('3508757009841017964', 'AUS', 'Kai Trewin', 'Kai', 'Trewin', NULL, 'defender', 'New York City'),
+  ('4882532583735214397', 'AUS', 'Aziz Behich', 'Aziz', 'Behich', '35', 'defender', 'Melbourne City'),
+  ('5299369556236639743', 'AUS', 'Milos Degenek', 'Miloš', 'Degenek', '32', 'defender', 'Apoel FC'),
+  ('7353877079719597846', 'AUS', 'Lucas Herrington', 'Lucas', 'Herrington', NULL, 'defender', 'Colorado Rapids'),
+  ('9063673441978923293', 'AUS', 'Alessandro Circati', 'Alessandro', 'Circati', '23', 'defender', 'Parma Calcio 1913'),
+  ('9125653903079223134', 'AUS', 'Cameron Burgess', 'Cameron', 'Burgess', '30', 'defender', 'Swansea City'),
+  ('190949442109203656', 'AUS', 'Mathew Ryan', 'Mathew', 'Ryan', '34', 'goalkeeper', 'Levante UD'),
+  ('655454422930854153', 'AUS', 'Patrick Beach', 'Patrick', 'Beach', NULL, 'goalkeeper', 'Melbourne City'),
+  ('6563738193945372714', 'AUS', 'Paul Izzo', 'Paul', 'Izzo', NULL, 'goalkeeper', 'Randers FC'),
+  ('305237073184033014', 'AUS', 'Connor Metcalfe', 'Connor', 'Metcalfe', '26', 'midfielder', 'St Pauli FC'),
+  ('2554955547423939064', 'AUS', 'Ajdin Hrustic', 'Ajdin', 'Hrustić', '29', 'midfielder', 'Heracles Almelo'),
+  ('4254013751681405171', 'AUS', 'Aiden O''Neill', 'Aiden', 'O''Neill', '27', 'midfielder', 'New York City'),
+  ('7002755873519603968', 'AUS', 'Jackson Irvine', 'Jackson', 'Irvine', '33', 'midfielder', 'St Pauli'),
+  ('7284727219079449382', 'AUS', 'Paul Okon-Engstler', 'Paul', 'Okon-Engstler', NULL, 'midfielder', 'Sydney FC'),
+  ('8490936986528375557', 'AUS', 'Cameron Devlin', 'Cameron', 'Devlin', '27', 'midfielder', 'Hearts'),
   ('98193', 'AUT', 'Marko Arnautovic', 'Marko', 'Arnautovic', '37', 'attacker', 'Red Star Belgrade'),
   ('146804', 'AUT', 'M. Gregoritsch', 'Michael', 'Gregoritsch', '32', 'attacker', 'FC Augsburg'),
   ('259131', 'AUT', 'Sasa Kalajdzic', 'Sasa', 'Kalajdzic', '28', 'attacker', 'LASK Linz'),
@@ -361,7 +387,6 @@ INSERT INTO players (
   ('212330', 'CZE', 'Patrik Schick', 'Patrik', 'Schick', '30', 'attacker', 'Bayer Leverkusen'),
   ('306008', 'CZE', 'Jan Kuchta', 'Jan', 'Kuchta', '29', 'attacker', 'Sparta Prague'),
   ('343733', 'CZE', 'Mojmír Chytil', 'Mojmír', 'Chytil', '27', 'attacker', 'Slavia Prague'),
-  ('2032411330165628197', 'CZE', 'Christophe Kabongo', 'Christophe', 'Kabongo', NULL, 'attacker', 'Mlada Boleslav'),
   ('3022939494831559682', 'CZE', 'Tomáš Chorý', 'Tomáš', 'Chorý', NULL, 'attacker', 'Slavia Prague'),
   ('5352051578579127156', 'CZE', 'Adam Hložek', 'Adam', 'Hložek', NULL, 'attacker', 'TSG Hoffenheim'),
   ('151714', 'CZE', 'Ladislav Krejcí', 'Ladislav', 'Krejcí', '27', 'defender', 'Wolverhampton Wanderers'),
@@ -377,13 +402,11 @@ INSERT INTO players (
   ('277313', 'CZE', 'Matej Kovar', 'Matej', 'Kovar', '26', 'goalkeeper', 'PSV Eindhoven'),
   ('319267', 'CZE', 'Lukas Hornicek', 'Lukas', 'Hornicek', '23', 'goalkeeper', 'Braga'),
   ('249525', 'CZE', 'Michal Sadílek', 'Michal', 'Sadílek', '27', 'midfielder', 'Slavia Prague'),
-  ('279180', 'CZE', 'Pavel Bucha', 'Pavel', 'Bucha', '28', 'midfielder', 'FC Cincinnati'),
   ('294618', 'CZE', 'Lukás Provod', 'Lukás', 'Provod', '29', 'midfielder', 'Slavia Prague'),
   ('326596', 'CZE', 'Lukás Cerv', 'Lukás', 'Cerv', '25', 'midfielder', 'Viktoria Plzen'),
   ('3420410447819805903', 'CZE', 'Denis Višinský', 'Denis', 'Višinský', NULL, 'midfielder', 'Viktoria Plzen'),
   ('4311930901673009667', 'CZE', 'Tomáš Souček', 'Tomáš', 'Souček', NULL, 'midfielder', 'West Ham'),
   ('5372527729157646428', 'CZE', 'Alexandr Sojka', 'Alexandr', 'Sojka', NULL, 'midfielder', 'Viktoria Plzen'),
-  ('6147177296645511893', 'CZE', 'Tomáš Ladra', 'Tomáš', 'Ladra', NULL, 'midfielder', 'Viktoria Plzen'),
   ('6247853516035141008', 'CZE', 'Vladimir Darida', 'Vladimir', 'Darida', NULL, 'midfielder', 'Hradec Kralove'),
   ('6292083611145983385', 'CZE', 'Hugo Sochůrek', 'Hugo', 'Sochůrek', NULL, 'midfielder', 'Sparta Prague'),
   ('8644972597999535000', 'CZE', 'Pavel Šulc', 'Pavel', 'Šulc', NULL, 'midfielder', 'Lyon'),
