@@ -1,57 +1,117 @@
 name: release
 
-# Triggers when a version tag (e.g. v1.2.3) is pushed to any branch.
-# Creates a DRAFT GitHub Release pre-populated with commits since the
-# last tag. You then edit the draft and publish it manually.
-# Publishing the release triggers deploy-prod.yml.
+# Creates a DRAFT GitHub Release (you edit + publish it; publishing triggers
+# deploy-prod). Runs on two paths, sharing one job:
+#
+#   1. AUTO (normal path) — a `develop → main` release PR is MERGED. The version
+#      is read from the PR title (`chore: release vX.Y.Z`); this workflow tags
+#      main's merge commit, then drafts the release. Used by the `release` skill:
+#      open the PR + queue auto-merge, and the rest happens here, server-side.
+#
+#   2. MANUAL (emergency path) — someone pushes a `vX.Y.Z` tag by hand. The tag
+#      already exists, so we skip tagging and just draft the release.
+#
+# Note on path 1: the tag is pushed with GITHUB_TOKEN, which by design does NOT
+# start another workflow run — so the push-tag trigger below won't double-fire.
+# That's why this same job drafts the release directly after tagging.
 on:
   push:
     tags:
       - 'v*.*.*'
+  pull_request:
+    types: [closed]
+    branches: [main]
 
 jobs:
-  # Create release draft
   create-release:
+    # Run on a manual tag push, OR on a merged develop→main release PR.
+    if: >
+      github.event_name == 'push' ||
+      (github.event.pull_request.merged == true &&
+       github.event.pull_request.head.ref == 'develop' &&
+       startsWith(github.event.pull_request.title, 'chore: release v'))
     runs-on: ubuntu-22.04
     timeout-minutes: 5
 
-    # Needs write access to create GitHub Releases.
+    # Needs write access to push the tag and create the GitHub Release.
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@v6
         with:
-          # Fetch full history so we can diff against the previous tag.
+          # Full history + all tags so we can diff against the previous tag and
+          # reach main's merge commit.
           fetch-depth: 0
+          ref: main
 
-      # Build a raw commit log since the previous tag as a starting point
-      # for the changelog. Edit and clean this up before publishing.
+      # Resolve the version: from the tag (manual) or the PR title (auto).
+      - name: Determine version
+        id: ver
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if [ "$EVENT" = "push" ]; then
+            VERSION="$REF_NAME"
+          else
+            VERSION=$(printf '%s' "$TITLE" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          fi
+          if ! printf '%s' "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Could not resolve a vX.Y.Z version (event=$EVENT, title=$TITLE, ref=$REF_NAME)"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing $VERSION"
+
+      # AUTO path only: tag main's merge commit and push it.
+      - name: Tag the merge commit
+        if: github.event_name == 'pull_request'
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          if git rev-parse "refs/tags/$VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag $VERSION already exists — refusing to move it."
+            exit 1
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" "$SHA" -m "Release $VERSION"
+          git push origin "$VERSION"
+
+      # Build a raw commit log since the previous tag as a changelog starting
+      # point. Edit and clean this up before publishing the draft.
       - name: Generate commit log since last tag
         id: log
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          PREV=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -vx "$VERSION" | head -1)
           if [ -n "$PREV" ]; then
             echo "Commits since ${PREV}:"
-            LOG=$(git log ${PREV}..HEAD --oneline --no-merges)
+            LOG=$(git log "${PREV}..${VERSION}" --oneline --no-merges)
           else
             echo "First release — no previous tag found."
-            LOG=$(git log --oneline --no-merges)
+            LOG=$(git log "${VERSION}" --oneline --no-merges)
+            PREV="$VERSION"
           fi
-          # Write to output using multiline syntax.
+          echo "prev=$PREV" >> "$GITHUB_OUTPUT"
           {
             echo "log<<EOF"
             echo "$LOG"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      # Creates the draft release. Edit the body in GitHub UI before publishing.
+      # Creates the draft release. Edit the body in the GitHub UI before publishing.
       # Publishing the release will trigger deploy-prod.yml.
       - name: Create draft release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          name: ${{ github.ref_name }}
+          tag_name: ${{ steps.ver.outputs.version }}
+          name: ${{ steps.ver.outputs.version }}
           body: |
             <!-- Raw commit log since previous tag - replace with clean changelog below -->
             ${{ steps.log.outputs.log }}
@@ -60,7 +120,7 @@ jobs:
             <!-- Release Notes Template - Fill in the sections below -->
             <!-- ============================================================ -->
 
-            # Release ${{ github.ref_name }}
+            # Release ${{ steps.ver.outputs.version }}
 
             Brief summary of the release.
 
@@ -116,4 +176,4 @@ jobs:
 
             ## Full diff
 
-            https://github.com/${{ github.repository }}/compare/PREV...${{ github.ref_name }}
+            https://github.com/${{ github.repository }}/compare/${{ steps.log.outputs.prev }}...${{ steps.ver.outputs.version }}
