@@ -1,12 +1,5 @@
 name: release
 
-# Creates a DRAFT GitHub Release (edit + publish it; publishing triggers deploy-prod).
-# Two paths, one job:
-#   1. AUTO — a develop→main release PR merges; the version is read from its title
-#      (`chore: release vX.Y.Z`), this job tags main's merge commit, then drafts.
-#   2. MANUAL — a `vX.Y.Z` tag is pushed by hand; tagging is skipped, just drafts.
-# The AUTO tag push uses GITHUB_TOKEN, which can't trigger another workflow run, so this
-# same job drafts the release directly rather than relying on the tag trigger.
 on:
   push:
     tags:
@@ -30,7 +23,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # Full history/tags to diff against the previous tag and reach main's merge commit.
           fetch-depth: 0
           ref: main
 
@@ -77,7 +69,6 @@ jobs:
           if [ -n "$PREV" ]; then RANGE="${PREV}..${VERSION}"; else RANGE="$VERSION"; fi
 
           ALL=$(git log "$RANGE" --no-merges --pretty='%s' | grep -vE '^chore: release ')
-          # Strip the conventional-commit prefix (type, optional scope, optional !).
           strip='s/^[a-z]+(\([^)]*\))?!?:[[:space:]]*//'
 
           FEATS=$(printf '%s\n' "$ALL" | grep -E '^feat'      | sed -E "$strip" | sed 's/^/- /')

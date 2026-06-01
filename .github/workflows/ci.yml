@@ -1,7 +1,5 @@
 name: ci
 
-# pull_request runs only on develop: a develop→main release PR's head is develop,
-# which already ran push CI on the same commit, so a pull_request run would duplicate it.
 on:
   push:
     branches: [main, develop]
