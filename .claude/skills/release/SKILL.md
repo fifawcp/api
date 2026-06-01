@@ -10,8 +10,8 @@ maintainer approves, the rest is automatic:
 
 ```
 /release → PR opened + auto-merge queued → (maintainer approves)
-        → GitHub merges as a MERGE COMMIT → release.yml tags vX.Y.Z + drafts the release
-        → you publish the draft → prod deploy
+        → GitHub merges as a MERGE COMMIT → release.yml tags vX.Y.Z + auto-drafts the notes
+        → you publish the draft → deploy.yml ships the tag to Railway prod
 ```
 
 ## The one rule
@@ -26,15 +26,18 @@ The `--auto --merge` in step 6 enforces this.
 ## How it's wired
 
 - **Auto-merge** merges the PR as a merge commit the instant its required review lands.
-- **`.github/workflows/release.yml`** runs on the merged PR, reads the version from the title
-  (`chore: release vX.Y.Z`), tags main's merge commit, and drafts the release. You publish the
-  draft to deploy.
+- **`release.yml`** runs on the merged PR: reads the version from the title
+  (`chore: release vX.Y.Z`), tags main's merge commit, **auto-generates a categorized changelog**
+  from the commits, and creates the release **as a draft**. You don't hand-write release notes.
+- **`deploy.yml`** runs when you **publish** that draft: it deploys the released tag to Railway
+  production. Publishing is the single go-live gate.
 
 **Prerequisites** (already configured — check these if a release misbehaves):
 
 - `main` protection: "Require linear history" **off**; requires **1 non-author review**.
 - Repo: "Allow auto-merge" and "Allow merge commits" **on**.
-- `release.yml` triggers on `pull_request: [closed]` → `main`.
+- `release.yml` triggers on `pull_request: [closed]` → `main`; `deploy.yml` on `release: [published]`.
+- Railway's native auto-deploy is **off** (deploy goes through `deploy.yml`); `RAILWAY_TOKEN` secret set.
 
 ## Steps
 
@@ -50,8 +53,9 @@ The `--auto --merge` in step 6 enforces this.
    - Bump from the commits since that tag: `BREAKING CHANGE`/`type!:` → **major**; else `feat:` →
      **minor**; else → **patch**.
 5. **Open the PR.** Title MUST be exactly `chore: release vX.Y.Z` — `release.yml` parses the
-   version from it. Body: terse grouped highlights (~150 words, same density as `open-pr`) derived
-   from real commits; skip migration files, go.sum bumps, mock regens.
+   version from it. Body is the PR description for the reviewer (the published release notes are
+   auto-generated): terse grouped highlights (~150 words, same density as `open-pr`) from real
+   commits; skip migration files, go.sum bumps, mock regens.
    ```bash
    gh pr create --base main --head develop --title "chore: release vX.Y.Z" --body "$(cat <<'EOF'
    ## Release vX.Y.Z
@@ -73,4 +77,4 @@ The `--auto --merge` in step 6 enforces this.
    jobs:
    > Release PR #<num> (`vX.Y.Z`) is queued to auto-merge as a merge commit. It needs **one
    > maintainer approval** (not the author). On approval it merges, then `release.yml` tags it and
-   > drafts the release — **publish the draft** to deploy.
+   > drafts the notes — review the draft and **publish** it; that deploys to Railway prod.

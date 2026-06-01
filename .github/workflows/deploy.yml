@@ -1,0 +1,33 @@
+name: deploy
+
+# Deploys the released version to Railway production when a GitHub Release is published
+# (the go-live gate). Railway's "Auto deploys when pushed to GitHub" must be DISABLED on
+# the api service so a main merge doesn't also deploy — this is the single production path;
+# the repo stays connected only for build settings and the pre-deploy migration command.
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+
+      # RAILWAY_TOKEN is a project token scoped to production, so the environment is
+      # implied; --ci streams build logs and exits when the build completes.
+      - name: Deploy to Railway (production)
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --ci --service api
