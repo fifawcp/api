@@ -1,5 +1,3 @@
--- Drops the provider_id column. The uniform sequential id renumbering is not
--- reversible (the original random placeholder IDs were meaningless and are not
--- reconstructable), and the new IDs are perfectly valid, so player.id values are
--- intentionally left in place.
+-- The id renumbering is irreversible (original placeholder IDs were meaningless);
+-- only the provider_id column is dropped.
 ALTER TABLE players DROP COLUMN IF EXISTS provider_id;
