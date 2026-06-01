@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS players (
 CREATE INDEX IF NOT EXISTS idx_players_team_fifa_code ON players(team_fifa_code);
 CREATE INDEX IF NOT EXISTS idx_players_position       ON players(position);
 
--- Rosters pending for: ECU, IRQ, KSA
 INSERT INTO players (
   id, team_fifa_code, name, first_name, last_name, age, position, club_name
 ) VALUES
