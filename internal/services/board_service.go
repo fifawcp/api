@@ -5,15 +5,19 @@ import (
 	"crypto/rand"
 	"errors"
 	"math/big"
+	"strings"
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/dtos"
 )
 
+const boardPreviewMemberSampleSize = 8
+
 type BoardServiceInterface interface {
 	CreateBoard(ctx context.Context, payload dtos.CreateBoardDto, userID string) (*domain.Board, error)
 	GetUserBoards(ctx context.Context, userID string) ([]*domain.UserBoardListItem, error)
 	GetBoardByID(ctx context.Context, boardID int64, userID string) (*domain.BoardDetails, error)
+	GetBoardPreview(ctx context.Context, joinCode string) (*domain.BoardPreview, error)
 	RegenerateJoinCode(ctx context.Context, boardID int64, role domain.BoardMemberRole) (string, error)
 	UpdateBoard(ctx context.Context, boardID int64, role domain.BoardMemberRole, payload dtos.UpdateBoardDto) error
 	DeleteBoard(ctx context.Context, boardID int64, role domain.BoardMemberRole) error
@@ -109,6 +113,16 @@ func (s *BoardService) GetBoardByID(
 	userID string,
 ) (*domain.BoardDetails, error) {
 	return s.boardRepository.GetBoardDetails(ctx, boardID, userID)
+}
+
+func (s *BoardService) GetBoardPreview(ctx context.Context, joinCode string) (*domain.BoardPreview, error) {
+	// Join codes are uppercase; normalize so a stray-cased or padded link still resolves.
+	code := strings.ToUpper(strings.TrimSpace(joinCode))
+	if code == "" {
+		return nil, domain.ErrBoardNotFound
+	}
+
+	return s.boardRepository.GetBoardPreview(ctx, code, boardPreviewMemberSampleSize)
 }
 
 func (s *BoardService) RegenerateJoinCode(ctx context.Context, boardID int64, role domain.BoardMemberRole) (string, error) {

@@ -11,6 +11,7 @@ type MockBoardRepository struct {
 	GetUserBoardsFunc   func(ctx context.Context, userID string) ([]*domain.UserBoardListItem, error)
 	GetBoardByIDFunc    func(ctx context.Context, boardID int64) (*domain.Board, error)
 	GetBoardDetailsFunc func(ctx context.Context, boardID int64, userID string) (*domain.BoardDetails, error)
+	GetBoardPreviewFunc func(ctx context.Context, joinCode string, sampleSize int) (*domain.BoardPreview, error)
 	GetBoardMembersFunc func(ctx context.Context, boardID int64, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error)
 	UpdateJoinCodeFunc  func(ctx context.Context, boardID int64, joinCode string) error
 	UpdateBoardFunc     func(ctx context.Context, boardID int64, board *domain.Board) error
@@ -43,6 +44,13 @@ func (m *MockBoardRepository) GetBoardDetails(ctx context.Context, boardID int64
 		return m.GetBoardDetailsFunc(ctx, boardID, userID)
 	}
 	panic("GetBoardDetails called unexpectedly")
+}
+
+func (m *MockBoardRepository) GetBoardPreview(ctx context.Context, joinCode string, sampleSize int) (*domain.BoardPreview, error) {
+	if m.GetBoardPreviewFunc != nil {
+		return m.GetBoardPreviewFunc(ctx, joinCode, sampleSize)
+	}
+	panic("GetBoardPreview called unexpectedly")
 }
 
 func (m *MockBoardRepository) GetBoardMembers(ctx context.Context, boardID int64, filters domain.BoardMembersFilters, page, limit int) (*domain.BoardMembersPage, error) {

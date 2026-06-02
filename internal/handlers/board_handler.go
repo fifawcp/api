@@ -129,6 +129,29 @@ func (h *BoardHandler) JoinBoard(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetBoardPreview godoc
+//
+//	@Summary		Preview a board by join code
+//	@Description	Returns a public, non-sensitive summary of the board behind a join code (name, privacy, member count, and a small sample of members) for an invite landing page. No authentication required.
+//	@Tags			boards
+//	@Produce		json
+//	@Param			code	query		string				true	"Board join code"
+//	@Success		200		{object}	httpx.Response		"Board preview retrieved successfully"
+//	@Failure		404		{object}	httpx.ErrorResponse	"No board matches the join code"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
+//	@Router			/boards/preview [get]
+func (h *BoardHandler) GetBoardPreview(w http.ResponseWriter, r *http.Request) {
+	code := strings.TrimSpace(r.URL.Query().Get("code"))
+
+	preview, err := h.boardService.GetBoardPreview(r.Context(), code)
+	if err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	httpx.RespondWithData(w, http.StatusOK, preview)
+}
+
 // GetBoardByID godoc
 //
 //	@Summary		Get board details
