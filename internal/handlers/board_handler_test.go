@@ -1177,3 +1177,64 @@ func TestBoardHandler_TransferOwnership(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
+
+// ---------------------------------------------------------------------------
+// TestBoardHandler_GetBoardPreview
+// ---------------------------------------------------------------------------
+func TestBoardHandler_GetBoardPreview(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns 200 with preview data", func(t *testing.T) {
+		t.Parallel()
+
+		bs := &mocks.MockBoardService{
+			GetBoardPreviewFunc: func(ctx context.Context, joinCode string) (*domain.BoardPreview, error) {
+				assert.Equal(t, "SJKVOH7Y", joinCode)
+				return &domain.BoardPreview{
+					Name:        "Los Liberos",
+					Privacy:     domain.BoardPrivacyPrivate,
+					MemberCount: 18,
+					Members: []*domain.BoardPreviewMember{
+						{UserID: gofakeit.UUID(), UserName: "dmorales", FirstName: "Daniel", LastName: "Morales"},
+					},
+				}, nil
+			},
+		}
+
+		h := newTestBoardHandler(bs, nil)
+		req := testutils.MakeJSONRequest(t, http.MethodGet, "/boards/preview?code=SJKVOH7Y", nil)
+		w := httptest.NewRecorder()
+
+		h.GetBoardPreview(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp struct {
+			Data domain.BoardPreview `json:"data"`
+		}
+		testutils.ParseJSONResponse(t, w, &resp)
+		assert.Equal(t, "Los Liberos", resp.Data.Name)
+		assert.Equal(t, domain.BoardPrivacyPrivate, resp.Data.Privacy)
+		assert.Equal(t, 18, resp.Data.MemberCount)
+		assert.Len(t, resp.Data.Members, 1)
+		assert.Equal(t, "dmorales", resp.Data.Members[0].UserName)
+	})
+
+	t.Run("returns 404 when the code matches no board", func(t *testing.T) {
+		t.Parallel()
+
+		bs := &mocks.MockBoardService{
+			GetBoardPreviewFunc: func(ctx context.Context, joinCode string) (*domain.BoardPreview, error) {
+				return nil, domain.ErrBoardNotFound
+			},
+		}
+
+		h := newTestBoardHandler(bs, nil)
+		req := testutils.MakeJSONRequest(t, http.MethodGet, "/boards/preview?code=NOPE", nil)
+		w := httptest.NewRecorder()
+
+		h.GetBoardPreview(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+}

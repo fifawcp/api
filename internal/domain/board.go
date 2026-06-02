@@ -44,6 +44,20 @@ type BoardMembersPage struct {
 	Pagination Pagination
 }
 
+type BoardPreview struct {
+	Name        string                `json:"name" example:"My Board"`
+	Privacy     BoardPrivacy          `json:"privacy" example:"private"`
+	MemberCount int                   `json:"member_count" example:"12"`
+	Members     []*BoardPreviewMember `json:"members"`
+}
+
+type BoardPreviewMember struct {
+	UserID    string `json:"user_id" example:"123e4567-e89b-12d3-a456-426614174000"`
+	UserName  string `json:"username" example:"johndoe"`
+	FirstName string `json:"first_name" example:"John"`
+	LastName  string `json:"last_name" example:"Doe"`
+}
+
 type BoardMembersFilters struct {
 	Search string
 }
@@ -62,6 +76,7 @@ type BoardRepository interface {
 	GetUserBoards(ctx context.Context, userID string) ([]*UserBoardListItem, error)
 	GetBoardByID(ctx context.Context, boardID int64) (*Board, error)
 	GetBoardDetails(ctx context.Context, boardID int64, userID string) (*BoardDetails, error)
+	GetBoardPreview(ctx context.Context, joinCode string, sampleSize int) (*BoardPreview, error)
 	GetBoardMembers(ctx context.Context, boardID int64, filters BoardMembersFilters, page, limit int) (*BoardMembersPage, error)
 	UpdateJoinCode(ctx context.Context, boardID int64, joinCode string) error
 	UpdateBoard(ctx context.Context, boardID int64, board *Board) error

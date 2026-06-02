@@ -11,6 +11,7 @@ type MockBoardService struct {
 	CreateBoardFunc        func(ctx context.Context, payload dtos.CreateBoardDto, userID string) (*domain.Board, error)
 	GetUserBoardsFunc      func(ctx context.Context, userID string) ([]*domain.UserBoardListItem, error)
 	GetBoardByIDFunc       func(ctx context.Context, boardID int64, userID string) (*domain.BoardDetails, error)
+	GetBoardPreviewFunc    func(ctx context.Context, joinCode string) (*domain.BoardPreview, error)
 	RegenerateJoinCodeFunc func(ctx context.Context, boardID int64, role domain.BoardMemberRole) (string, error)
 	UpdateBoardFunc        func(ctx context.Context, boardID int64, role domain.BoardMemberRole, payload dtos.UpdateBoardDto) error
 	DeleteBoardFunc        func(ctx context.Context, boardID int64, role domain.BoardMemberRole) error
@@ -35,6 +36,13 @@ func (m *MockBoardService) GetBoardByID(ctx context.Context, boardID int64, user
 		return m.GetBoardByIDFunc(ctx, boardID, userID)
 	}
 	panic("GetBoardByID called unexpectedly")
+}
+
+func (m *MockBoardService) GetBoardPreview(ctx context.Context, joinCode string) (*domain.BoardPreview, error) {
+	if m.GetBoardPreviewFunc != nil {
+		return m.GetBoardPreviewFunc(ctx, joinCode)
+	}
+	panic("GetBoardPreview called unexpectedly")
 }
 
 func (m *MockBoardService) RegenerateJoinCode(ctx context.Context, boardID int64, role domain.BoardMemberRole) (string, error) {

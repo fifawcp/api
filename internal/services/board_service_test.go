@@ -602,3 +602,69 @@ func TestBoardService_generateJoinCode(t *testing.T) {
 		}
 	})
 }
+
+// ---------------------------------------------------------------------------
+// TestBoardService_GetBoardPreview
+// ---------------------------------------------------------------------------
+func TestBoardService_GetBoardPreview(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns preview and normalizes the code", func(t *testing.T) {
+		t.Parallel()
+
+		var capturedCode string
+		var capturedSample int
+
+		br := &mocks.MockBoardRepository{
+			GetBoardPreviewFunc: func(ctx context.Context, joinCode string, sampleSize int) (*domain.BoardPreview, error) {
+				capturedCode = joinCode
+				capturedSample = sampleSize
+				return &domain.BoardPreview{
+					Name:        "Los Liberos",
+					Privacy:     domain.BoardPrivacyPrivate,
+					MemberCount: 18,
+					Members:     []*domain.BoardPreviewMember{{UserID: gofakeit.UUID(), UserName: "dmorales"}},
+				}, nil
+			},
+		}
+
+		service := newTestBoardService(br, nil)
+
+		result, err := service.GetBoardPreview(context.Background(), "  sjkvoh7y ")
+
+		assert.NoError(t, err)
+		assert.Equal(t, "SJKVOH7Y", capturedCode)
+		assert.Equal(t, boardPreviewMemberSampleSize, capturedSample)
+		assert.Equal(t, "Los Liberos", result.Name)
+		assert.Equal(t, 18, result.MemberCount)
+		assert.Len(t, result.Members, 1)
+	})
+
+	t.Run("returns ErrBoardNotFound for a blank code without hitting the repo", func(t *testing.T) {
+		t.Parallel()
+
+		service := newTestBoardService(&mocks.MockBoardRepository{}, nil)
+
+		result, err := service.GetBoardPreview(context.Background(), "   ")
+
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, domain.ErrBoardNotFound)
+	})
+
+	t.Run("propagates repository ErrBoardNotFound", func(t *testing.T) {
+		t.Parallel()
+
+		br := &mocks.MockBoardRepository{
+			GetBoardPreviewFunc: func(ctx context.Context, joinCode string, sampleSize int) (*domain.BoardPreview, error) {
+				return nil, domain.ErrBoardNotFound
+			},
+		}
+
+		service := newTestBoardService(br, nil)
+
+		result, err := service.GetBoardPreview(context.Background(), "BADCODE1")
+
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, domain.ErrBoardNotFound)
+	})
+}
