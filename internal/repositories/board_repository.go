@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -251,6 +252,65 @@ func (r *BoardRepository) GetBoardMembers(
 	membersPage.Pagination.HasMore = page*limit < membersPage.Pagination.Total
 
 	return membersPage, nil
+}
+
+func (r *BoardRepository) GetBoardPreview(
+	ctx context.Context,
+	joinCode string,
+	sampleSize int,
+) (*domain.BoardPreview, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	var preview domain.BoardPreview
+	var boardID int64
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT
+			b.id,
+			b.name,
+			b.privacy,
+			(SELECT COUNT(*) FROM board_members WHERE board_id = b.id) AS member_count
+		FROM boards b
+		WHERE b.join_code = $1`,
+		joinCode,
+	).Scan(&boardID, &preview.Name, &preview.Privacy, &preview.MemberCount)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrBoardNotFound
+		}
+		return nil, handleDBError(err, resourceBoard)
+	}
+
+	preview.Members = []*domain.BoardPreviewMember{}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT bm.user_id, u.username, u.first_name, u.last_name
+		FROM board_members bm
+		INNER JOIN users u ON u.id = bm.user_id
+		WHERE bm.board_id = $1
+		ORDER BY (bm.role = 'owner') DESC, bm.created_at ASC, bm.user_id ASC
+		LIMIT $2`,
+		boardID, sampleSize,
+	)
+	if err != nil {
+		return nil, handleDBError(err, resourceBoard)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var member domain.BoardPreviewMember
+		if err := rows.Scan(&member.UserID, &member.UserName, &member.FirstName, &member.LastName); err != nil {
+			return nil, handleDBError(err, resourceBoard)
+		}
+		preview.Members = append(preview.Members, &member)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, handleDBError(err, resourceBoard)
+	}
+
+	return &preview, nil
 }
 
 func (r *BoardRepository) GetBoardByID(ctx context.Context, boardID int64) (*domain.Board, error) {
