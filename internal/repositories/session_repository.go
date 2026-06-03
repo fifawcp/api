@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/infrastructure/config"
@@ -114,29 +115,37 @@ func (r *SessionRepository) GetSessions(
 	return sessions, nil
 }
 
+// UpdateLastUsedAt touches the session and slides its expiry to slideTo, capped at
+// created_at + maxLifetime. expires_at only ever grows. It returns the resulting
+// expiry so the caller can cap the rotated refresh token to it.
 func (r *SessionRepository) UpdateLastUsedAt(
 	ctx context.Context,
 	id string,
-) error {
+	slideTo time.Time,
+	maxLifetime time.Duration,
+) (time.Time, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
 
-	query := `UPDATE sessions SET last_used_at = NOW() WHERE id = $1 AND expires_at > NOW()`
-	result, err := r.db.ExecContext(ctx, query, id)
+	query := `UPDATE sessions
+		SET last_used_at = NOW(),
+			expires_at = GREATEST(
+				expires_at,
+				LEAST($2::timestamptz, created_at + make_interval(secs => $3))
+			)
+		WHERE id = $1 AND expires_at > NOW()
+		RETURNING expires_at`
+
+	var expiresAt time.Time
+	err := r.db.QueryRowContext(ctx, query, id, slideTo, maxLifetime.Seconds()).Scan(&expiresAt)
 	if err != nil {
-		return handleDBError(err, resourceSession)
+		if err == sql.ErrNoRows {
+			return time.Time{}, domain.ErrRefreshTokenInvalidOrExpired
+		}
+		return time.Time{}, handleDBError(err, resourceSession)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return handleDBError(err, resourceSession)
-	}
-
-	if rowsAffected == 0 {
-		return domain.ErrRefreshTokenInvalidOrExpired
-	}
-
-	return nil
+	return expiresAt, nil
 }
 
 func (r *SessionRepository) DeleteSession(

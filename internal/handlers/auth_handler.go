@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/fifawcp/api/internal/dtos"
@@ -11,6 +12,7 @@ import (
 	"github.com/fifawcp/api/internal/infrastructure/validator"
 	"github.com/fifawcp/api/internal/services"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 type AuthHandler struct {
@@ -156,7 +158,12 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authResponse, err := h.authService.RefreshToken(r.Context(), refreshToken)
+	ctx := context.WithValue(r.Context(), httpctx.RefreshDiagnosticsContextKey, &httpctx.RefreshDiagnostics{
+		RequestID: middleware.GetReqID(r.Context()),
+		Source:    r.Header.Get("X-Refresh-Source"),
+	})
+
+	authResponse, err := h.authService.RefreshToken(ctx, refreshToken)
 	if err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return
