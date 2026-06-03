@@ -13,8 +13,8 @@ import (
 	"github.com/fifawcp/api/internal/dtos"
 	"github.com/fifawcp/api/internal/infrastructure/auth"
 	"github.com/fifawcp/api/internal/infrastructure/config"
-	"github.com/fifawcp/api/internal/test/mocks"
 	"github.com/fifawcp/api/internal/infrastructure/totp"
+	"github.com/fifawcp/api/internal/test/mocks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -34,9 +34,10 @@ func newTestAuthService(
 			RefreshGraceWindow: 10 * time.Second,
 		},
 		Auth: config.AuthConfig{
-			OTPCooldown:    30 * time.Second,
-			MaxOTPAttempts: 3,
-			SessionTTL:     24 * time.Hour,
+			OTPCooldown:        30 * time.Second,
+			MaxOTPAttempts:     3,
+			SessionTTL:         24 * time.Hour,
+			SessionMaxLifetime: 72 * time.Hour,
 		},
 	}
 
@@ -1114,9 +1115,12 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		}
 
 		sr := &mocks.MockSessionRepository{
-			UpdateLastUsedAtFunc: func(ctx context.Context, id string) error {
+			UpdateLastUsedAtFunc: func(ctx context.Context, id string, slideTo time.Time, maxLifetime time.Duration) (time.Time, error) {
 				assert.Equal(t, sessionID, id)
-				return nil
+				// expiry slides to now + SessionTTL, bounded by SessionMaxLifetime
+				assert.WithinDuration(t, time.Now().Add(24*time.Hour), slideTo, time.Minute)
+				assert.Equal(t, 72*time.Hour, maxLifetime)
+				return slideTo, nil
 			},
 		}
 
@@ -1158,7 +1162,9 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		}
 
 		sr := &mocks.MockSessionRepository{
-			UpdateLastUsedAtFunc: func(ctx context.Context, id string) error { return nil },
+			UpdateLastUsedAtFunc: func(ctx context.Context, id string, slideTo time.Time, maxLifetime time.Duration) (time.Time, error) {
+				return slideTo, nil
+			},
 		}
 
 		authenticator := &mocks.MockAuthenticator{
@@ -1252,8 +1258,8 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		}
 
 		sr := &mocks.MockSessionRepository{
-			UpdateLastUsedAtFunc: func(ctx context.Context, id string) error {
-				return errors.New("database error")
+			UpdateLastUsedAtFunc: func(ctx context.Context, id string, slideTo time.Time, maxLifetime time.Duration) (time.Time, error) {
+				return time.Time{}, errors.New("database error")
 			},
 		}
 
@@ -1288,8 +1294,8 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		}
 
 		sr := &mocks.MockSessionRepository{
-			UpdateLastUsedAtFunc: func(ctx context.Context, id string) error {
-				return nil
+			UpdateLastUsedAtFunc: func(ctx context.Context, id string, slideTo time.Time, maxLifetime time.Duration) (time.Time, error) {
+				return slideTo, nil
 			},
 		}
 
@@ -1328,8 +1334,8 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		}
 
 		sr := &mocks.MockSessionRepository{
-			UpdateLastUsedAtFunc: func(ctx context.Context, id string) error {
-				return nil
+			UpdateLastUsedAtFunc: func(ctx context.Context, id string, slideTo time.Time, maxLifetime time.Duration) (time.Time, error) {
+				return slideTo, nil
 			},
 		}
 
@@ -1367,13 +1373,19 @@ func TestAuthService_RefreshToken(t *testing.T) {
 			},
 		}
 
+		sr := &mocks.MockSessionRepository{
+			UpdateLastUsedAtFunc: func(ctx context.Context, id string, slideTo time.Time, maxLifetime time.Duration) (time.Time, error) {
+				return slideTo, nil
+			},
+		}
+
 		authenticator := &mocks.MockAuthenticator{
 			GenerateTokenFunc: func(uid string, tokenType auth.TokenType) (*auth.TokenResult, error) {
 				return &auth.TokenResult{Token: "access-token", ExpiresAt: time.Now().Add(time.Hour)}, nil
 			},
 		}
 
-		service := newTestAuthService(nil, nil, rtr, nil, &mocks.MockLogger{}, authenticator, nil)
+		service := newTestAuthService(nil, sr, rtr, nil, &mocks.MockLogger{}, authenticator, nil)
 
 		result, err := service.RefreshToken(context.Background(), "token")
 

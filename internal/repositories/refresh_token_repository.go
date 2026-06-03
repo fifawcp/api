@@ -61,10 +61,8 @@ func (r *RefreshTokenRepository) GetRefreshTokenByTokenHash(
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
 
-	// Join sessions so we can enforce session expiry at lookup time and carry
-	// session.expires_at to the service for capping the rotated token's TTL.
-	// rotated_at is carried too: a rotated-but-unexpired row is still returned so
-	// the service can grant it the grace window (or reject it as stale reuse).
+	// Join sessions to enforce session expiry at lookup time. rotated_at is carried so
+	// the service can grant the grace window (or reject the token as stale reuse).
 	query := `SELECT
 		rt.id,
 		rt.user_id,
@@ -72,8 +70,7 @@ func (r *RefreshTokenRepository) GetRefreshTokenByTokenHash(
 		rt.token_hash,
 		rt.expires_at,
 		rt.rotated_at,
-		rt.created_at,
-		s.expires_at AS session_expires_at
+		rt.created_at
 	FROM refresh_tokens rt
 	JOIN sessions s ON s.id = rt.session_id
 	WHERE rt.token_hash = $1
@@ -90,7 +87,6 @@ func (r *RefreshTokenRepository) GetRefreshTokenByTokenHash(
 		&refreshToken.ExpiresAt,
 		&refreshToken.RotatedAt,
 		&refreshToken.CreatedAt,
-		&refreshToken.SessionExpiresAt,
 	)
 
 	if err != nil {
@@ -100,17 +96,11 @@ func (r *RefreshTokenRepository) GetRefreshTokenByTokenHash(
 	return &refreshToken, nil
 }
 
-// RotateRefreshToken supersedes the presented token and issues the new one in a
-// single statement:
-//  1. mark the old token rotated (idempotent — a concurrent caller may have
-//     already marked it; we still issue the new token so the race loser keeps a
-//     working session),
-//  2. prune the session's *previous* grace token (any rotated row other than the
-//     one we just superseded), bounding an active session to ≤2 rows,
-//  3. insert the new token.
-//
-// The caller is responsible for validating the old token (existence, expiry,
-// grace window) before calling this.
+// RotateRefreshToken marks the presented token rotated and issues a new one in one
+// statement. The prune drops the session's spent tokens but keeps any still inside the
+// grace window, so concurrent refreshes (middleware + client) don't delete a token
+// another in-flight request is about to redeem. The presented token is never pruned;
+// the caller validates it first.
 func (r *RefreshTokenRepository) RotateRefreshToken(
 	ctx context.Context,
 	oldTokenHash string,
@@ -127,7 +117,10 @@ func (r *RefreshTokenRepository) RotateRefreshToken(
 	),
 	pruned AS (
 		DELETE FROM refresh_tokens
-		WHERE session_id = $3 AND rotated_at IS NOT NULL AND token_hash <> $1
+		WHERE session_id = $3
+		  AND token_hash <> $1
+		  AND created_at < NOW() - make_interval(secs => $6)
+		  AND (rotated_at IS NULL OR rotated_at < NOW() - make_interval(secs => $6))
 		RETURNING id
 	)
 	INSERT INTO refresh_tokens (
@@ -147,6 +140,7 @@ func (r *RefreshTokenRepository) RotateRefreshToken(
 		newToken.SessionID,
 		newToken.TokenHash,
 		newToken.ExpiresAt,
+		r.cfg.JWT.RefreshGraceWindow.Seconds(),
 	).Scan(&newToken.ID)
 
 	if err != nil {

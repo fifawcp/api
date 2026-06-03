@@ -79,11 +79,12 @@ type JWTConfig struct {
 }
 
 type AuthConfig struct {
-	SessionTTL     time.Duration
-	OTPTTL         time.Duration
-	MaxOTPAttempts int
-	OTPCooldown    time.Duration
-	GoogleOAuth    OAuthConfig
+	SessionTTL         time.Duration
+	SessionMaxLifetime time.Duration
+	OTPTTL             time.Duration
+	MaxOTPAttempts     int
+	OTPCooldown        time.Duration
+	GoogleOAuth        OAuthConfig
 }
 
 type OAuthConfig struct {
@@ -159,13 +160,14 @@ func NewConfig() *Config {
 			Issuer:             env.GetString("JWT_ISSUER", "fifa-wcp"),
 			AccessTokenExpiry:  env.GetDuration("JWT_ACCESS_TOKEN_EXPIRY", 15*time.Minute),
 			RefreshTokenExpiry: env.GetDuration("JWT_REFRESH_TOKEN_EXPIRY", 7*24*time.Hour),
-			RefreshGraceWindow: env.GetDuration("JWT_REFRESH_GRACE_WINDOW", 10*time.Second),
+			RefreshGraceWindow: env.GetDuration("JWT_REFRESH_GRACE_WINDOW", 20*time.Second),
 		},
 		Auth: AuthConfig{
-			SessionTTL:     env.GetDuration("AUTH_SESSION_TTL", 7*24*time.Hour),
-			OTPTTL:         env.GetDuration("AUTH_OTP_TTL", 10*time.Minute),
-			MaxOTPAttempts: env.GetInt("AUTH_MAX_OTP_ATTEMPTS", 3),
-			OTPCooldown:    env.GetDuration("AUTH_OTP_COOLDOWN", 30*time.Second),
+			SessionTTL:         env.GetDuration("AUTH_SESSION_TTL", 7*24*time.Hour),
+			SessionMaxLifetime: env.GetDuration("AUTH_SESSION_MAX_LIFETIME", 30*24*time.Hour),
+			OTPTTL:             env.GetDuration("AUTH_OTP_TTL", 10*time.Minute),
+			MaxOTPAttempts:     env.GetInt("AUTH_MAX_OTP_ATTEMPTS", 3),
+			OTPCooldown:        env.GetDuration("AUTH_OTP_COOLDOWN", 30*time.Second),
 			GoogleOAuth: OAuthConfig{
 				ClientID:          env.GetString("GOOGLE_OAUTH_CLIENT_ID", ""),
 				ClientSecret:      env.GetString("GOOGLE_OAUTH_CLIENT_SECRET", ""),
