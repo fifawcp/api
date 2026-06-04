@@ -10,16 +10,18 @@ type CompetitionType string
 const (
 	CompetitionTypePickem CompetitionType = "pickem"
 	CompetitionTypeMatch  CompetitionType = "match"
+	CompetitionTypePool   CompetitionType = "pool"
 )
 
 type Competition struct {
-	ID        int64             `json:"id" example:"1"`
-	BoardID   int64             `json:"board_id" example:"1"`
-	Type      CompetitionType   `json:"type" example:"pickem"`
-	Name      string            `json:"name" example:"Pick'em"`
-	CreatedBy *string           `json:"-"`
-	CreatedAt time.Time         `json:"created_at" example:"2026-01-15T10:30:00Z"`
-	Scope     *CompetitionScope `json:"scope,omitempty"`
+	ID          int64             `json:"id" example:"1"`
+	BoardID     int64             `json:"board_id" example:"1"`
+	Type        CompetitionType   `json:"type" example:"pickem"`
+	Name        string            `json:"name" example:"Pick'em"`
+	CreatedBy   *string           `json:"-"`
+	CreatedAt   time.Time         `json:"created_at" example:"2026-01-15T10:30:00Z"`
+	Scope       *CompetitionScope `json:"scope,omitempty"`
+	PoolMatchID *int64            `json:"pool_match_id,omitempty" example:"42"`
 }
 
 // CompetitionScope is only populated for match competitions

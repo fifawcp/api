@@ -10,22 +10,36 @@ import (
 type ContextKey string
 
 const (
-	RequestInfoContextKey       ContextKey = "request_info"
-	AuthenticatedUserContextKey ContextKey = "authenticated_user"
-	BoardIDContextKey           ContextKey = "board_id"
-	BoardMemberRoleContextKey   ContextKey = "board_member_role"
-	UserIDContextKey            ContextKey = "user_id"
-	MatchIDContextKey           ContextKey = "match_id"
-	CompetitionIDContextKey     ContextKey = "competition_id"
-	ReturnToContextKey          ContextKey = "return_to"
-	OAuthStateContextKey        ContextKey = "oauth_state"
-	OAuthCodeContextKey         ContextKey = "oauth_code"
-	ResponseErrorContextKey     ContextKey = "response_error"
+	RequestInfoContextKey        ContextKey = "request_info"
+	AuthenticatedUserContextKey  ContextKey = "authenticated_user"
+	BoardIDContextKey            ContextKey = "board_id"
+	BoardMemberRoleContextKey    ContextKey = "board_member_role"
+	UserIDContextKey             ContextKey = "user_id"
+	MatchIDContextKey            ContextKey = "match_id"
+	CompetitionIDContextKey      ContextKey = "competition_id"
+	ReturnToContextKey           ContextKey = "return_to"
+	OAuthStateContextKey         ContextKey = "oauth_state"
+	OAuthCodeContextKey          ContextKey = "oauth_code"
+	ResponseErrorContextKey      ContextKey = "response_error"
+	RefreshDiagnosticsContextKey ContextKey = "refresh_diagnostics"
 )
 
 type ResponseError struct {
 	Code    string
 	Message string
+}
+
+type RefreshDiagnostics struct {
+	RequestID string
+	Source    string
+}
+
+func GetRefreshDiagnostics(ctx context.Context) *RefreshDiagnostics {
+	diagnostics, ok := ctx.Value(RefreshDiagnosticsContextKey).(*RefreshDiagnostics)
+	if !ok {
+		return nil
+	}
+	return diagnostics
 }
 
 func GetResponseError(ctx context.Context) *ResponseError {

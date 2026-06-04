@@ -178,6 +178,13 @@ func validateCreateCompetition(sl validator.StructLevel) {
 		if input.Scope == nil || len(input.Scope.Stages) == 0 {
 			sl.ReportError(input.Scope, "scope", "Scope", "scope_required", "")
 		}
+	case domain.CompetitionTypePool:
+		if input.Scope != nil {
+			sl.ReportError(input.Scope, "scope", "Scope", "scope_forbidden", "")
+		}
+		if input.MatchID == nil {
+			sl.ReportError(input.MatchID, "match_id", "MatchID", "required", "")
+		}
 	}
 }
 

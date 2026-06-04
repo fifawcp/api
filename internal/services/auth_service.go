@@ -9,6 +9,7 @@ import (
 
 	"github.com/fifawcp/api/internal/domain"
 	"github.com/fifawcp/api/internal/dtos"
+	"github.com/fifawcp/api/internal/httpctx"
 	"github.com/fifawcp/api/internal/infrastructure/auth"
 	"github.com/fifawcp/api/internal/infrastructure/config"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
@@ -189,21 +190,21 @@ func (s *AuthService) RefreshToken(
 	ctx context.Context,
 	refreshTokenString string,
 ) (*dtos.AuthData, error) {
-	// Validate refresh token
-	refreshToken, err := s.refreshTokenRepository.GetRefreshTokenByTokenHash(ctx, hashToken(refreshTokenString))
+	tokenHash := hashToken(refreshTokenString)
+	refreshToken, err := s.refreshTokenRepository.GetRefreshTokenByTokenHash(ctx, tokenHash)
 	if err != nil {
 		if errors.Is(err, domain.ErrRefreshTokenNotFound) {
+			s.logRefreshOutcome(ctx, "not_found_or_expired", tokenHash, nil)
 			return nil, domain.ErrRefreshTokenInvalidOrExpired
 		}
 
 		return nil, err
 	}
 
-	// A token already superseded by rotation is honored only inside the grace
-	// window — this lets concurrent refreshes (e.g. the web middleware and client
-	// racing on the same cookie) both succeed instead of logging the user out.
-	// Reuse past the window is treated as invalid.
+	// A rotated token is still honored inside the grace window so concurrent refreshes
+	// don't log the user out; past the window it's invalid.
 	if refreshToken.RotatedAt != nil && time.Since(*refreshToken.RotatedAt) > s.cfg.JWT.RefreshGraceWindow {
+		s.logRefreshOutcome(ctx, "rotated_past_grace", tokenHash, refreshToken)
 		return nil, domain.ErrRefreshTokenInvalidOrExpired
 	}
 
@@ -219,9 +220,22 @@ func (s *AuthService) RefreshToken(
 		return nil, err
 	}
 
+	// Slide the session expiry forward (bounded by SessionMaxLifetime) before rotating,
+	// so the new refresh token can be capped to the post-slide expiry rather than the
+	// stale pre-slide one — otherwise an active session's token would be clamped short.
+	sessionExpiresAt, err := s.sessionRepository.UpdateLastUsedAt(
+		ctx,
+		refreshToken.SessionID,
+		time.Now().Add(s.cfg.Auth.SessionTTL),
+		s.cfg.Auth.SessionMaxLifetime,
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	refreshTokenExpiresAt := refreshTokenResult.ExpiresAt
-	if refreshTokenExpiresAt.After(refreshToken.SessionExpiresAt) {
-		refreshTokenExpiresAt = refreshToken.SessionExpiresAt
+	if refreshTokenExpiresAt.After(sessionExpiresAt) {
+		refreshTokenExpiresAt = sessionExpiresAt
 	}
 
 	// Rotate refresh token
@@ -234,16 +248,50 @@ func (s *AuthService) RefreshToken(
 		return nil, err
 	}
 
-	// Update session last_used_at
-	if err := s.sessionRepository.UpdateLastUsedAt(ctx, refreshToken.SessionID); err != nil {
-		return nil, err
-	}
+	s.logRefreshOutcome(ctx, "success", tokenHash, refreshToken)
 
 	return &dtos.AuthData{
 		AccessToken:  accessTokenResult.Token,
 		RefreshToken: refreshTokenResult.Token,
 		ExpiresAt:    refreshTokenResult.ExpiresAt,
 	}, nil
+}
+
+// logRefreshOutcome emits one structured line per refresh attempt. rt is nil when no
+// live row was found. Only a hash fingerprint is logged, never the raw token.
+func (s *AuthService) logRefreshOutcome(ctx context.Context, outcome, tokenHash string, rt *domain.RefreshToken) {
+	fields := []any{
+		logging.RefreshOutcome, outcome,
+		logging.TokenFingerprint, tokenHash[:8],
+		logging.GraceWindowMS, s.cfg.JWT.RefreshGraceWindow.Milliseconds(),
+	}
+
+	if rt != nil {
+		fields = append(fields, logging.UserID, rt.UserID, logging.SessionID, rt.SessionID)
+		if !rt.CreatedAt.IsZero() {
+			fields = append(fields, logging.TokenAgeMS, time.Since(rt.CreatedAt).Milliseconds())
+		}
+		if rt.RotatedAt != nil {
+			fields = append(fields, logging.RotatedAgeMS, time.Since(*rt.RotatedAt).Milliseconds())
+		}
+	}
+
+	if diagnostics := httpctx.GetRefreshDiagnostics(ctx); diagnostics != nil {
+		if diagnostics.RequestID != "" {
+			fields = append(fields, logging.RequestID, diagnostics.RequestID)
+		}
+		if diagnostics.Source != "" {
+			fields = append(fields, logging.RefreshSource, diagnostics.Source)
+		}
+	}
+
+	// rotated_past_grace is the real anomaly (race lost past the window / reuse);
+	// success and the benign not_found_or_expired stay at info to avoid warn noise.
+	if outcome == "rotated_past_grace" {
+		s.logger.Warn("refresh outcome", fields...)
+	} else {
+		s.logger.Info("refresh outcome", fields...)
+	}
 }
 
 func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {

@@ -2,6 +2,7 @@ package mocks
 
 import (
 	"context"
+	"time"
 
 	"github.com/fifawcp/api/internal/domain"
 )
@@ -9,7 +10,7 @@ import (
 type MockSessionRepository struct {
 	CreateSessionFunc         func(ctx context.Context, session *domain.Session) error
 	GetSessionsFunc           func(ctx context.Context, refreshTokenHash string) ([]domain.Session, error)
-	UpdateLastUsedAtFunc      func(ctx context.Context, id string) error
+	UpdateLastUsedAtFunc      func(ctx context.Context, id string, slideTo time.Time, maxLifetime time.Duration) (time.Time, error)
 	DeleteSessionFunc         func(ctx context.Context, refreshTokenHash string) error
 	DeleteAllSessionsFunc     func(ctx context.Context, refreshTokenHash string) error
 	DeleteSessionByIdFunc     func(ctx context.Context, sessionID string, userID string) error
@@ -30,9 +31,9 @@ func (m *MockSessionRepository) GetSessions(ctx context.Context, refreshTokenHas
 	panic("GetSessions called unexpectedly")
 }
 
-func (m *MockSessionRepository) UpdateLastUsedAt(ctx context.Context, id string) error {
+func (m *MockSessionRepository) UpdateLastUsedAt(ctx context.Context, id string, slideTo time.Time, maxLifetime time.Duration) (time.Time, error) {
 	if m.UpdateLastUsedAtFunc != nil {
-		return m.UpdateLastUsedAtFunc(ctx, id)
+		return m.UpdateLastUsedAtFunc(ctx, id, slideTo, maxLifetime)
 	}
 	panic("UpdateLastUsedAt called unexpectedly")
 }

@@ -20,7 +20,7 @@ type Session struct {
 type SessionRepository interface {
 	CreateSession(ctx context.Context, session *Session) error
 	GetSessions(ctx context.Context, refreshTokenHash string) ([]Session, error)
-	UpdateLastUsedAt(ctx context.Context, id string) error
+	UpdateLastUsedAt(ctx context.Context, id string, slideTo time.Time, maxLifetime time.Duration) (time.Time, error)
 	DeleteSession(ctx context.Context, refreshTokenHash string) error
 	DeleteAllSessions(ctx context.Context, refreshTokenHash string) error
 	DeleteSessionById(ctx context.Context, sessionID string, userID string) error

@@ -31,6 +31,7 @@ const (
 	codeCompetitionPickemAlreadyExists = "COMPETITION_PICKEM_ALREADY_EXISTS"
 	codeCompetitionNameAlreadyExists   = "COMPETITION_NAME_ALREADY_EXISTS"
 	codeCompetitionPickemNotDeletable  = "COMPETITION_PICKEM_NOT_DELETABLE"
+	codeDuplicatePoolForMatch          = "DUPLICATE_POOL_FOR_MATCH"
 
 	// 401 Unauthorized
 	codeOTPInvalidOrExpired          = "OTP_INVALID_OR_EXPIRED"
@@ -233,6 +234,8 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.BadRequest(w, r, codeCannotTransferToSelf, domain.ErrCannotTransferOwnershipToSelf.Error())
 	case errors.Is(err, domain.ErrCompetitionNameAlreadyExists):
 		httpx.Conflict(w, r, codeCompetitionNameAlreadyExists, domain.ErrCompetitionNameAlreadyExists.Error())
+	case errors.Is(err, domain.ErrDuplicatePoolForMatch):
+		httpx.Conflict(w, r, codeDuplicatePoolForMatch, domain.ErrDuplicatePoolForMatch.Error())
 
 	// 502 Bad Gateway
 	case errors.Is(err, domain.ErrMissingIDToken):

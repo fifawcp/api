@@ -31,14 +31,14 @@ func NewPlayerHandler(playerService services.PlayerServiceInterface, logger logg
 //	@Description	Search the tournament player catalog. All filters are optional and combine with AND. `q` is a case-insensitive substring match across name, first name and last name. `team_fifa_codes` and `positions` accept comma-separated values (or the param repeated) and match if the player's value is in the supplied set. Results are paginated.
 //	@Tags			players
 //	@Produce		json
-//	@Param			q					query		string				false	"Case-insensitive substring match across name, first_name and last_name"
-//	@Param			team_fifa_codes		query		[]string			false	"Filter by team FIFA codes (e.g. MEX,COL). Comma-separated or repeated."	collectionFormat(csv)
-//	@Param			positions			query		[]string			false	"Filter by positions. Comma-separated or repeated."	collectionFormat(csv)	Enums(goalkeeper,defender,midfielder,attacker)
-//	@Param			page				query		int					false	"Page number (1-based)"	default(1)
-//	@Param			limit				query		int					false	"Page size (max 100)"	default(20)
-//	@Success		200					{object}	httpx.Response		"Paginated list of players"
-//	@Failure		400					{object}	httpx.ErrorResponse	"Invalid query parameters"
-//	@Failure		401					{object}	httpx.ErrorResponse	"Missing or invalid Bearer token"
+//	@Param			q				query		string				false	"Case-insensitive substring match across name, first_name and last_name"
+//	@Param			team_fifa_codes	query		[]string			false	"Filter by team FIFA codes (e.g. MEX,COL). Comma-separated or repeated."	collectionFormat(csv)
+//	@Param			positions		query		[]string			false	"Filter by positions. Comma-separated or repeated."							collectionFormat(csv)	Enums(goalkeeper,defender,midfielder,attacker)
+//	@Param			page			query		int					false	"Page number (1-based)"														default(1)
+//	@Param			limit			query		int					false	"Page size (max 100)"														default(20)
+//	@Success		200				{object}	httpx.Response		"Paginated list of players"
+//	@Failure		400				{object}	httpx.ErrorResponse	"Invalid query parameters"
+//	@Failure		401				{object}	httpx.ErrorResponse	"Missing or invalid Bearer token"
 //	@Security		BearerAuth
 //	@Router			/players [get]
 func (h *PlayerHandler) SearchPlayers(w http.ResponseWriter, r *http.Request) {

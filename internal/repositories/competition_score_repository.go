@@ -63,6 +63,41 @@ func (r *CompetitionScoreRepository) FindMatchCompetitionsByMatches(
 	return ids, rows.Err()
 }
 
+func (r *CompetitionScoreRepository) FindPoolCompetitionsByMatches(
+	ctx context.Context,
+	matchIDs []int64,
+) ([]int64, error) {
+	if len(matchIDs) == 0 {
+		return nil, nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	query := `
+		SELECT id
+		FROM competitions
+		WHERE type = 'pool' AND match_id = ANY($1::bigint[])
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(matchIDs))
+	if err != nil {
+		return nil, handleDBError(err, resourceCompetitionScore)
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, handleDBError(err, resourceCompetitionScore)
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, rows.Err()
+}
+
 func (r *CompetitionScoreRepository) BatchUpsertMatchScores(
 	ctx context.Context,
 	competitionID int64,
@@ -89,6 +124,61 @@ func (r *CompetitionScoreRepository) BatchUpsertMatchScores(
 					  AND cst.team_fifa_code IN (m.home_team_fifa_code, m.away_team_fifa_code)
 				)
 			)
+		),
+		computed AS (
+			SELECT
+				se.user_id,
+				COALESCE(SUM(se.points), 0)                                   AS match_score_points,
+				COUNT(*) FILTER (WHERE se.points >= $3)                       AS exact_hits_count,
+				COUNT(*) FILTER (WHERE se.points > 0 AND se.points < $3)      AS correct_outcomes_count
+			FROM score_events se
+			INNER JOIN scope_matches sm ON sm.id = se.source_ref::bigint
+			WHERE se.user_id = ANY($2::uuid[])
+			  AND se.source_type = 'match_score_pick'
+			GROUP BY se.user_id
+		)
+		INSERT INTO competition_match_scores (
+			competition_id, user_id, total_points,
+			exact_hits, correct_outcomes, updated_at
+		)
+		SELECT $1, c.user_id, c.match_score_points, c.exact_hits_count, c.correct_outcomes_count, NOW()
+		FROM computed c
+		WHERE EXISTS (
+			SELECT 1 FROM competitions co
+			INNER JOIN board_members bm ON bm.board_id = co.board_id AND bm.user_id = c.user_id
+			WHERE co.id = $1
+		)
+		ON CONFLICT (competition_id, user_id) DO UPDATE SET
+			total_points     = EXCLUDED.total_points,
+			exact_hits       = EXCLUDED.exact_hits,
+			correct_outcomes = EXCLUDED.correct_outcomes,
+			updated_at       = EXCLUDED.updated_at
+	`
+
+	_, err := r.db.ExecContext(ctx, query, competitionID, pq.Array(userIDs), exactScorePts)
+	if err != nil {
+		return handleDBError(err, resourceCompetitionScore)
+	}
+
+	return nil
+}
+
+func (r *CompetitionScoreRepository) BatchUpsertPoolScores(
+	ctx context.Context,
+	competitionID int64,
+	userIDs []string,
+	exactScorePts int,
+) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	query := `
+		WITH scope_matches AS (
+			SELECT match_id AS id FROM competitions WHERE id = $1
 		),
 		computed AS (
 			SELECT
@@ -218,7 +308,7 @@ func (r *CompetitionScoreRepository) GetLeaderboard(
 	switch competitionType {
 	case domain.CompetitionTypePickem:
 		return r.getPickemLeaderboard(ctx, competitionID, page, limit, q)
-	case domain.CompetitionTypeMatch:
+	case domain.CompetitionTypeMatch, domain.CompetitionTypePool:
 		return r.getMatchLeaderboard(ctx, competitionID, page, limit, q)
 	default:
 		return nil, domain.ErrCompetitionNotFound
