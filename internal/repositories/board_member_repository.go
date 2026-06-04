@@ -146,6 +146,35 @@ func (r *BoardMemberRepository) initCompetitionScoresForMember(
 		return handleDBError(err, resourceBoardMember)
 	}
 
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO competition_match_scores (
+			competition_id, user_id,
+			total_points, exact_hits, correct_outcomes
+		)
+		SELECT
+			c.id,
+			$2,
+			COALESCE(agg.match_score_points, 0),
+			COALESCE(agg.exact_hits_count, 0),
+			COALESCE(agg.correct_outcomes_count, 0)
+		FROM competitions c
+		LEFT JOIN LATERAL (
+			SELECT
+				SUM(se.points)                                           AS match_score_points,
+				COUNT(*) FILTER (WHERE se.points >= $3)                  AS exact_hits_count,
+				COUNT(*) FILTER (WHERE se.points > 0 AND se.points < $3) AS correct_outcomes_count
+			FROM score_events se
+			WHERE se.user_id = $2
+			  AND se.source_type = 'match_score_pick'
+			  AND se.source_ref::bigint = c.match_id
+		) agg ON TRUE
+		WHERE c.board_id = $1 AND c.type = 'pool'`,
+		boardID, userID,
+		r.cfg.Scoring.MatchScoreExact,
+	); err != nil {
+		return handleDBError(err, resourceBoardMember)
+	}
+
 	return nil
 }
 
