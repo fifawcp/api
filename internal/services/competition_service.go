@@ -48,10 +48,11 @@ func (s *CompetitionService) CreateCompetition(
 	}
 
 	competition := &domain.Competition{
-		BoardID:   boardID,
-		Type:      payload.Type,
-		Name:      payload.Name,
-		CreatedBy: &userID,
+		BoardID:     boardID,
+		Type:        payload.Type,
+		Name:        payload.Name,
+		CreatedBy:   &userID,
+		PoolMatchID: payload.MatchID,
 	}
 
 	if payload.Scope != nil {

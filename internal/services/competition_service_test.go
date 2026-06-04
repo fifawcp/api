@@ -6,8 +6,10 @@ import (
 
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/fifawcp/api/internal/domain"
+	"github.com/fifawcp/api/internal/dtos"
 	"github.com/fifawcp/api/internal/test/mocks"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestCompetitionService(br *mocks.MockBoardRepository, cr *mocks.MockCompetitionRepository) CompetitionServiceInterface {
@@ -20,6 +22,57 @@ func privateBoardRepo() *mocks.MockBoardRepository {
 			return &domain.Board{ID: bid, Privacy: domain.BoardPrivacyPrivate}, nil
 		},
 	}
+}
+
+// ---------------------------------------------------------------------------
+// TestCompetitionService_CreateCompetition
+// ---------------------------------------------------------------------------
+func TestCompetitionService_CreateCompetition(t *testing.T) {
+	t.Parallel()
+
+	t.Run("creates a pool competition carrying the match id", func(t *testing.T) {
+		t.Parallel()
+
+		boardID := gofakeit.Int64()
+		userID := gofakeit.UUID()
+		matchID := gofakeit.Int64()
+
+		var captured *domain.Competition
+		cr := &mocks.MockCompetitionRepository{
+			CreateCompetitionFunc: func(ctx context.Context, c *domain.Competition) error {
+				captured = c
+				return nil
+			},
+		}
+
+		service := newTestCompetitionService(privateBoardRepo(), cr)
+
+		_, err := service.CreateCompetition(context.Background(), boardID, userID, domain.BoardMemberRoleAdmin, dtos.CreateCompetitionDto{
+			Type:    domain.CompetitionTypePool,
+			Name:    "CvP",
+			MatchID: &matchID,
+		})
+
+		require.NoError(t, err)
+		require.NotNil(t, captured)
+		require.NotNil(t, captured.PoolMatchID)
+		assert.Equal(t, matchID, *captured.PoolMatchID)
+		assert.Equal(t, domain.CompetitionTypePool, captured.Type)
+	})
+
+	t.Run("rejects a member without manage permission", func(t *testing.T) {
+		t.Parallel()
+
+		// Empty repos: the role check must short-circuit before any repo call.
+		service := newTestCompetitionService(&mocks.MockBoardRepository{}, &mocks.MockCompetitionRepository{})
+
+		_, err := service.CreateCompetition(context.Background(), gofakeit.Int64(), gofakeit.UUID(), domain.BoardMemberRoleMember, dtos.CreateCompetitionDto{
+			Type: domain.CompetitionTypePool,
+			Name: "CvP",
+		})
+
+		assert.ErrorIs(t, err, domain.ErrCompetitionForbidden)
+	})
 }
 
 // ---------------------------------------------------------------------------

@@ -7,10 +7,10 @@ import (
 )
 
 type MockAwardService struct {
-	GetUserAwardsFunc    func(ctx context.Context, userID string) (*domain.UserAwards, error)
-	SaveAwardPicksFunc   func(ctx context.Context, userID string, picks []*domain.UserAwardPick) (*domain.UserAwards, error)
-	GetPopularPicksFunc  func(ctx context.Context, limit int) (domain.PopularPicksByAward, error)
-	RecordWinnersFunc    func(ctx context.Context, winners []*domain.AwardWinner) error
+	GetUserAwardsFunc   func(ctx context.Context, userID string) (*domain.UserAwards, error)
+	SaveAwardPicksFunc  func(ctx context.Context, userID string, picks []*domain.UserAwardPick) (*domain.UserAwards, error)
+	GetPopularPicksFunc func(ctx context.Context, limit int) (domain.PopularPicksByAward, error)
+	RecordWinnersFunc   func(ctx context.Context, winners []*domain.AwardWinner) error
 }
 
 func (m *MockAwardService) GetUserAwards(ctx context.Context, userID string) (*domain.UserAwards, error) {

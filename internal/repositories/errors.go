@@ -98,6 +98,8 @@ func translateForeignKeyViolation(pqErr *pq.Error) error {
 		"board_members_board_id_fkey",
 		"board_members_user_id_fkey":
 		return domain.ErrUserNotFound
+	case "competitions_match_id_fkey":
+		return domain.ErrMatchNotFound
 	default:
 		return buildErrorFromPQError(pqErr)
 	}
@@ -115,6 +117,8 @@ func translateUniqueViolation(pqErr *pq.Error) error {
 		return domain.ErrBoardMemberAlreadyInBoard
 	case "idx_competitions_one_pickem_per_board":
 		return domain.ErrCompetitionPickemAlreadyExists
+	case "idx_competitions_one_pool_per_match":
+		return domain.ErrDuplicatePoolForMatch
 	case "competitions_board_id_name_key":
 		return domain.ErrCompetitionNameAlreadyExists
 	default:

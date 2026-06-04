@@ -17,7 +17,9 @@ type CompetitionUserStats struct {
 
 type CompetitionScoreRepository interface {
 	FindMatchCompetitionsByMatches(ctx context.Context, matchIDs []int64) ([]int64, error)
+	FindPoolCompetitionsByMatches(ctx context.Context, matchIDs []int64) ([]int64, error)
 	BatchUpsertMatchScores(ctx context.Context, competitionID int64, userIDs []string, exactScorePts int) error
+	BatchUpsertPoolScores(ctx context.Context, competitionID int64, userIDs []string, exactScorePts int) error
 	BatchUpsertPickemScores(ctx context.Context, competitionIDs []int64, userIDs []string) error
 	GetLeaderboard(ctx context.Context, competitionID int64, page, limit int, q string) (*CompetitionLeaderboardPage, error)
 	GetUserPickemStats(ctx context.Context, competitionID int64, userID string) (CompetitionUserStats, error)

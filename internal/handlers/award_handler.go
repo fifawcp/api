@@ -75,7 +75,7 @@ func (h *AwardHandler) GetUserAwards(w http.ResponseWriter, r *http.Request) {
 //	@Description	Returns the most-picked players per award (across all users), ranked desc by pick count then alphabetically. Eligibility is enforced per award: Golden Glove restricts to goalkeepers; Young Player restricts to players within the age cap (unknown ages are treated as eligible). Boot and Ball draw from the full catalog. Useful for the awards picker UI's "top choices" section.
 //	@Tags			awards
 //	@Produce		json
-//	@Param			limit	query		int	false	"Top-N per award (1-50)"	default(10)
+//	@Param			limit	query		int							false	"Top-N per award (1-50)"	default(10)
 //	@Success		200		{object}	domain.PopularPicksByAward	"Top picks grouped by award type"
 //	@Failure		400		{object}	httpx.ErrorResponse			"Invalid limit"
 //	@Failure		401		{object}	httpx.ErrorResponse			"Missing or invalid Bearer token"
