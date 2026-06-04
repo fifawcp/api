@@ -66,6 +66,30 @@ func (s *CompetitionScoringService) RecomputeForMatches(ctx context.Context, res
 		}
 	}
 
+	// Pool competitions (single-match pools share the match-score cache)
+	if len(result.ScoredMatchIDs) > 0 {
+		poolIDs, err := s.competitionScoreRepository.FindPoolCompetitionsByMatches(ctx, result.ScoredMatchIDs)
+		if err != nil {
+			s.logger.Error("failed to find pool competitions",
+				logging.Error, err.Error(),
+				"match_ids", result.ScoredMatchIDs,
+			)
+			return err
+		}
+
+		for _, competitionID := range poolIDs {
+			if err := s.competitionScoreRepository.BatchUpsertPoolScores(
+				ctx, competitionID, result.AffectedUserIDs, s.cfg.Scoring.MatchScoreExact,
+			); err != nil {
+				s.logger.Error("failed to upsert pool scores",
+					logging.Error, err.Error(),
+					"competition_id", competitionID,
+				)
+				return err
+			}
+		}
+	}
+
 	// Pickem competitions
 	if result.PickemAffected {
 		if err := s.recomputeAllPickems(ctx, result.AffectedUserIDs); err != nil {

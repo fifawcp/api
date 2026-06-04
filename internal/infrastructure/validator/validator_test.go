@@ -346,3 +346,45 @@ func TestValidateStruct_UpdateMatchResult_RejectsTiedPenalties(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "PENALTY_TIED", awayField.Code)
 }
+
+func TestValidateStruct_CreateCompetition_ValidPool(t *testing.T) {
+	matchID := int64(42)
+
+	result := v.ValidateStruct(dtos.CreateCompetitionDto{
+		Type:    domain.CompetitionTypePool,
+		Name:    "CvP",
+		MatchID: &matchID,
+	})
+
+	assert.Nil(t, result)
+}
+
+func TestValidateStruct_CreateCompetition_PoolRequiresMatchID(t *testing.T) {
+	result := v.ValidateStruct(dtos.CreateCompetitionDto{
+		Type: domain.CompetitionTypePool,
+		Name: "CvP",
+	})
+
+	require.NotNil(t, result)
+	field, ok := result["match_id"]
+	require.True(t, ok)
+	assert.Equal(t, "REQUIRED", field.Code)
+}
+
+func TestValidateStruct_CreateCompetition_PoolForbidsScope(t *testing.T) {
+	matchID := int64(42)
+
+	result := v.ValidateStruct(dtos.CreateCompetitionDto{
+		Type:    domain.CompetitionTypePool,
+		Name:    "CvP",
+		MatchID: &matchID,
+		Scope: &dtos.CreateCompetitionScopeDto{
+			Stages: []domain.MatchStageCode{domain.MatchStageCodeGroupStage},
+		},
+	})
+
+	require.NotNil(t, result)
+	field, ok := result["scope"]
+	require.True(t, ok)
+	assert.Equal(t, "SCOPE_FORBIDDEN", field.Code)
+}

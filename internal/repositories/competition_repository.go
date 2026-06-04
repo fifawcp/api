@@ -33,13 +33,14 @@ func (r *CompetitionRepository) CreateCompetition(
 	defer tx.Rollback()
 
 	err = tx.QueryRowContext(ctx,
-		`INSERT INTO competitions (board_id, type, name, created_by)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO competitions (board_id, type, name, created_by, match_id)
+		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, created_at`,
 		competition.BoardID,
 		competition.Type,
 		competition.Name,
 		competition.CreatedBy,
+		competition.PoolMatchID,
 	).Scan(&competition.ID, &competition.CreatedAt)
 	if err != nil {
 		return handleDBError(err, resourceCompetition)
@@ -178,6 +179,44 @@ func (r *CompetitionRepository) seedScoresFromEvents(
 		if err != nil {
 			return handleDBError(err, resourceCompetition)
 		}
+
+	case domain.CompetitionTypePool:
+		_, err := tx.ExecContext(ctx, `
+			WITH user_agg AS (
+				SELECT
+					se.user_id,
+					SUM(se.points)                                          AS match_score_points,
+					COUNT(*) FILTER (WHERE se.points >= $4)                 AS exact_hits_count,
+					COUNT(*) FILTER (WHERE se.points > 0 AND se.points < $4) AS correct_outcomes_count
+				FROM score_events se
+				WHERE se.source_type = 'match_score_pick'
+				  AND se.source_ref::bigint = $3
+				GROUP BY se.user_id
+			)
+			INSERT INTO competition_match_scores (
+				competition_id,
+				user_id,
+				total_points,
+				exact_hits,
+				correct_outcomes
+			)
+			SELECT
+				$1,
+				bm.user_id,
+				COALESCE(agg.match_score_points, 0),
+				COALESCE(agg.exact_hits_count, 0),
+				COALESCE(agg.correct_outcomes_count, 0)
+			FROM board_members bm
+			LEFT JOIN user_agg agg ON agg.user_id = bm.user_id
+			WHERE bm.board_id = $2`,
+			competition.ID,
+			competition.BoardID,
+			competition.PoolMatchID,
+			r.cfg.Scoring.MatchScoreExact,
+		)
+		if err != nil {
+			return handleDBError(err, resourceCompetition)
+		}
 	}
 
 	return nil
@@ -193,7 +232,7 @@ func (r *CompetitionRepository) GetBoardCompetitions(
 
 	query := `
 		WITH board_competitions AS (
-			SELECT id, board_id, type, name, created_by, created_at
+			SELECT id, board_id, type, name, created_by, created_at, match_id
 			FROM competitions
 			WHERE board_id = $1
 		),
@@ -241,7 +280,7 @@ func (r *CompetitionRepository) GetBoardCompetitions(
 			SELECT competition_id, user_id, total_points, rank FROM match_ranked
 		)
 		SELECT
-			bc.id, bc.board_id, bc.type, bc.name, bc.created_by, bc.created_at,
+			bc.id, bc.board_id, bc.type, bc.name, bc.created_by, bc.created_at, bc.match_id,
 			COALESCE(vr.rank, 0)   AS viewer_rank,
 			COALESCE(vr.total_points, 0) AS viewer_total_points
 		FROM board_competitions bc
@@ -260,6 +299,7 @@ func (r *CompetitionRepository) GetBoardCompetitions(
 	for rows.Next() {
 		competition := &domain.CompetitionListItem{}
 		var createdBy sql.NullString
+		var matchID sql.NullInt64
 
 		if err := rows.Scan(
 			&competition.ID,
@@ -268,6 +308,7 @@ func (r *CompetitionRepository) GetBoardCompetitions(
 			&competition.Name,
 			&createdBy,
 			&competition.CreatedAt,
+			&matchID,
 			&competition.Viewer.Rank,
 			&competition.Viewer.TotalPoints,
 		); err != nil {
@@ -276,6 +317,10 @@ func (r *CompetitionRepository) GetBoardCompetitions(
 
 		if createdBy.Valid {
 			competition.CreatedBy = &createdBy.String
+		}
+
+		if matchID.Valid {
+			competition.PoolMatchID = &matchID.Int64
 		}
 
 		competitions = append(competitions, competition)
@@ -398,9 +443,10 @@ func (r *CompetitionRepository) GetCompetitionByID(
 
 	competition := &domain.Competition{}
 	var createdBy sql.NullString
+	var matchID sql.NullInt64
 
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, board_id, type, name, created_by, created_at
+		`SELECT id, board_id, type, name, created_by, created_at, match_id
 		 FROM competitions
 		 WHERE id = $1 AND board_id = $2`,
 		competitionID, boardID,
@@ -411,6 +457,7 @@ func (r *CompetitionRepository) GetCompetitionByID(
 		&competition.Name,
 		&createdBy,
 		&competition.CreatedAt,
+		&matchID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domain.ErrCompetitionNotFound
@@ -421,6 +468,10 @@ func (r *CompetitionRepository) GetCompetitionByID(
 
 	if createdBy.Valid {
 		competition.CreatedBy = &createdBy.String
+	}
+
+	if matchID.Valid {
+		competition.PoolMatchID = &matchID.Int64
 	}
 
 	return competition, nil
