@@ -37,6 +37,8 @@ func boardsRoutes(c *Container) chi.Router {
 				})
 			})
 
+			r.Get("/summary", c.CompetitionHandler.GetBoardSummary)
+
 			r.Route("/competitions", func(r chi.Router) {
 				r.Get("/", c.CompetitionHandler.GetBoardCompetitions)
 				r.Post("/", c.CompetitionHandler.CreateCompetition)

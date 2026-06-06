@@ -30,7 +30,7 @@ func privateBoardRepo() *mocks.MockBoardRepository {
 func TestCompetitionService_CreateCompetition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("creates a pool competition carrying the match id", func(t *testing.T) {
+	t.Run("creates a pick competition carrying the match id", func(t *testing.T) {
 		t.Parallel()
 
 		boardID := gofakeit.Int64()
@@ -48,16 +48,16 @@ func TestCompetitionService_CreateCompetition(t *testing.T) {
 		service := newTestCompetitionService(privateBoardRepo(), cr)
 
 		_, err := service.CreateCompetition(context.Background(), boardID, userID, domain.BoardMemberRoleAdmin, dtos.CreateCompetitionDto{
-			Type:    domain.CompetitionTypePool,
+			Type:    domain.CompetitionTypePick,
 			Name:    "CvP",
 			MatchID: &matchID,
 		})
 
 		require.NoError(t, err)
 		require.NotNil(t, captured)
-		require.NotNil(t, captured.PoolMatchID)
-		assert.Equal(t, matchID, *captured.PoolMatchID)
-		assert.Equal(t, domain.CompetitionTypePool, captured.Type)
+		require.NotNil(t, captured.PickMatchID)
+		assert.Equal(t, matchID, *captured.PickMatchID)
+		assert.Equal(t, domain.CompetitionTypePick, captured.Type)
 	})
 
 	t.Run("rejects a member without manage permission", func(t *testing.T) {
@@ -67,7 +67,7 @@ func TestCompetitionService_CreateCompetition(t *testing.T) {
 		service := newTestCompetitionService(&mocks.MockBoardRepository{}, &mocks.MockCompetitionRepository{})
 
 		_, err := service.CreateCompetition(context.Background(), gofakeit.Int64(), gofakeit.UUID(), domain.BoardMemberRoleMember, dtos.CreateCompetitionDto{
-			Type: domain.CompetitionTypePool,
+			Type: domain.CompetitionTypePick,
 			Name: "CvP",
 		})
 
@@ -81,24 +81,29 @@ func TestCompetitionService_CreateCompetition(t *testing.T) {
 func TestCompetitionService_DeleteCompetition(t *testing.T) {
 	t.Parallel()
 
-	t.Run("rejects deleting the tournament pick'em competition", func(t *testing.T) {
+	t.Run("deletes the tournament pick'em competition", func(t *testing.T) {
 		t.Parallel()
 
 		boardID := gofakeit.Int64()
 		competitionID := gofakeit.Int64()
+		deleteCalled := false
 
 		cr := &mocks.MockCompetitionRepository{
 			GetCompetitionByIDFunc: func(ctx context.Context, bid, cid int64) (*domain.Competition, error) {
 				return &domain.Competition{ID: cid, BoardID: bid, Type: domain.CompetitionTypePickem}, nil
 			},
-			// DeleteCompetitionFunc intentionally unset — it must never be called for a pick'em.
+			DeleteCompetitionFunc: func(ctx context.Context, bid, cid int64) error {
+				deleteCalled = true
+				return nil
+			},
 		}
 
 		service := newTestCompetitionService(privateBoardRepo(), cr)
 
 		err := service.DeleteCompetition(context.Background(), boardID, competitionID, domain.BoardMemberRoleAdmin)
 
-		assert.ErrorIs(t, err, domain.ErrCompetitionPickemNotDeletable)
+		assert.NoError(t, err)
+		assert.True(t, deleteCalled)
 	})
 
 	t.Run("deletes a match competition", func(t *testing.T) {

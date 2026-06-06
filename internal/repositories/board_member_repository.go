@@ -73,38 +73,6 @@ func (r *BoardMemberRepository) initCompetitionScoresForMember(
 	boardID int64,
 	userID string,
 ) error {
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO competition_pickem_scores (
-			competition_id, user_id,
-			total_points, group_exact_positions, group_qualifier_hits, best_third_hits, bracket_hits
-		)
-		SELECT
-			c.id,
-			$2,
-			COALESCE(agg.total_points, 0),
-			COALESCE(agg.group_exact_count, 0),
-			COALESCE(agg.group_qualifier_count, 0),
-			COALESCE(agg.best_third_hits_count, 0),
-			COALESCE(agg.bracket_hits_count, 0)
-		FROM competitions c
-		LEFT JOIN (
-			SELECT
-				SUM(se.points)                                                                         AS total_points,
-				COUNT(*) FILTER (WHERE se.source_type = 'group_standing_pick' AND se.points = $3)::int AS group_exact_count,
-				COUNT(*) FILTER (WHERE se.source_type = 'group_standing_pick' AND se.points = $4)::int AS group_qualifier_count,
-				COUNT(*) FILTER (WHERE se.source_type = 'best_third_pick')::int                        AS best_third_hits_count,
-				COUNT(*) FILTER (WHERE se.source_type = 'bracket_pick')::int                           AS bracket_hits_count
-			FROM score_events se
-			WHERE se.user_id = $2
-			  AND se.source_type IN ('group_standing_pick', 'best_third_pick', 'bracket_pick')
-		) agg ON TRUE
-		WHERE c.board_id = $1 AND c.type = 'pickem'`,
-		boardID, userID,
-		r.cfg.Scoring.GroupPositionExact, r.cfg.Scoring.GroupQualifies,
-	); err != nil {
-		return handleDBError(err, resourceBoardMember)
-	}
-
 	// Match aggregation depends on each competition's scope (stages + optional
 	// team filter), so the LATERAL subquery re-evaluates per competition
 	if _, err := tx.ExecContext(ctx, `
@@ -168,7 +136,7 @@ func (r *BoardMemberRepository) initCompetitionScoresForMember(
 			  AND se.source_type = 'match_score_pick'
 			  AND se.source_ref::bigint = c.match_id
 		) agg ON TRUE
-		WHERE c.board_id = $1 AND c.type = 'pool'`,
+		WHERE c.board_id = $1 AND c.type = 'pick'`,
 		boardID, userID,
 		r.cfg.Scoring.MatchScoreExact,
 	); err != nil {
@@ -444,15 +412,6 @@ func (r *BoardMemberRepository) deleteCompetitionScoresForMember(
 	boardID int64,
 	userID string,
 ) error {
-	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM competition_pickem_scores
-		 WHERE user_id = $2
-		   AND competition_id IN (SELECT id FROM competitions WHERE board_id = $1)`,
-		boardID, userID,
-	); err != nil {
-		return handleDBError(err, resourceBoardMember)
-	}
-
 	if _, err := tx.ExecContext(ctx,
 		`DELETE FROM competition_match_scores
 		 WHERE user_id = $2

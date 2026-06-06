@@ -211,16 +211,8 @@ func (s *MatchService) scoreMatchOutcomes(ctx context.Context, outcomes *domain.
 
 	if outcomes != nil && outcomes.PromotionOutcome != nil &&
 		outcomes.PromotionOutcome.Status == domain.PromotionStatusCompleted {
-		bestThirdUserIDs, err := s.scoringService.ScoreBestThirds(ctx)
-		if err != nil {
+		if _, err := s.scoringService.ScoreBestThirds(ctx); err != nil {
 			s.logger.Error("pickem best-thirds scoring failed",
-				logging.Error, err.Error(),
-			)
-			return err
-		}
-
-		if err := s.competitionScoringService.RecomputeForBestThirds(ctx, bestThirdUserIDs); err != nil {
-			s.logger.Error("competition scoring recompute for best-thirds failed",
 				logging.Error, err.Error(),
 			)
 			return err
@@ -333,16 +325,8 @@ func (s *MatchService) ResolveThirdPlaceConflict(ctx context.Context, payload dt
 
 	// Third-place qualifiers are now resolved -> best_third_pick events can be scored
 	go func() {
-		bestThirdUserIDs, err := s.scoringService.ScoreBestThirds(context.Background())
-		if err != nil {
+		if _, err := s.scoringService.ScoreBestThirds(context.Background()); err != nil {
 			s.logger.Error("pickem best-thirds scoring failed (post conflict resolve)",
-				logging.Error, err.Error(),
-			)
-			return
-		}
-
-		if err := s.competitionScoringService.RecomputeForBestThirds(context.Background(), bestThirdUserIDs); err != nil {
-			s.logger.Error("competition scoring recompute for best-thirds failed (post conflict resolve)",
 				logging.Error, err.Error(),
 			)
 		}

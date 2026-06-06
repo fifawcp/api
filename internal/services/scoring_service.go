@@ -72,7 +72,6 @@ func (s *ScoringService) ScoreMatches(ctx context.Context, matchIDs []int64) (*d
 	affectedUserIDs := make(map[string]struct{})
 	scoredMatchIDs := make([]int64, 0, len(matches))
 	seenGroups := make(map[string]struct{})
-	pickemAffected := false
 
 	for _, match := range matches {
 		// Match score picks (every finished match, group or bracket)
@@ -122,7 +121,6 @@ func (s *ScoringService) ScoreMatches(ctx context.Context, matchIDs []int64) (*d
 
 				allScoreEvents = append(allScoreEvents, groupScoreEvents...)
 				addUserIDsToSet(affectedUserIDs, groupScoreUserIDs)
-				pickemAffected = true
 			}
 
 			continue
@@ -140,9 +138,6 @@ func (s *ScoringService) ScoreMatches(ctx context.Context, matchIDs []int64) (*d
 
 		allScoreEvents = append(allScoreEvents, bracketEvents...)
 		addUserIDsToSet(affectedUserIDs, bracketUserIDs)
-		if len(bracketEvents) > 0 {
-			pickemAffected = true
-		}
 	}
 
 	if err := s.scoreEventRepository.BatchUpsertScoreEvents(ctx, allScoreEvents); err != nil {
@@ -165,7 +160,6 @@ func (s *ScoringService) ScoreMatches(ctx context.Context, matchIDs []int64) (*d
 	return &domain.ScoreMatchesResult{
 		AffectedUserIDs: userIDs,
 		ScoredMatchIDs:  scoredMatchIDs,
-		PickemAffected:  pickemAffected,
 	}, nil
 }
 

@@ -7,10 +7,14 @@ import (
 	"github.com/fifawcp/api/internal/dtos"
 )
 
+// Top-N members previewed on each competition card.
+const competitionTopPreviewLimit = 3
+
 type CompetitionServiceInterface interface {
 	CreateCompetition(ctx context.Context, boardID int64, userID string, role domain.BoardMemberRole, payload dtos.CreateCompetitionDto) (*domain.CompetitionListItem, error)
 	GetBoardCompetitions(ctx context.Context, boardID int64, viewerUserID string) ([]*domain.CompetitionListItem, error)
-	GetLeaderboard(ctx context.Context, competitionID int64, page, limit int, q string) (*domain.CompetitionLeaderboardPage, error)
+	GetLeaderboard(ctx context.Context, competitionID int64, page, limit int, q, sort, dir string) (*domain.CompetitionLeaderboardPage, error)
+	GetBoardSummary(ctx context.Context, boardID int64, page, limit int, q, sort, dir string) (*domain.BoardSummaryPage, error)
 	DeleteCompetition(ctx context.Context, boardID, competitionID int64, role domain.BoardMemberRole) error
 }
 
@@ -52,7 +56,7 @@ func (s *CompetitionService) CreateCompetition(
 		Type:        payload.Type,
 		Name:        payload.Name,
 		CreatedBy:   &userID,
-		PoolMatchID: payload.MatchID,
+		PickMatchID: payload.MatchID,
 	}
 
 	if payload.Scope != nil {
@@ -74,16 +78,42 @@ func (s *CompetitionService) GetBoardCompetitions(
 	boardID int64,
 	viewerUserID string,
 ) ([]*domain.CompetitionListItem, error) {
-	return s.competitionRepository.GetBoardCompetitions(ctx, boardID, viewerUserID)
+	competitions, err := s.competitionRepository.GetBoardCompetitions(ctx, boardID, viewerUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	previews, err := s.competitionScoreRepository.GetBoardCompetitionPreviews(ctx, boardID, competitionTopPreviewLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, competition := range competitions {
+		competition.TopPreview = previews[competition.ID]
+		if competition.TopPreview == nil {
+			competition.TopPreview = []*domain.CompetitionLeaderboardEntry{}
+		}
+	}
+
+	return competitions, nil
+}
+
+func (s *CompetitionService) GetBoardSummary(
+	ctx context.Context,
+	boardID int64,
+	page, limit int,
+	q, sort, dir string,
+) (*domain.BoardSummaryPage, error) {
+	return s.competitionScoreRepository.GetBoardSummary(ctx, boardID, page, limit, q, sort, dir)
 }
 
 func (s *CompetitionService) GetLeaderboard(
 	ctx context.Context,
 	competitionID int64,
 	page, limit int,
-	q string,
+	q, sort, dir string,
 ) (*domain.CompetitionLeaderboardPage, error) {
-	return s.competitionScoreRepository.GetLeaderboard(ctx, competitionID, page, limit, q)
+	return s.competitionScoreRepository.GetLeaderboard(ctx, competitionID, page, limit, q, sort, dir)
 }
 
 func (s *CompetitionService) DeleteCompetition(
@@ -99,14 +129,8 @@ func (s *CompetitionService) DeleteCompetition(
 		return err
 	}
 
-	competition, err := s.competitionRepository.GetCompetitionByID(ctx, boardID, competitionID)
-	if err != nil {
+	if _, err := s.competitionRepository.GetCompetitionByID(ctx, boardID, competitionID); err != nil {
 		return err
-	}
-
-	// The tournament pick'em is the board's anchor competition and must never be removed.
-	if competition.Type == domain.CompetitionTypePickem {
-		return domain.ErrCompetitionPickemNotDeletable
 	}
 
 	return s.competitionRepository.DeleteCompetition(ctx, boardID, competitionID)

@@ -258,7 +258,6 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 
 		service := newTestMatchService(mr, gsr, gss, ss, &mocks.MockCompetitionScoringService{
 			RecomputeForMatchesFunc:    func(ctx context.Context, result *domain.ScoreMatchesResult) error { return nil },
-			RecomputeForBestThirdsFunc: func(ctx context.Context, affectedUserIDs []string) error { return nil },
 		}, nil)
 
 		home, away := 1, 0
@@ -314,7 +313,6 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 
 		service := newTestMatchService(mr, nil, gss, ss, &mocks.MockCompetitionScoringService{
 			RecomputeForMatchesFunc:    func(ctx context.Context, result *domain.ScoreMatchesResult) error { return nil },
-			RecomputeForBestThirdsFunc: func(ctx context.Context, affectedUserIDs []string) error { return nil },
 		}, nil)
 
 		home, away := 1, 0
@@ -464,7 +462,6 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 
 		service := newTestMatchService(mr, nil, gss, ss, &mocks.MockCompetitionScoringService{
 			RecomputeForMatchesFunc:    func(ctx context.Context, result *domain.ScoreMatchesResult) error { return nil },
-			RecomputeForBestThirdsFunc: func(ctx context.Context, affectedUserIDs []string) error { return nil },
 		}, nil)
 
 		home, away := 1, 0
@@ -518,7 +515,6 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 
 		service := newTestMatchService(mr, gsr, gss, ss, &mocks.MockCompetitionScoringService{
 			RecomputeForMatchesFunc:    func(ctx context.Context, result *domain.ScoreMatchesResult) error { return nil },
-			RecomputeForBestThirdsFunc: func(ctx context.Context, affectedUserIDs []string) error { return nil },
 		}, nil)
 
 		home, away := 1, 0
@@ -736,7 +732,6 @@ func TestMatchService_ResolveThirdPlaceConflict(t *testing.T) {
 
 		service := newTestMatchService(mr, gsr, gss, ss, &mocks.MockCompetitionScoringService{
 			RecomputeForMatchesFunc:    func(ctx context.Context, result *domain.ScoreMatchesResult) error { return nil },
-			RecomputeForBestThirdsFunc: func(ctx context.Context, affectedUserIDs []string) error { return nil },
 		}, nil)
 
 		// Select POR (group I) over NED (group A) from the tied pair — both are valid candidates.

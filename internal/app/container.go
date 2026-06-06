@@ -278,7 +278,7 @@ func (c *Container) initServices() {
 	)
 
 	c.competitionScoringService = services.NewCompetitionScoringService(
-		c.competitionRepository, c.competitionScoreRepository, c.Config, c.Logger,
+		c.competitionScoreRepository, c.Config, c.Logger,
 	)
 	c.competitionService = services.NewCompetitionService(
 		c.boardRepository, c.competitionRepository, c.competitionScoreRepository,
@@ -296,7 +296,7 @@ func (c *Container) initServices() {
 	c.playerService = services.NewPlayerService(c.playerRepository)
 	c.awardService = services.NewAwardService(
 		c.awardPickRepository, c.playerRepository,
-		c.pickemScoringService, c.competitionScoringService,
+		c.pickemScoringService,
 		c.firstKickoff, c.Config, c.Logger,
 	)
 

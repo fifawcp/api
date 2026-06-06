@@ -108,9 +108,9 @@ var ErrOAuthAccountNotVerified = errors.New("oauth account not verified")
 var ErrCompetitionNotFound = errors.New("competition not found")
 var ErrCompetitionForbidden = errors.New("only board owner or admins can manage competitions")
 var ErrCompetitionPickemAlreadyExists = errors.New("a tournament pick'em competition already exists on this board")
+var ErrCompetitionAwardsAlreadyExists = errors.New("an awards competition already exists on this board")
 var ErrCompetitionNameAlreadyExists = errors.New("a competition with this name already exists on this board")
-var ErrCompetitionPickemNotDeletable = errors.New("the tournament pick'em competition cannot be deleted")
-var ErrDuplicatePoolForMatch = errors.New("a pool for this match already exists on this board")
+var ErrDuplicatePickForMatch = errors.New("a pick for this match already exists on this board")
 
 // Pickem
 var ErrPickemLocked = errors.New("pickem is locked: tournament has started")
