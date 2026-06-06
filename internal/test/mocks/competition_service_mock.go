@@ -10,7 +10,8 @@ import (
 type MockCompetitionService struct {
 	CreateCompetitionFunc    func(ctx context.Context, boardID int64, userID string, role domain.BoardMemberRole, payload dtos.CreateCompetitionDto) (*domain.CompetitionListItem, error)
 	GetBoardCompetitionsFunc func(ctx context.Context, boardID int64, viewerUserID string) ([]*domain.CompetitionListItem, error)
-	GetLeaderboardFunc       func(ctx context.Context, competitionID int64, page, limit int, q string) (*domain.CompetitionLeaderboardPage, error)
+	GetLeaderboardFunc       func(ctx context.Context, competitionID int64, page, limit int, q, sort, dir string) (*domain.CompetitionLeaderboardPage, error)
+	GetBoardSummaryFunc      func(ctx context.Context, boardID int64, page, limit int, q, sort, dir string) (*domain.BoardSummaryPage, error)
 	DeleteCompetitionFunc    func(ctx context.Context, boardID, competitionID int64, role domain.BoardMemberRole) error
 }
 
@@ -28,11 +29,18 @@ func (m *MockCompetitionService) GetBoardCompetitions(ctx context.Context, board
 	panic("GetBoardCompetitions called unexpectedly")
 }
 
-func (m *MockCompetitionService) GetLeaderboard(ctx context.Context, competitionID int64, page, limit int, q string) (*domain.CompetitionLeaderboardPage, error) {
+func (m *MockCompetitionService) GetLeaderboard(ctx context.Context, competitionID int64, page, limit int, q, sort, dir string) (*domain.CompetitionLeaderboardPage, error) {
 	if m.GetLeaderboardFunc != nil {
-		return m.GetLeaderboardFunc(ctx, competitionID, page, limit, q)
+		return m.GetLeaderboardFunc(ctx, competitionID, page, limit, q, sort, dir)
 	}
 	panic("GetLeaderboard called unexpectedly")
+}
+
+func (m *MockCompetitionService) GetBoardSummary(ctx context.Context, boardID int64, page, limit int, q, sort, dir string) (*domain.BoardSummaryPage, error) {
+	if m.GetBoardSummaryFunc != nil {
+		return m.GetBoardSummaryFunc(ctx, boardID, page, limit, q, sort, dir)
+	}
+	panic("GetBoardSummary called unexpectedly")
 }
 
 func (m *MockCompetitionService) DeleteCompetition(ctx context.Context, boardID, competitionID int64, role domain.BoardMemberRole) error {

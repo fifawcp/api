@@ -40,7 +40,7 @@ func (r *CompetitionRepository) CreateCompetition(
 		competition.Type,
 		competition.Name,
 		competition.CreatedBy,
-		competition.PoolMatchID,
+		competition.PickMatchID,
 	).Scan(&competition.ID, &competition.CreatedAt)
 	if err != nil {
 		return handleDBError(err, resourceCompetition)
@@ -87,48 +87,6 @@ func (r *CompetitionRepository) seedScoresFromEvents(
 	competition *domain.Competition,
 ) error {
 	switch competition.Type {
-	case domain.CompetitionTypePickem:
-		_, err := tx.ExecContext(ctx, `
-			INSERT INTO competition_pickem_scores (
-				competition_id,
-				user_id,
-				total_points,
-				group_exact_positions,
-				group_qualifier_hits,
-				best_third_hits,
-				bracket_hits
-			)
-			SELECT
-				$1,
-				bm.user_id,
-				COALESCE(agg.total_points, 0),
-				COALESCE(agg.group_exact_count, 0),
-				COALESCE(agg.group_qualifier_count, 0),
-				COALESCE(agg.best_third_hits_count, 0),
-				COALESCE(agg.bracket_hits_count, 0)
-			FROM board_members bm
-			LEFT JOIN (
-				SELECT
-					se.user_id,
-					SUM(se.points) AS total_points,
-					COUNT(*) FILTER (WHERE se.source_type = 'group_standing_pick' AND se.points = $3) AS group_exact_count,
-					COUNT(*) FILTER (WHERE se.source_type = 'group_standing_pick' AND se.points = $4) AS group_qualifier_count,
-					COUNT(*) FILTER (WHERE se.source_type = 'best_third_pick')                         AS best_third_hits_count,
-					COUNT(*) FILTER (WHERE se.source_type = 'bracket_pick')                            AS bracket_hits_count
-				FROM score_events se
-				WHERE se.source_type IN ('group_standing_pick', 'best_third_pick', 'bracket_pick')
-				GROUP BY se.user_id
-			) agg ON agg.user_id = bm.user_id
-			WHERE bm.board_id = $2`,
-			competition.ID,
-			competition.BoardID,
-			r.cfg.Scoring.GroupPositionExact,
-			r.cfg.Scoring.GroupQualifies,
-		)
-		if err != nil {
-			return handleDBError(err, resourceCompetition)
-		}
-
 	case domain.CompetitionTypeMatch:
 		_, err := tx.ExecContext(ctx, `
 			WITH scope_matches AS (
@@ -180,7 +138,7 @@ func (r *CompetitionRepository) seedScoresFromEvents(
 			return handleDBError(err, resourceCompetition)
 		}
 
-	case domain.CompetitionTypePool:
+	case domain.CompetitionTypePick:
 		_, err := tx.ExecContext(ctx, `
 			WITH user_agg AS (
 				SELECT
@@ -211,7 +169,7 @@ func (r *CompetitionRepository) seedScoresFromEvents(
 			WHERE bm.board_id = $2`,
 			competition.ID,
 			competition.BoardID,
-			competition.PoolMatchID,
+			competition.PickMatchID,
 			r.cfg.Scoring.MatchScoreExact,
 		)
 		if err != nil {
@@ -238,23 +196,34 @@ func (r *CompetitionRepository) GetBoardCompetitions(
 		),
 		pickem_ranked AS (
 			SELECT
-				cps.competition_id,
-				cps.user_id,
-				cps.total_points,
+				bc.id AS competition_id,
+				bm.user_id,
+				agg.total_points,
 				RANK() OVER (
-					PARTITION BY cps.competition_id
+					PARTITION BY bc.id
 					ORDER BY
-						cps.total_points          DESC,
-						cps.bracket_hits          DESC,
-						cps.best_third_hits       DESC,
-						cps.group_exact_positions DESC,
-						cps.group_qualifier_hits  DESC,
+						agg.total_points          DESC,
+						agg.bracket_hits          DESC,
+						agg.best_third_hits       DESC,
+						agg.group_exact_positions DESC,
+						agg.group_qualifier_hits  DESC,
 						bm.created_at ASC,
-						cps.user_id ASC
+						bm.user_id ASC
 				) AS rank
-			FROM competition_pickem_scores cps
-			INNER JOIN board_members bm ON bm.board_id = $1 AND bm.user_id = cps.user_id
-			WHERE cps.competition_id IN (SELECT id FROM board_competitions)
+			FROM board_competitions bc
+			JOIN board_members bm ON bm.board_id = $1
+			LEFT JOIN LATERAL (
+				SELECT
+					COALESCE(SUM(se.points), 0)::int                                                       AS total_points,
+					COUNT(*) FILTER (WHERE se.source_type = 'group_standing_pick' AND se.points = $3)::int AS group_exact_positions,
+					COUNT(*) FILTER (WHERE se.source_type = 'group_standing_pick' AND se.points = $4)::int AS group_qualifier_hits,
+					COUNT(*) FILTER (WHERE se.source_type = 'best_third_pick')::int                        AS best_third_hits,
+					COUNT(*) FILTER (WHERE se.source_type = 'bracket_pick')::int                           AS bracket_hits
+				FROM score_events se
+				WHERE se.user_id = bm.user_id
+				  AND se.source_type IN ('group_standing_pick', 'best_third_pick', 'bracket_pick')
+			) agg ON TRUE
+			WHERE bc.type = 'pickem'
 		),
 		match_ranked AS (
 			SELECT
@@ -274,10 +243,34 @@ func (r *CompetitionRepository) GetBoardCompetitions(
 			INNER JOIN board_members bm ON bm.board_id = $1 AND bm.user_id = cms.user_id
 			WHERE cms.competition_id IN (SELECT id FROM board_competitions)
 		),
+		awards_ranked AS (
+			SELECT
+				bc.id AS competition_id,
+				bm.user_id,
+				agg.total_points,
+				RANK() OVER (
+					PARTITION BY bc.id
+					ORDER BY
+						agg.total_points DESC,
+						bm.created_at ASC,
+						bm.user_id ASC
+				) AS rank
+			FROM board_competitions bc
+			JOIN board_members bm ON bm.board_id = $1
+			LEFT JOIN LATERAL (
+				SELECT COALESCE(SUM(se.points), 0)::int AS total_points
+				FROM score_events se
+				WHERE se.user_id = bm.user_id
+				  AND se.source_type = 'award_pick'
+			) agg ON TRUE
+			WHERE bc.type = 'awards'
+		),
 		viewer_ranked AS (
 			SELECT competition_id, user_id, total_points, rank FROM pickem_ranked
 			UNION ALL
 			SELECT competition_id, user_id, total_points, rank FROM match_ranked
+			UNION ALL
+			SELECT competition_id, user_id, total_points, rank FROM awards_ranked
 		)
 		SELECT
 			bc.id, bc.board_id, bc.type, bc.name, bc.created_by, bc.created_at, bc.match_id,
@@ -288,7 +281,9 @@ func (r *CompetitionRepository) GetBoardCompetitions(
 		ORDER BY bc.created_at ASC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, boardID, viewerUserID)
+	rows, err := r.db.QueryContext(ctx, query, boardID, viewerUserID,
+		r.cfg.Scoring.GroupPositionExact, r.cfg.Scoring.GroupQualifies,
+	)
 	if err != nil {
 		return nil, handleDBError(err, resourceCompetition)
 	}
@@ -320,7 +315,7 @@ func (r *CompetitionRepository) GetBoardCompetitions(
 		}
 
 		if matchID.Valid {
-			competition.PoolMatchID = &matchID.Int64
+			competition.PickMatchID = &matchID.Int64
 		}
 
 		competitions = append(competitions, competition)
@@ -471,35 +466,10 @@ func (r *CompetitionRepository) GetCompetitionByID(
 	}
 
 	if matchID.Valid {
-		competition.PoolMatchID = &matchID.Int64
+		competition.PickMatchID = &matchID.Int64
 	}
 
 	return competition, nil
-}
-
-func (r *CompetitionRepository) GetAllPickemIDs(ctx context.Context) ([]int64, error) {
-	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
-	defer cancel()
-
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT id FROM competitions WHERE type = 'pickem'`,
-	)
-	if err != nil {
-		return nil, handleDBError(err, resourceCompetition)
-	}
-	defer rows.Close()
-
-	var ids []int64
-
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, handleDBError(err, resourceCompetition)
-		}
-		ids = append(ids, id)
-	}
-
-	return ids, rows.Err()
 }
 
 func (r *CompetitionRepository) GetGlobalCompetitions(

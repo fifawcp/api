@@ -57,7 +57,7 @@ func TestBoardService_CreateBoard(t *testing.T) {
 		assert.Equal(t, domain.BoardPrivacyPrivate, result.Privacy)
 	})
 
-	t.Run("creates default Pick'em and All Matches competitions", func(t *testing.T) {
+	t.Run("creates default Pick'em, All Matches and Awards competitions", func(t *testing.T) {
 		t.Parallel()
 
 		payload := dtos.CreateBoardDto{Name: "Test Board"}
@@ -84,7 +84,7 @@ func TestBoardService_CreateBoard(t *testing.T) {
 		_, err := service.CreateBoard(context.Background(), payload, userID)
 
 		assert.NoError(t, err)
-		assert.Len(t, createdCompetitions, 2)
+		assert.Len(t, createdCompetitions, 3)
 
 		pickem := createdCompetitions[0]
 		assert.Equal(t, expectedID, pickem.BoardID)
@@ -111,6 +111,14 @@ func TestBoardService_CreateBoard(t *testing.T) {
 			domain.MatchStageCodeFinal,
 		}, match.Scope.Stages)
 		assert.Empty(t, match.Scope.TeamFifaCodes)
+
+		awards := createdCompetitions[2]
+		assert.Equal(t, expectedID, awards.BoardID)
+		assert.Equal(t, domain.CompetitionTypeAwards, awards.Type)
+		assert.Equal(t, "Awards", awards.Name)
+		assert.NotNil(t, awards.CreatedBy)
+		assert.Equal(t, userID, *awards.CreatedBy)
+		assert.Nil(t, awards.Scope)
 	})
 
 	t.Run("rolls back board when default competition creation fails", func(t *testing.T) {

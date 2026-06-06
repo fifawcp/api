@@ -117,8 +117,10 @@ func translateUniqueViolation(pqErr *pq.Error) error {
 		return domain.ErrBoardMemberAlreadyInBoard
 	case "idx_competitions_one_pickem_per_board":
 		return domain.ErrCompetitionPickemAlreadyExists
-	case "idx_competitions_one_pool_per_match":
-		return domain.ErrDuplicatePoolForMatch
+	case "idx_competitions_one_awards_per_board":
+		return domain.ErrCompetitionAwardsAlreadyExists
+	case "idx_competitions_one_pick_per_match":
+		return domain.ErrDuplicatePickForMatch
 	case "competitions_board_id_name_key":
 		return domain.ErrCompetitionNameAlreadyExists
 	default:

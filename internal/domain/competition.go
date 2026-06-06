@@ -10,7 +10,8 @@ type CompetitionType string
 const (
 	CompetitionTypePickem CompetitionType = "pickem"
 	CompetitionTypeMatch  CompetitionType = "match"
-	CompetitionTypePool   CompetitionType = "pool"
+	CompetitionTypePick   CompetitionType = "pick"
+	CompetitionTypeAwards CompetitionType = "awards"
 )
 
 type Competition struct {
@@ -21,7 +22,7 @@ type Competition struct {
 	CreatedBy   *string           `json:"-"`
 	CreatedAt   time.Time         `json:"created_at" example:"2026-01-15T10:30:00Z"`
 	Scope       *CompetitionScope `json:"scope,omitempty"`
-	PoolMatchID *int64            `json:"pool_match_id,omitempty" example:"42"`
+	PickMatchID *int64            `json:"pick_match_id,omitempty" example:"42"`
 }
 
 // CompetitionScope is only populated for match competitions
@@ -32,7 +33,25 @@ type CompetitionScope struct {
 
 type CompetitionListItem struct {
 	Competition
-	Viewer CompetitionViewer `json:"viewer"`
+	Viewer     CompetitionViewer              `json:"viewer"`
+	TopPreview []*CompetitionLeaderboardEntry `json:"top_preview"`
+}
+
+// BoardSummaryEntry is one member's board-wide standing: points per competition
+// type plus the raw-sum overall. Custom = match competitions.
+type BoardSummaryEntry struct {
+	Member CompetitionLeaderboardMember `json:"member"`
+	Rank   int                          `json:"rank"`
+	Total  int                          `json:"total"`
+	Pickem int                          `json:"pickem"`
+	Custom int                          `json:"custom"`
+	Pick   int                          `json:"pick"`
+	Awards int                          `json:"awards"`
+}
+
+type BoardSummaryPage struct {
+	Members    []*BoardSummaryEntry `json:"members"`
+	Pagination Pagination           `json:"-"`
 }
 
 type CompetitionViewer struct {
@@ -55,13 +74,20 @@ type PickemScore struct {
 	GroupQualifierHits  int `json:"group_qualifier_hits" example:"3"`
 	BestThirdHits       int `json:"best_third_hits" example:"2"`
 	BracketHits         int `json:"bracket_hits" example:"5"`
-	AwardHits           int `json:"award_hits" example:"1"`
 }
 
 type MatchScore struct {
 	Total           int `json:"total" example:"12"`
 	ExactHits       int `json:"exact_hits" example:"2"`
 	CorrectOutcomes int `json:"correct_outcomes" example:"3"`
+}
+
+type AwardsScore struct {
+	Total       int `json:"total" example:"40"`
+	GoldenBoot  int `json:"golden_boot" example:"1"`
+	GoldenBall  int `json:"golden_ball" example:"0"`
+	GoldenGlove int `json:"golden_glove" example:"1"`
+	YoungPlayer int `json:"young_player" example:"0"`
 }
 
 type CompetitionLeaderboardEntry struct {
@@ -80,7 +106,6 @@ type CompetitionRepository interface {
 	GetBoardCompetitions(ctx context.Context, boardID int64, viewerUserID string) ([]*CompetitionListItem, error)
 	GetCompetitionByID(ctx context.Context, boardID, competitionID int64) (*Competition, error)
 	DeleteCompetition(ctx context.Context, boardID, competitionID int64) error
-	GetAllPickemIDs(ctx context.Context) ([]int64, error)
 	FindMatchCompetitionsByMatches(ctx context.Context, matchIDs []int64) ([]int64, error)
 	GetGlobalCompetitions(ctx context.Context) (pickem *Competition, match *Competition, err error)
 }

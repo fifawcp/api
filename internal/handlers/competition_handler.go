@@ -124,13 +124,52 @@ func (h *CompetitionHandler) GetLeaderboard(w http.ResponseWriter, r *http.Reque
 		q = q[:64]
 	}
 
-	leaderboardPage, err := h.competitionService.GetLeaderboard(r.Context(), competitionID, page, limit, q)
+	sort := r.URL.Query().Get("sort")
+	dir := r.URL.Query().Get("dir")
+
+	leaderboardPage, err := h.competitionService.GetLeaderboard(r.Context(), competitionID, page, limit, q, sort, dir)
 	if err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return
 	}
 
 	httpx.RespondWithPaginatedData(w, http.StatusOK, leaderboardPage.Members, leaderboardPage.Pagination)
+}
+
+// GetBoardSummary godoc
+//
+//	@Summary		Get board summary standings
+//	@Description	Per-member points across all the board's competitions (per-type subtotals + raw-sum total), ranked.
+//	@Tags			competitions
+//	@Produce		json
+//	@Param			boardId	path		int					true	"Board ID"
+//	@Param			page	query		int					false	"Page number (1-indexed, default 1)"
+//	@Param			limit	query		int					false	"Page size (default 20, max 100)"
+//	@Param			q		query		string				false	"Filter by username, first name, or last name"
+//	@Success		200		{object}	httpx.Response		"Summary page retrieved successfully"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Unauthorized"
+//	@Failure		500		{object}	httpx.ErrorResponse	"Internal server error"
+//	@Security		BearerAuth
+//	@Router			/boards/{boardId}/summary [get]
+func (h *CompetitionHandler) GetBoardSummary(w http.ResponseWriter, r *http.Request) {
+	boardID := httpctx.GetBoardID(r.Context())
+	page, limit := httpx.ParsePagination(w, r)
+
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(q) > 64 {
+		q = q[:64]
+	}
+
+	sort := r.URL.Query().Get("sort")
+	dir := r.URL.Query().Get("dir")
+
+	summary, err := h.competitionService.GetBoardSummary(r.Context(), boardID, page, limit, q, sort, dir)
+	if err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	httpx.RespondWithPaginatedData(w, http.StatusOK, summary.Members, summary.Pagination)
 }
 
 // DeleteCompetition godoc

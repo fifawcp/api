@@ -21,32 +21,29 @@ type AwardServiceInterface interface {
 }
 
 type AwardService struct {
-	awardRepository           domain.AwardPickRepository
-	playerRepository          domain.PlayerRepository
-	scoringService            ScoringServiceInterface
-	competitionScoringService CompetitionScoringServiceInterface
-	lockTime                  time.Time
-	cfg                       *config.Config
-	logger                    logging.Logger
+	awardRepository  domain.AwardPickRepository
+	playerRepository domain.PlayerRepository
+	scoringService   ScoringServiceInterface
+	lockTime         time.Time
+	cfg              *config.Config
+	logger           logging.Logger
 }
 
 func NewAwardService(
 	awardRepository domain.AwardPickRepository,
 	playerRepository domain.PlayerRepository,
 	scoringService ScoringServiceInterface,
-	competitionScoringService CompetitionScoringServiceInterface,
 	lockTime time.Time,
 	cfg *config.Config,
 	logger logging.Logger,
 ) AwardServiceInterface {
 	return &AwardService{
-		awardRepository:           awardRepository,
-		playerRepository:          playerRepository,
-		scoringService:            scoringService,
-		competitionScoringService: competitionScoringService,
-		lockTime:                  lockTime,
-		cfg:                       cfg,
-		logger:                    logger,
+		awardRepository:  awardRepository,
+		playerRepository: playerRepository,
+		scoringService:   scoringService,
+		lockTime:         lockTime,
+		cfg:              cfg,
+		logger:           logger,
 	}
 }
 
@@ -259,17 +256,8 @@ func (s *AwardService) isPlayerEligible(awardType domain.AwardType, player *doma
 
 func (s *AwardService) asyncScoreAwards() {
 	go func() {
-		ctx := context.Background()
-		affectedUserIDs, err := s.scoringService.ScoreAwards(ctx)
-		if err != nil {
+		if _, err := s.scoringService.ScoreAwards(context.Background()); err != nil {
 			s.logger.Error("award scoring failed",
-				logging.Error, err.Error(),
-			)
-			return
-		}
-
-		if err := s.competitionScoringService.RecomputeForAwards(ctx, affectedUserIDs); err != nil {
-			s.logger.Error("competition scoring recompute for awards failed",
 				logging.Error, err.Error(),
 			)
 		}

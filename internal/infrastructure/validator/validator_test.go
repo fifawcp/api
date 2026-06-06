@@ -347,11 +347,11 @@ func TestValidateStruct_UpdateMatchResult_RejectsTiedPenalties(t *testing.T) {
 	assert.Equal(t, "PENALTY_TIED", awayField.Code)
 }
 
-func TestValidateStruct_CreateCompetition_ValidPool(t *testing.T) {
+func TestValidateStruct_CreateCompetition_ValidPick(t *testing.T) {
 	matchID := int64(42)
 
 	result := v.ValidateStruct(dtos.CreateCompetitionDto{
-		Type:    domain.CompetitionTypePool,
+		Type:    domain.CompetitionTypePick,
 		Name:    "CvP",
 		MatchID: &matchID,
 	})
@@ -359,9 +359,9 @@ func TestValidateStruct_CreateCompetition_ValidPool(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-func TestValidateStruct_CreateCompetition_PoolRequiresMatchID(t *testing.T) {
+func TestValidateStruct_CreateCompetition_PickRequiresMatchID(t *testing.T) {
 	result := v.ValidateStruct(dtos.CreateCompetitionDto{
-		Type: domain.CompetitionTypePool,
+		Type: domain.CompetitionTypePick,
 		Name: "CvP",
 	})
 
@@ -371,11 +371,11 @@ func TestValidateStruct_CreateCompetition_PoolRequiresMatchID(t *testing.T) {
 	assert.Equal(t, "REQUIRED", field.Code)
 }
 
-func TestValidateStruct_CreateCompetition_PoolForbidsScope(t *testing.T) {
+func TestValidateStruct_CreateCompetition_PickForbidsScope(t *testing.T) {
 	matchID := int64(42)
 
 	result := v.ValidateStruct(dtos.CreateCompetitionDto{
-		Type:    domain.CompetitionTypePool,
+		Type:    domain.CompetitionTypePick,
 		Name:    "CvP",
 		MatchID: &matchID,
 		Scope: &dtos.CreateCompetitionScopeDto{
