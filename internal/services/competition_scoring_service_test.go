@@ -11,14 +11,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCompetitionScoringService_RecomputeForMatches_Pools(t *testing.T) {
+func TestCompetitionScoringService_RecomputeForMatches_Picks(t *testing.T) {
 	t.Parallel()
 
 	matchIDs := []int64{42}
 	userIDs := []string{"user-1", "user-2"}
-	poolID := int64(7)
+	pickID := int64(7)
 
-	var upsertedPoolID int64
+	var upsertedPickID int64
 	var upsertedPts int
 	var upsertedUsers []string
 
@@ -26,12 +26,12 @@ func TestCompetitionScoringService_RecomputeForMatches_Pools(t *testing.T) {
 		FindMatchCompetitionsByMatchesFunc: func(ctx context.Context, ids []int64) ([]int64, error) {
 			return nil, nil
 		},
-		FindPoolCompetitionsByMatchesFunc: func(ctx context.Context, ids []int64) ([]int64, error) {
+		FindPickCompetitionsByMatchesFunc: func(ctx context.Context, ids []int64) ([]int64, error) {
 			assert.Equal(t, matchIDs, ids)
-			return []int64{poolID}, nil
+			return []int64{pickID}, nil
 		},
-		BatchUpsertPoolScoresFunc: func(ctx context.Context, competitionID int64, users []string, exactScorePts int) error {
-			upsertedPoolID = competitionID
+		BatchUpsertPickScoresFunc: func(ctx context.Context, competitionID int64, users []string, exactScorePts int) error {
+			upsertedPickID = competitionID
 			upsertedUsers = users
 			upsertedPts = exactScorePts
 			return nil
@@ -39,16 +39,15 @@ func TestCompetitionScoringService_RecomputeForMatches_Pools(t *testing.T) {
 	}
 
 	cfg := &config.Config{Scoring: config.ScoringConfig{MatchScoreExact: 5}}
-	service := NewCompetitionScoringService(&mocks.MockCompetitionRepository{}, scoreRepo, cfg, &mocks.MockLogger{})
+	service := NewCompetitionScoringService(scoreRepo, cfg, &mocks.MockLogger{})
 
 	err := service.RecomputeForMatches(context.Background(), &domain.ScoreMatchesResult{
 		AffectedUserIDs: userIDs,
 		ScoredMatchIDs:  matchIDs,
-		PickemAffected:  false,
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, poolID, upsertedPoolID)
+	assert.Equal(t, pickID, upsertedPickID)
 	assert.Equal(t, userIDs, upsertedUsers)
 	assert.Equal(t, 5, upsertedPts)
 }

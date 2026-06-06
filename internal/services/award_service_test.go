@@ -22,14 +22,13 @@ func newTestAwardService(
 	awardRepo *mocks.MockAwardPickRepository,
 	playerRepo *mocks.MockPlayerRepository,
 	scoringSvc *mocks.MockScoringService,
-	competitionSvc *mocks.MockCompetitionScoringService,
 	lockTime time.Time,
 ) AwardServiceInterface {
 	cfg := &config.Config{
 		Scoring: config.ScoringConfig{Award: 50},
 	}
 	logger := &mocks.MockLogger{}
-	return NewAwardService(awardRepo, playerRepo, scoringSvc, competitionSvc, lockTime, cfg, logger)
+	return NewAwardService(awardRepo, playerRepo, scoringSvc, lockTime, cfg, logger)
 }
 
 func ageRef(value int) *int { return &value }
@@ -77,7 +76,7 @@ func pastLock() time.Time { return time.Now().UTC().Add(-24 * time.Hour) }
 func TestAwardService_SaveAwardPicks_RejectsWhenLocked(t *testing.T) {
 	t.Parallel()
 
-	service := newTestAwardService(&mocks.MockAwardPickRepository{}, &mocks.MockPlayerRepository{}, nil, nil, pastLock())
+	service := newTestAwardService(&mocks.MockAwardPickRepository{}, &mocks.MockPlayerRepository{}, nil, pastLock())
 
 	picks := []*domain.UserAwardPick{{AwardType: domain.AwardGoldenBoot, PlayerID: 1}}
 	_, err := service.SaveAwardPicks(context.Background(), gofakeit.UUID(), picks)
@@ -93,7 +92,7 @@ func TestAwardService_SaveAwardPicks_RejectsGoldenGloveForOutfielder(t *testing.
 			return []*domain.Player{attacker(7)}, nil
 		},
 	}
-	service := newTestAwardService(&mocks.MockAwardPickRepository{}, playerRepo, nil, nil, futureLock())
+	service := newTestAwardService(&mocks.MockAwardPickRepository{}, playerRepo, nil, futureLock())
 
 	picks := []*domain.UserAwardPick{{AwardType: domain.AwardGoldenGlove, PlayerID: 7}}
 	_, err := service.SaveAwardPicks(context.Background(), gofakeit.UUID(), picks)
@@ -109,7 +108,7 @@ func TestAwardService_SaveAwardPicks_RejectsYoungPlayerOverCutoff(t *testing.T) 
 			return []*domain.Player{attacker(11)}, nil
 		},
 	}
-	service := newTestAwardService(&mocks.MockAwardPickRepository{}, playerRepo, nil, nil, futureLock())
+	service := newTestAwardService(&mocks.MockAwardPickRepository{}, playerRepo, nil, futureLock())
 
 	picks := []*domain.UserAwardPick{{AwardType: domain.AwardYoungPlayer, PlayerID: 11}}
 	_, err := service.SaveAwardPicks(context.Background(), gofakeit.UUID(), picks)
@@ -138,7 +137,7 @@ func TestAwardService_SaveAwardPicks_AcceptsYoungPlayerWithUnknownAge(t *testing
 			return nil
 		},
 	}
-	service := newTestAwardService(awardRepo, playerRepo, nil, nil, futureLock())
+	service := newTestAwardService(awardRepo, playerRepo, nil, futureLock())
 
 	picks := []*domain.UserAwardPick{{AwardType: domain.AwardYoungPlayer, PlayerID: 42}}
 	_, err := service.SaveAwardPicks(context.Background(), gofakeit.UUID(), picks)
@@ -154,7 +153,7 @@ func TestAwardService_SaveAwardPicks_RejectsUnknownPlayer(t *testing.T) {
 			return []*domain.Player{}, nil
 		},
 	}
-	service := newTestAwardService(&mocks.MockAwardPickRepository{}, playerRepo, nil, nil, futureLock())
+	service := newTestAwardService(&mocks.MockAwardPickRepository{}, playerRepo, nil, futureLock())
 
 	picks := []*domain.UserAwardPick{{AwardType: domain.AwardGoldenBoot, PlayerID: 999}}
 	_, err := service.SaveAwardPicks(context.Background(), gofakeit.UUID(), picks)
@@ -183,7 +182,7 @@ func TestAwardService_SaveAwardPicks_AcceptsValidMixedPicks(t *testing.T) {
 		},
 	}
 
-	service := newTestAwardService(awardRepo, playerRepo, nil, nil, futureLock())
+	service := newTestAwardService(awardRepo, playerRepo, nil, futureLock())
 
 	picks := []*domain.UserAwardPick{
 		{AwardType: domain.AwardGoldenBoot, PlayerID: bootPlayer.ID},
@@ -221,7 +220,7 @@ func TestAwardService_GetUserAwards_ResolvesInCanonicalOrderWithGaps(t *testing.
 		},
 	}
 
-	service := newTestAwardService(awardRepo, playerRepo, nil, nil, futureLock())
+	service := newTestAwardService(awardRepo, playerRepo, nil, futureLock())
 
 	awards, err := service.GetUserAwards(context.Background(), gofakeit.UUID())
 
@@ -246,7 +245,7 @@ func TestAwardService_GetUserAwards_SignalsLockAfterDeadline(t *testing.T) {
 	}
 	playerRepo := &mocks.MockPlayerRepository{}
 
-	service := newTestAwardService(awardRepo, playerRepo, nil, nil, pastLock())
+	service := newTestAwardService(awardRepo, playerRepo, nil, pastLock())
 
 	awards, err := service.GetUserAwards(context.Background(), gofakeit.UUID())
 
@@ -287,7 +286,7 @@ func TestAwardService_GetPopularPicks_FansOutPerAwardAndPropagatesLimit(t *testi
 			return nil, nil
 		},
 	}
-	service := newTestAwardService(awardRepo, &mocks.MockPlayerRepository{}, nil, nil, futureLock())
+	service := newTestAwardService(awardRepo, &mocks.MockPlayerRepository{}, nil, futureLock())
 
 	result, err := service.GetPopularPicks(context.Background(), 10)
 
@@ -321,7 +320,7 @@ type callRecord struct {
 func TestAwardService_RecordWinners_RejectsIncompleteSet(t *testing.T) {
 	t.Parallel()
 
-	service := newTestAwardService(&mocks.MockAwardPickRepository{}, &mocks.MockPlayerRepository{}, nil, nil, futureLock())
+	service := newTestAwardService(&mocks.MockAwardPickRepository{}, &mocks.MockPlayerRepository{}, nil, futureLock())
 
 	winners := []*domain.AwardWinner{
 		{AwardType: domain.AwardGoldenBoot, PlayerID: 1},
@@ -334,7 +333,7 @@ func TestAwardService_RecordWinners_RejectsIncompleteSet(t *testing.T) {
 func TestAwardService_RecordWinners_RejectsDuplicateAwardType(t *testing.T) {
 	t.Parallel()
 
-	service := newTestAwardService(&mocks.MockAwardPickRepository{}, &mocks.MockPlayerRepository{}, nil, nil, futureLock())
+	service := newTestAwardService(&mocks.MockAwardPickRepository{}, &mocks.MockPlayerRepository{}, nil, futureLock())
 
 	winners := []*domain.AwardWinner{
 		{AwardType: domain.AwardGoldenBoot, PlayerID: 1},
@@ -357,7 +356,7 @@ func TestAwardService_RecordWinners_RejectsIneligibleWinner(t *testing.T) {
 			}, nil
 		},
 	}
-	service := newTestAwardService(&mocks.MockAwardPickRepository{}, playerRepo, nil, nil, futureLock())
+	service := newTestAwardService(&mocks.MockAwardPickRepository{}, playerRepo, nil, futureLock())
 
 	winners := []*domain.AwardWinner{
 		{AwardType: domain.AwardGoldenBoot, PlayerID: 1},
@@ -393,21 +392,14 @@ func TestAwardService_RecordWinners_PersistsAndTriggersScoring(t *testing.T) {
 	}
 
 	scoreCalled := make(chan struct{}, 1)
-	recomputeCalled := make(chan struct{}, 1)
 	scoringSvc := &mocks.MockScoringService{
 		ScoreAwardsFunc: func(ctx context.Context) ([]string, error) {
 			scoreCalled <- struct{}{}
 			return []string{"user-1", "user-2"}, nil
 		},
 	}
-	competitionSvc := &mocks.MockCompetitionScoringService{
-		RecomputeForAwardsFunc: func(ctx context.Context, affectedUserIDs []string) error {
-			recomputeCalled <- struct{}{}
-			return nil
-		},
-	}
 
-	service := newTestAwardService(awardRepo, playerRepo, scoringSvc, competitionSvc, futureLock())
+	service := newTestAwardService(awardRepo, playerRepo, scoringSvc, futureLock())
 
 	winners := []*domain.AwardWinner{
 		{AwardType: domain.AwardGoldenBoot, PlayerID: bootPlayer.ID},
@@ -421,7 +413,6 @@ func TestAwardService_RecordWinners_PersistsAndTriggersScoring(t *testing.T) {
 	assert.Len(t, persisted, 4)
 
 	assertSignaledWithin(t, scoreCalled, time.Second, "ScoreAwards not invoked")
-	assertSignaledWithin(t, recomputeCalled, time.Second, "RecomputeForAwards not invoked")
 }
 
 func TestAwardService_RecordWinners_SurfacesPersistenceFailureSynchronously(t *testing.T) {
@@ -445,7 +436,7 @@ func TestAwardService_RecordWinners_SurfacesPersistenceFailureSynchronously(t *t
 		},
 	}
 
-	service := newTestAwardService(awardRepo, playerRepo, nil, nil, futureLock())
+	service := newTestAwardService(awardRepo, playerRepo, nil, futureLock())
 
 	winners := []*domain.AwardWinner{
 		{AwardType: domain.AwardGoldenBoot, PlayerID: bootPlayer.ID},

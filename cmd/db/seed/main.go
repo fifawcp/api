@@ -66,7 +66,7 @@ func main() {
 		cfg, logger,
 	)
 	competitionScoringService := services.NewCompetitionScoringService(
-		competitionRepository, competitionScoreRepository, cfg, logger,
+		competitionScoreRepository, cfg, logger,
 	)
 	competitionService := services.NewCompetitionService(
 		boardRepository, competitionRepository, competitionScoreRepository,

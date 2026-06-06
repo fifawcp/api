@@ -96,6 +96,16 @@ func (s *BoardService) CreateBoard(
 			return nil, err
 		}
 
+		if err := s.competitionRepository.CreateCompetition(ctx, &domain.Competition{
+			BoardID:   board.ID,
+			Type:      domain.CompetitionTypeAwards,
+			Name:      "Awards",
+			CreatedBy: &userID,
+		}); err != nil {
+			_ = s.boardRepository.DeleteBoard(ctx, board.ID)
+			return nil, err
+		}
+
 		return board, nil
 	}
 

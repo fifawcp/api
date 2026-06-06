@@ -20,7 +20,7 @@ func newTestCompetitionHandler(cs *mocks.MockCompetitionService) *CompetitionHan
 	return NewCompetitionHandler(cs, testutils.NewTestConfig(), validator.NewValidator(), &mocks.MockLogger{})
 }
 
-func makeCreatePoolReq(t *testing.T, body any) *http.Request {
+func makeCreatePickReq(t *testing.T, body any) *http.Request {
 	return testutils.MakeJSONRequest(
 		t, http.MethodPost, "/boards/1/competitions", body,
 		testutils.WithAuthUser(testutils.CreateTestUser()),
@@ -29,7 +29,7 @@ func makeCreatePoolReq(t *testing.T, body any) *http.Request {
 	)
 }
 
-func TestCompetitionHandler_CreateCompetition_Pool(t *testing.T) {
+func TestCompetitionHandler_CreateCompetition_Pick(t *testing.T) {
 	t.Parallel()
 
 	matchID := int64(42)
@@ -40,13 +40,13 @@ func TestCompetitionHandler_CreateCompetition_Pool(t *testing.T) {
 		cs := &mocks.MockCompetitionService{
 			CreateCompetitionFunc: func(ctx context.Context, boardID int64, userID string, role domain.BoardMemberRole, payload dtos.CreateCompetitionDto) (*domain.CompetitionListItem, error) {
 				return &domain.CompetitionListItem{
-					Competition: domain.Competition{ID: 9, BoardID: boardID, Type: domain.CompetitionTypePool, Name: payload.Name, PoolMatchID: payload.MatchID},
+					Competition: domain.Competition{ID: 9, BoardID: boardID, Type: domain.CompetitionTypePick, Name: payload.Name, PickMatchID: payload.MatchID},
 				}, nil
 			},
 		}
 		h := newTestCompetitionHandler(cs)
 
-		req := makeCreatePoolReq(t, dtos.CreateCompetitionDto{Type: domain.CompetitionTypePool, Name: "CvP", MatchID: &matchID})
+		req := makeCreatePickReq(t, dtos.CreateCompetitionDto{Type: domain.CompetitionTypePick, Name: "CvP", MatchID: &matchID})
 		w := httptest.NewRecorder()
 
 		h.CreateCompetition(w, req)
@@ -56,22 +56,22 @@ func TestCompetitionHandler_CreateCompetition_Pool(t *testing.T) {
 			Data domain.CompetitionListItem `json:"data"`
 		}
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, domain.CompetitionTypePool, resp.Data.Type)
-		require.NotNil(t, resp.Data.PoolMatchID)
-		assert.Equal(t, matchID, *resp.Data.PoolMatchID)
+		assert.Equal(t, domain.CompetitionTypePick, resp.Data.Type)
+		require.NotNil(t, resp.Data.PickMatchID)
+		assert.Equal(t, matchID, *resp.Data.PickMatchID)
 	})
 
-	t.Run("returns 409 when a pool already exists for the match", func(t *testing.T) {
+	t.Run("returns 409 when a pick already exists for the match", func(t *testing.T) {
 		t.Parallel()
 
 		cs := &mocks.MockCompetitionService{
 			CreateCompetitionFunc: func(ctx context.Context, boardID int64, userID string, role domain.BoardMemberRole, payload dtos.CreateCompetitionDto) (*domain.CompetitionListItem, error) {
-				return nil, domain.ErrDuplicatePoolForMatch
+				return nil, domain.ErrDuplicatePickForMatch
 			},
 		}
 		h := newTestCompetitionHandler(cs)
 
-		req := makeCreatePoolReq(t, dtos.CreateCompetitionDto{Type: domain.CompetitionTypePool, Name: "CvP", MatchID: &matchID})
+		req := makeCreatePickReq(t, dtos.CreateCompetitionDto{Type: domain.CompetitionTypePick, Name: "CvP", MatchID: &matchID})
 		w := httptest.NewRecorder()
 
 		h.CreateCompetition(w, req)
@@ -79,6 +79,6 @@ func TestCompetitionHandler_CreateCompetition_Pool(t *testing.T) {
 		require.Equal(t, http.StatusConflict, w.Code)
 		var resp httpx.ErrorResponse
 		testutils.ParseJSONResponse(t, w, &resp)
-		assert.Equal(t, "DUPLICATE_POOL_FOR_MATCH", resp.Error.Code)
+		assert.Equal(t, "DUPLICATE_PICK_FOR_MATCH", resp.Error.Code)
 	})
 }

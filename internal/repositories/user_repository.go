@@ -79,16 +79,6 @@ func (r *UserRepository) CreateUser(
 
 	if _, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO competition_pickem_scores (competition_id, user_id)
-		 SELECT id, $1 FROM competitions WHERE board_id = $2 AND type = 'pickem'`,
-		user.ID,
-		globalBoardID,
-	); err != nil {
-		return handleDBError(err, resourceCompetitionScore)
-	}
-
-	if _, err := tx.ExecContext(
-		ctx,
 		`INSERT INTO competition_match_scores (competition_id, user_id)
 		 SELECT id, $1 FROM competitions WHERE board_id = $2 AND type = 'match'`,
 		user.ID,

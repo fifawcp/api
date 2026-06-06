@@ -29,9 +29,9 @@ const (
 	codeBoardUserAlreadyInBoard        = "BOARD_USER_ALREADY_IN_BOARD"
 	codeMaxBoardMembersExceeded        = "MAX_BOARD_MEMBERS_EXCEEDED"
 	codeCompetitionPickemAlreadyExists = "COMPETITION_PICKEM_ALREADY_EXISTS"
+	codeCompetitionAwardsAlreadyExists = "COMPETITION_AWARDS_ALREADY_EXISTS"
 	codeCompetitionNameAlreadyExists   = "COMPETITION_NAME_ALREADY_EXISTS"
-	codeCompetitionPickemNotDeletable  = "COMPETITION_PICKEM_NOT_DELETABLE"
-	codeDuplicatePoolForMatch          = "DUPLICATE_POOL_FOR_MATCH"
+	codeDuplicatePickForMatch          = "DUPLICATE_PICK_FOR_MATCH"
 
 	// 401 Unauthorized
 	codeOTPInvalidOrExpired          = "OTP_INVALID_OR_EXPIRED"
@@ -124,8 +124,8 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 	// 409 Conflict
 	case errors.Is(err, domain.ErrCompetitionPickemAlreadyExists):
 		httpx.Conflict(w, r, codeCompetitionPickemAlreadyExists, domain.ErrCompetitionPickemAlreadyExists.Error())
-	case errors.Is(err, domain.ErrCompetitionPickemNotDeletable):
-		httpx.Conflict(w, r, codeCompetitionPickemNotDeletable, domain.ErrCompetitionPickemNotDeletable.Error())
+	case errors.Is(err, domain.ErrCompetitionAwardsAlreadyExists):
+		httpx.Conflict(w, r, codeCompetitionAwardsAlreadyExists, domain.ErrCompetitionAwardsAlreadyExists.Error())
 	case errors.Is(err, domain.ErrUserAlreadyExists):
 		httpx.Conflict(w, r, codeUserAlreadyExists, domain.ErrUserAlreadyExists.Error())
 	case errors.Is(err, domain.ErrUsernameAlreadyExists):
@@ -234,8 +234,8 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.BadRequest(w, r, codeCannotTransferToSelf, domain.ErrCannotTransferOwnershipToSelf.Error())
 	case errors.Is(err, domain.ErrCompetitionNameAlreadyExists):
 		httpx.Conflict(w, r, codeCompetitionNameAlreadyExists, domain.ErrCompetitionNameAlreadyExists.Error())
-	case errors.Is(err, domain.ErrDuplicatePoolForMatch):
-		httpx.Conflict(w, r, codeDuplicatePoolForMatch, domain.ErrDuplicatePoolForMatch.Error())
+	case errors.Is(err, domain.ErrDuplicatePickForMatch):
+		httpx.Conflict(w, r, codeDuplicatePickForMatch, domain.ErrDuplicatePickForMatch.Error())
 
 	// 502 Bad Gateway
 	case errors.Is(err, domain.ErrMissingIDToken):

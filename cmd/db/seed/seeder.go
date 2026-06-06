@@ -376,7 +376,6 @@ func allMatchIDs() []int64 {
 func (s *Seeder) resetTournamentState(ctx context.Context) error {
 	queries := []string{
 		`DELETE FROM score_events`,
-		`DELETE FROM competition_pickem_scores`,
 		`DELETE FROM competition_match_scores`,
 		`DELETE FROM user_bracket_picks`,
 		`DELETE FROM user_match_score_picks`,
