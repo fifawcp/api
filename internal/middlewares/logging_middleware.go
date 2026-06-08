@@ -3,6 +3,7 @@ package middlewares
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/fifawcp/api/internal/httpctx"
@@ -30,6 +31,13 @@ func LogRequest(logger logging.Logger) func(next http.Handler) http.Handler {
 			ctx := context.WithValue(r.Context(), httpctx.ResponseErrorContextKey, responseErr)
 			r = r.WithContext(ctx)
 
+			// TEMP DEBUG (revert): raw forwarding headers to diagnose client IP on Railway.
+			// r.RemoteAddr is already rewritten by TrustedProxyRealIP, so capture the peer too.
+			dbgXFF := strings.Join(r.Header.Values("X-Forwarded-For"), " | ")
+			dbgXRealIP := r.Header.Get("X-Real-Ip")
+			dbgXEnvoy := r.Header.Get("X-Envoy-External-Address")
+			dbgResolvedIP := getClientIP(r)
+
 			// Run after ServeHTTP returns
 			defer func() {
 				status := wrapResponseWriter.Status()
@@ -47,6 +55,11 @@ func LogRequest(logger logging.Logger) func(next http.Handler) http.Handler {
 					logging.Status, status,
 					logging.DurationMS, time.Since(start).Milliseconds(),
 					logging.Outcome, outcome,
+					// TEMP DEBUG (revert): raw forwarding headers vs resolved IP.
+					"dbg_xff", dbgXFF,
+					"dbg_x_real_ip", dbgXRealIP,
+					"dbg_x_envoy_external", dbgXEnvoy,
+					"dbg_resolved_ip", dbgResolvedIP,
 				}
 
 				// Append user ID if the endpoint is authenticated
