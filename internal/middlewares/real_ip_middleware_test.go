@@ -11,7 +11,7 @@ import (
 
 // Runs the production middleware chain (TrustedProxyRealIP -> RequestInfo) and returns the
 // IP that handlers ultimately observe via the request context.
-func resolveIP(trustedCIDRs []string, remoteAddr string, headers map[string]string) string {
+func resolveIP(trustedCIDRs []string, forwardSecret, remoteAddr string, headers map[string]string) string {
 	var observed string
 	terminal := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		if info := httpctx.GetRequestInfo(r.Context()); info != nil {
@@ -19,7 +19,7 @@ func resolveIP(trustedCIDRs []string, remoteAddr string, headers map[string]stri
 		}
 	})
 
-	chain := middlewares.TrustedProxyRealIP(trustedCIDRs)(middlewares.RequestInfo()(terminal))
+	chain := middlewares.TrustedProxyRealIP(trustedCIDRs, forwardSecret)(middlewares.RequestInfo()(terminal))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/token", nil)
 	req.RemoteAddr = remoteAddr
@@ -40,13 +40,59 @@ func TestResolveClientIP(t *testing.T) {
 	// Mirrors production: the API trusts its own Railway edge plus the BFF's egress range.
 	prodTrusted := []string{"10.0.0.0/8", "44.220.117.0/24"}
 
+	const secret = "s3cret-shared-with-frontend"
+
 	tests := []struct {
-		name         string
-		trustedCIDRs []string
-		remoteAddr   string
-		headers      map[string]string
-		want         string
+		name          string
+		trustedCIDRs  []string
+		forwardSecret string
+		remoteAddr    string
+		headers       map[string]string
+		want          string
 	}{
+		{
+			name:          "trusted X-Client-IP wins when the shared secret matches",
+			forwardSecret: secret,
+			remoteAddr:    "10.0.0.1:5000",
+			headers: map[string]string{
+				"X-Ip-Forward-Secret": secret,
+				"X-Client-Ip":         realClient,
+				"X-Forwarded-For":     bffEgress, // edge-rewritten chain is ignored
+			},
+			want: realClient,
+		},
+		{
+			name:          "X-Client-IP is ignored when the secret does not match",
+			forwardSecret: secret,
+			remoteAddr:    "10.0.0.1:5000",
+			headers: map[string]string{
+				"X-Ip-Forward-Secret": "wrong",
+				"X-Client-Ip":         "6.6.6.6",
+				"X-Forwarded-For":     realClient,
+			},
+			want: realClient,
+		},
+		{
+			name:         "X-Client-IP is ignored when no secret is configured",
+			remoteAddr:   "10.0.0.1:5000",
+			headers: map[string]string{
+				"X-Ip-Forward-Secret": secret,
+				"X-Client-Ip":         "6.6.6.6",
+				"X-Forwarded-For":     realClient,
+			},
+			want: realClient,
+		},
+		{
+			name:          "invalid X-Client-IP falls back to the forwarded chain",
+			forwardSecret: secret,
+			remoteAddr:    "10.0.0.1:5000",
+			headers: map[string]string{
+				"X-Ip-Forward-Secret": secret,
+				"X-Client-Ip":         "not-an-ip",
+				"X-Forwarded-For":     realClient,
+			},
+			want: realClient,
+		},
 		{
 			name:         "real client recovered from forwarded chain behind the BFF",
 			trustedCIDRs: prodTrusted,
@@ -95,7 +141,7 @@ func TestResolveClientIP(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := resolveIP(tc.trustedCIDRs, tc.remoteAddr, tc.headers)
+			got := resolveIP(tc.trustedCIDRs, tc.forwardSecret, tc.remoteAddr, tc.headers)
 			if got != tc.want {
 				t.Fatalf("resolved client IP = %q, want %q", got, tc.want)
 			}

@@ -36,6 +36,7 @@ func LogRequest(logger logging.Logger) func(next http.Handler) http.Handler {
 			dbgXFF := strings.Join(r.Header.Values("X-Forwarded-For"), " | ")
 			dbgXRealIP := r.Header.Get("X-Real-Ip")
 			dbgXEnvoy := r.Header.Get("X-Envoy-External-Address")
+			dbgXClientIP := r.Header.Get("X-Client-Ip")
 			dbgResolvedIP := getClientIP(r)
 
 			// Run after ServeHTTP returns
@@ -59,6 +60,7 @@ func LogRequest(logger logging.Logger) func(next http.Handler) http.Handler {
 					"dbg_xff", dbgXFF,
 					"dbg_x_real_ip", dbgXRealIP,
 					"dbg_x_envoy_external", dbgXEnvoy,
+					"dbg_x_client_ip", dbgXClientIP,
 					"dbg_resolved_ip", dbgResolvedIP,
 				}
 
