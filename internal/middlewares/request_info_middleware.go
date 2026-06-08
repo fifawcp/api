@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/fifawcp/api/internal/dtos"
 	"github.com/fifawcp/api/internal/httpctx"
@@ -34,23 +33,7 @@ func RequestInfo() func(next http.Handler) http.Handler {
 }
 
 func getClientIP(r *http.Request) string {
-	// Chi's middleware.RealIP has already processed X-Forwarded-For and X-Real-IP headers
-	// and set r.RemoteAddr to the real client IP. We just need to strip the port.
-	ip := r.RemoteAddr
-
-	// Handle IPv6 addresses like [::1]:63514 or [2001:db8::1]:8080
-	if len(ip) > 0 && ip[0] == '[' {
-		if idx := strings.Index(ip, "]"); idx != -1 {
-			return ip[1:idx]
-		}
-	}
-
-	// Handle IPv4 like 127.0.0.1:63514
-	if host, _, found := strings.Cut(ip, ":"); found {
-		return host
-	}
-
-	return ip
+	return stripPort(r.RemoteAddr)
 }
 
 func parseUserAgent(userAgent string) dtos.DeviceInfo {
