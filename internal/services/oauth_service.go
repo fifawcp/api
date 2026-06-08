@@ -166,21 +166,11 @@ func (s *OAuthService) registerNewUserViaOAuth(
 	returnTo string,
 	requestInfo dtos.RequestInfo,
 ) (*dtos.AuthenticationDto, string, error) {
-	firstName := idToken.GivenName
-	if firstName == "" {
-		firstName = "Google"
-	}
-
-	lastName := idToken.FamilyName
-	if lastName == "" {
-		lastName = "User"
-	}
-
 	user := &domain.User{
 		Email:     strings.ToLower(idToken.Email),
-		FirstName: firstName,
-		LastName:  lastName,
-		Username:  generateUsernameFromEmail(idToken.Email, idToken.Provider),
+		FirstName: idToken.GivenName,
+		LastName:  idToken.FamilyName,
+		Username:  s.resolveAvailableUsername(ctx, idToken.Email, idToken.Provider),
 	}
 
 	account := &domain.OAuthAccount{
@@ -200,16 +190,34 @@ func (s *OAuthService) registerNewUserViaOAuth(
 	return authentication, returnTo, nil
 }
 
-func generateUsernameFromEmail(email string, provider string) string {
-	// Extract and lowercase the local part (everything before @)
+// resolveAvailableUsername prefers the clean email local part and only falls
+// back to the prefixed format when that handle is already taken.
+func (s *OAuthService) resolveAvailableUsername(ctx context.Context, email string, provider string) string {
+	base := usernameBaseFromEmail(email)
+
+	if _, err := s.userRepository.GetUserByIdentifier(ctx, base); errors.Is(err, domain.ErrUserNotFound) {
+		return base
+	}
+
+	return generateUsernameFromEmail(email, provider)
+}
+
+// usernameBaseFromEmail returns the lowercased email local part, capped so the
+// prefixed fallback still fits in VARCHAR(20):
+// <provider-letter>(1) + 3-digit suffix(3) + "-"(1) + base → base max = 15.
+func usernameBaseFromEmail(email string) string {
 	base := strings.ToLower(strings.SplitN(email, "@", 2)[0])
 
-	// Cap the local part so the final username fits in VARCHAR(20).
-	// Format: <provider-letter>(1) + 3-digit suffix(3) + "-"(1) + base → base max = 15.
 	const maxBaseLen = 15
 	if len(base) > maxBaseLen {
 		base = base[:maxBaseLen]
 	}
+
+	return base
+}
+
+func generateUsernameFromEmail(email string, provider string) string {
+	base := usernameBaseFromEmail(email)
 
 	// Random 3-digit suffix to reduce collisions on the same (provider, base) pair
 	n, err := rand.Int(rand.Reader, big.NewInt(1000))

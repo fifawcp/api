@@ -343,14 +343,14 @@ func TestOAuthService_CompleteGoogleLogin(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "test-given-name", authentication.User.FirstName)
 		assert.Equal(t, "test-family-name", authentication.User.LastName)
-		assert.Regexp(t, `^G\d{3}-test-email$`, authentication.User.Username)
+		assert.Equal(t, "test-email", authentication.User.Username)
 		assert.Equal(t, "test-email", authentication.User.Email)
 		assert.Equal(t, "test-access-token", authentication.Auth.AccessToken)
 		assert.Equal(t, "test-refresh-token", authentication.Auth.RefreshToken)
 		assert.Equal(t, "https://return-to.com", redirectURL)
 	})
 
-	t.Run("returns authentication data with default names when given name and family name are empty", func(t *testing.T) {
+	t.Run("leaves names empty when given name and family name are empty", func(t *testing.T) {
 		t.Parallel()
 
 		oauthStorage := &mocks.MockOAuthStorage{
@@ -426,10 +426,10 @@ func TestOAuthService_CompleteGoogleLogin(t *testing.T) {
 		)
 
 		assert.NoError(t, err)
-		assert.Equal(t, "Google", authentication.User.FirstName)
-		assert.Equal(t, "User", authentication.User.LastName)
+		assert.Equal(t, "", authentication.User.FirstName)
+		assert.Equal(t, "", authentication.User.LastName)
 		assert.Equal(t, "newuser@example.com", authentication.User.Email)
-		assert.Regexp(t, `^G\d{3}-newuser$`, authentication.User.Username)
+		assert.Equal(t, "newuser", authentication.User.Username)
 		assert.Equal(t, "https://return-to.com", redirectURL)
 	})
 
@@ -514,8 +514,89 @@ func TestOAuthService_CompleteGoogleLogin(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, strings.ToLower(email), authentication.User.Email)
-		assert.Regexp(t, `^G\d{3}-`+cappedLocal+`$`, authentication.User.Username)
+		assert.Equal(t, cappedLocal, authentication.User.Username)
 		assert.Equal(t, "https://return-to.com", redirectURL)
+	})
+
+	t.Run("falls back to a prefixed username when the plain handle is taken", func(t *testing.T) {
+		t.Parallel()
+
+		oauthStorage := &mocks.MockOAuthStorage{
+			GetAndDeleteOAuthStateFunc: func(ctx context.Context, state string) (string, error) {
+				return "https://return-to.com", nil
+			},
+		}
+
+		oauth2Client := &mocks.MockGoogleOAuth2Client{
+			ExchangeCodeForTokenFunc: func(ctx context.Context, code string) (*domain.OIDCToken, error) {
+				return &domain.OIDCToken{
+					RawIDToken: "test-raw-id-token",
+				}, nil
+			},
+		}
+
+		idTokenVerifier := &mocks.MockGoogleIDTokenVerifier{
+			VerifyFunc: func(ctx context.Context, rawIDToken string) (*domain.IDToken, error) {
+				return &domain.IDToken{
+					Sub:           "test-sub",
+					Email:         "taken@example.com",
+					EmailVerified: true,
+					GivenName:     "test-given-name",
+					FamilyName:    "test-family-name",
+					Provider:      "google",
+				}, nil
+			},
+		}
+
+		oauthAccountRepository := &mocks.MockOAuthAccountRepository{
+			GetByProviderSubFunc: func(ctx context.Context, provider string, providerSub string) (*domain.OAuthAccount, error) {
+				return nil, domain.ErrOAuthAccountNotFound
+			},
+			CreateUserWithOAuthAccountFunc: func(ctx context.Context, user *domain.User, oauthAccount *domain.OAuthAccount) error {
+				return nil
+			},
+		}
+
+		userRepository := &mocks.MockUserRepository{
+			GetUserByIdentifierFunc: func(ctx context.Context, identifier string) (*domain.User, error) {
+				// Email lookup finds no existing user; the username "taken" is already in use.
+				if identifier == "taken" {
+					return &domain.User{Username: "taken"}, nil
+				}
+				return nil, domain.ErrUserNotFound
+			},
+		}
+
+		authService := &mocks.MockAuthService{
+			IssueAuthenticationFunc: func(ctx context.Context, user *domain.User, requestInfo dtos.RequestInfo) (*dtos.AuthenticationDto, error) {
+				return &dtos.AuthenticationDto{
+					User: user,
+					Auth: dtos.AuthData{
+						AccessToken:  "test-access-token",
+						RefreshToken: "test-refresh-token",
+					},
+				}, nil
+			},
+		}
+
+		s := newTestOAuthService(
+			oauthStorage,
+			oauth2Client,
+			idTokenVerifier,
+			oauthAccountRepository,
+			userRepository,
+			authService,
+		)
+
+		authentication, _, err := s.CompleteGoogleLogin(
+			context.Background(),
+			"test-state",
+			"test-code",
+			dtos.RequestInfo{},
+		)
+
+		assert.NoError(t, err)
+		assert.Regexp(t, `^G\d{3}-taken$`, authentication.User.Username)
 	})
 
 	t.Run("returns error when get and delete oauth state error", func(t *testing.T) {

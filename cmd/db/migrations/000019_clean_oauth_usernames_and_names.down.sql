@@ -1,0 +1,3 @@
+-- Irreversible: the original random username prefix is not recoverable, and a
+-- blank name cannot be distinguished from one that was originally a placeholder.
+-- No-op.
