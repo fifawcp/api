@@ -46,6 +46,7 @@ type ServerConfig struct {
 	ShutdownTimeout   time.Duration
 	CORS              CORSConfig
 	TrustedProxyCIDRs []string
+	IPForwardSecret   string
 }
 
 type CORSConfig struct {
@@ -135,6 +136,7 @@ func NewConfig() *Config {
 			IdleTimeout:       env.GetDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
 			ShutdownTimeout:   env.GetDuration("SERVER_SHUTDOWN_TIMEOUT", 3*time.Second),
 			TrustedProxyCIDRs: strings.Split(env.GetString("TRUSTED_PROXY_CIDRS", ""), ","),
+			IPForwardSecret:   env.GetString("IP_FORWARD_SECRET", ""),
 			CORS: CORSConfig{
 				AllowedOrigins: strings.Split(env.GetString("CORS_ALLOWED_ORIGINS", "*"), ","),
 			},

@@ -14,7 +14,7 @@ func (c *Container) NewRouter() *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
-	r.Use(middlewares.TrustedProxyRealIP(c.Config.Server.TrustedProxyCIDRs))
+	r.Use(middlewares.TrustedProxyRealIP(c.Config.Server.TrustedProxyCIDRs, c.Config.Server.IPForwardSecret))
 	r.Use(middleware.Recoverer)
 	r.Use(middlewares.LogRequest(c.Logger))
 	r.Use(middleware.Timeout(c.Config.Server.ContextTimeout))

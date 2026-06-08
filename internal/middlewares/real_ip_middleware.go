@@ -1,23 +1,33 @@
 package middlewares
 
 import (
+	"crypto/subtle"
 	"net"
 	"net/http"
 	"strings"
 )
 
-func TrustedProxyRealIP(trustedCIDRs []string) func(http.Handler) http.Handler {
+const (
+	clientIPHeader      = "X-Client-IP"
+	forwardSecretHeader = "X-IP-Forward-Secret"
+)
+
+func TrustedProxyRealIP(trustedCIDRs []string, forwardSecret string) func(http.Handler) http.Handler {
 	nets := parseCIDRs(trustedCIDRs)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			r.RemoteAddr = resolveClientIP(r, nets)
+			r.RemoteAddr = resolveClientIP(r, nets, forwardSecret)
 			next.ServeHTTP(w, r)
 		})
 	}
 }
 
-func resolveClientIP(r *http.Request, trusted []*net.IPNet) string {
+func resolveClientIP(r *http.Request, trusted []*net.IPNet, forwardSecret string) string {
+	if ip := clientIPFromTrustedHeader(r, forwardSecret); ip != "" {
+		return ip
+	}
+
 	peer := stripPort(r.RemoteAddr)
 	forwarded := forwardedChain(r)
 
@@ -46,7 +56,24 @@ func resolveClientIP(r *http.Request, trusted []*net.IPNet) string {
 	return peer
 }
 
-// forwardedChain returns the valid IPs from all X-Forwarded-For headers, left to right.
+func clientIPFromTrustedHeader(r *http.Request, forwardSecret string) string {
+	if forwardSecret == "" {
+		return ""
+	}
+
+	provided := r.Header.Get(forwardSecretHeader)
+	if subtle.ConstantTimeCompare([]byte(provided), []byte(forwardSecret)) != 1 {
+		return ""
+	}
+
+	ip := strings.TrimSpace(r.Header.Get(clientIPHeader))
+	if net.ParseIP(ip) == nil {
+		return ""
+	}
+
+	return ip
+}
+
 func forwardedChain(r *http.Request) []string {
 	var ips []string
 	for _, header := range r.Header.Values("X-Forwarded-For") {
@@ -74,8 +101,6 @@ func ipInNets(ipStr string, nets []*net.IPNet) bool {
 	return false
 }
 
-// stripPort returns the host portion of an address, tolerating bare IPs (v4 and v6),
-// "host:port", and "[ipv6]:port".
 func stripPort(addr string) string {
 	if host, _, err := net.SplitHostPort(addr); err == nil {
 		return host
