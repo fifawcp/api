@@ -48,6 +48,10 @@ func (dto *AuthenticationInputDto) Normalize() {
 	if isEmail(dto.Identifier) {
 		dto.Identifier = strings.ToLower(dto.Identifier)
 	}
+
+	if dto.User != nil {
+		dto.User.Email = strings.ToLower(strings.TrimSpace(dto.User.Email))
+	}
 }
 
 type AuthenticationDto struct {

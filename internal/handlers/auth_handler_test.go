@@ -448,6 +448,41 @@ func TestAuthHandler_Authenticate(t *testing.T) {
 		assert.True(t, cookie.HttpOnly)
 	})
 
+	t.Run("normalizes a mixed-case registration email before reaching the service", func(t *testing.T) {
+		t.Parallel()
+
+		var capturedEmail string
+		s := &mocks.MockAuthService{
+			AuthenticateFunc: func(
+				_ context.Context,
+				input *dtos.AuthenticationInputDto,
+				_ dtos.RequestInfo,
+			) (*dtos.AuthenticationDto, error) {
+				capturedEmail = input.User.Email
+				return &dtos.AuthenticationDto{User: testutils.CreateTestUser()}, nil
+			},
+		}
+		h := newTestAuthHandler(s)
+
+		req := makeAuthReq(t, map[string]any{
+			"identifier": "John.Doe@Example.com",
+			"purpose":    "registration",
+			"otp":        "123456",
+			"user": map[string]any{
+				"email":      "  John.Doe@Example.com  ",
+				"username":   "johndoe",
+				"first_name": "John",
+				"last_name":  "Doe",
+			},
+		})
+		w := httptest.NewRecorder()
+
+		h.Authenticate(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "john.doe@example.com", capturedEmail)
+	})
+
 	t.Run("returns 400 when validation fails", func(t *testing.T) {
 		t.Parallel()
 
