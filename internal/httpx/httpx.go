@@ -18,6 +18,10 @@ import (
 const refreshTokenCookieName = "refresh_token"
 const maxBodySizeInBytes = 1_048_576 // 1 MB
 
+type Normalizer interface {
+	Normalize()
+}
+
 // Response is the envelope for every successful API response.
 // `data` carries the resource (object or array). `pagination` is set only for
 // list endpoints — it sits at envelope level so client code can handle
@@ -122,6 +126,12 @@ func ReadAndValidateJSON(
 	if err := readJSON(w, r, data); err != nil {
 		RespondWithError(w, r, http.StatusBadRequest, codeInvalidRequestBody, err.Error())
 		return err
+	}
+
+	// Normalize before validation so canonical values (trimmed, lowercased) are
+	// what we validate and persist.
+	if normalizer, ok := data.(Normalizer); ok {
+		normalizer.Normalize()
 	}
 
 	if validationErrors := v.ValidateStruct(data); len(validationErrors) > 0 {
