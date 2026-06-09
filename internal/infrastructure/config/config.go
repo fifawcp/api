@@ -105,6 +105,7 @@ type MailerConfig struct {
 type CronConfig struct {
 	CleanupSessionsSchedule  string
 	SyncMatchResultsSchedule string
+	SyncMatchResultsEnabled  bool
 }
 
 type FootballAPIConfig struct {
@@ -186,6 +187,7 @@ func NewConfig() *Config {
 		Cron: CronConfig{
 			CleanupSessionsSchedule:  env.GetString("CRON_CLEANUP_SESSIONS_SCHEDULE", "0 0 * * *"),   // Every day at midnight
 			SyncMatchResultsSchedule: env.GetString("CRON_SYNC_MATCH_RESULTS_SCHEDULE", "0 0 * * *"), // Every day at midnight (planning-only run)
+			SyncMatchResultsEnabled:  env.GetBool("CRON_SYNC_MATCH_RESULTS_ENABLED", true),
 		},
 		FootballAPI: FootballAPIConfig{
 			Key:     env.GetString("FOOTBALL_API_KEY", ""),
