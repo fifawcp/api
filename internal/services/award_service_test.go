@@ -449,6 +449,37 @@ func TestAwardService_RecordWinners_SurfacesPersistenceFailureSynchronously(t *t
 	assert.ErrorIs(t, err, persistenceErr)
 }
 
+// ---------------------------------------------------------------------------
+// GetMemberAwards
+// ---------------------------------------------------------------------------
+func TestAwardService_GetMemberAwards_HiddenBeforeLock(t *testing.T) {
+	t.Parallel()
+
+	service := newTestAwardService(&mocks.MockAwardPickRepository{}, &mocks.MockPlayerRepository{}, nil, futureLock())
+
+	result, err := service.GetMemberAwards(context.Background(), gofakeit.UUID())
+
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, domain.ErrPredictionsHidden)
+}
+
+func TestAwardService_GetMemberAwards_ReturnsAwardsAfterLock(t *testing.T) {
+	t.Parallel()
+
+	awardRepo := &mocks.MockAwardPickRepository{
+		GetAwardPicksFunc: func(ctx context.Context, userID string) ([]*domain.UserAwardPick, error) {
+			return []*domain.UserAwardPick{}, nil
+		},
+	}
+	service := newTestAwardService(awardRepo, &mocks.MockPlayerRepository{}, nil, pastLock())
+
+	result, err := service.GetMemberAwards(context.Background(), gofakeit.UUID())
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.IsLocked)
+}
+
 func assertSignaledWithin(t *testing.T, ch <-chan struct{}, timeout time.Duration, msg string) {
 	t.Helper()
 	select {

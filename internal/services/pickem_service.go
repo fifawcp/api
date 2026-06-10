@@ -16,6 +16,7 @@ var allKnockoutMatchIDs = []int64{73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84
 
 type PickemServiceInterface interface {
 	GetUserPickem(ctx context.Context, userID string) (*domain.UserPickem, error)
+	GetMemberPickem(ctx context.Context, userID string) (*domain.UserPickem, error)
 	GetChampionPick(ctx context.Context, userID string) (*domain.Team, error)
 	GetUserPickemProgress(ctx context.Context, userID string) (*domain.PickemProgress, error)
 	SaveGroupPicks(ctx context.Context, userID string, picks []*domain.UserGroupPick, lockedCodes []string) error
@@ -95,6 +96,14 @@ func (s *PickemService) GetUserPickem(ctx context.Context, userID string) (*doma
 		},
 		IsLocked: s.isPickemLocked(),
 	}, nil
+}
+
+func (s *PickemService) GetMemberPickem(ctx context.Context, userID string) (*domain.UserPickem, error) {
+	if !s.isPickemLocked() {
+		return nil, domain.ErrPredictionsHidden
+	}
+
+	return s.GetUserPickem(ctx, userID)
 }
 
 func (s *PickemService) GetChampionPick(ctx context.Context, userID string) (*domain.Team, error) {

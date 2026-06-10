@@ -34,6 +34,12 @@ func boardsRoutes(c *Container) chi.Router {
 					r.Patch("/role", c.BoardHandler.UpdateBoardMemberRole)
 					r.Delete("/", c.BoardHandler.RemoveBoardMember)
 					r.Post("/transfer-ownership", c.BoardHandler.TransferOwnership)
+
+					r.Group(func(r chi.Router) {
+						r.Use(middlewares.RequireTargetBoardMembership(c.BoardMemberService))
+						r.Get("/pickem", c.PickemHandler.GetMemberPickem)
+						r.Get("/awards", c.AwardHandler.GetMemberAwards)
+					})
 				})
 			})
 

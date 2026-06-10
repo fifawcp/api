@@ -17,7 +17,8 @@ const (
 	codeForbidden      = "FORBIDDEN"
 
 	// 404 Not Found
-	codeBoardNotFound = "BOARD_NOT_FOUND"
+	codeBoardNotFound        = "BOARD_NOT_FOUND"
+	codeBoardMemberNotFound  = "BOARD_MEMBER_NOT_FOUND"
 
 	// 400 Bad Request
 	codeReturnToRequired   = "RETURN_TO_REQUIRED"
