@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/fifawcp/api/internal/domain"
@@ -25,6 +26,8 @@ type SyncMatchResultsJob struct {
 	fairPlayRepo   domain.MatchFairPlayRepository
 	apiFixtureRepo domain.MatchAPIFixtureRepository
 	logger         logging.Logger
+	timersMutex    sync.Mutex
+	timers         map[int64]*time.Timer
 }
 
 func NewSyncMatchResultsJob(
@@ -40,6 +43,7 @@ func NewSyncMatchResultsJob(
 		fairPlayRepo:   fairPlayRepo,
 		apiFixtureRepo: apiFixtureRepo,
 		logger:         logger,
+		timers:         make(map[int64]*time.Timer),
 	}
 }
 
@@ -79,9 +83,7 @@ func (j *SyncMatchResultsJob) Run(ctx context.Context) error {
 
 		// Schedule the sync if the match is in the future
 		if delay > 0 {
-			time.AfterFunc(delay, func() {
-				j.syncMatch(context.Background(), matchID, fixtureID, syncMaxRetries)
-			})
+			j.scheduleSync(matchID, fixtureID, delay)
 		} else {
 			// Sync the match immediately if it's in the past
 			go j.syncMatch(ctx, matchID, fixtureID, syncMaxRetries)
@@ -94,6 +96,33 @@ func (j *SyncMatchResultsJob) Run(ctx context.Context) error {
 		"matches_scheduled", scheduled,
 	)
 	return nil
+}
+
+// scheduleSync registers a single pending sync timer per match. A re-run stops
+// the previous timer before installing the new one so timers never accumulate.
+func (j *SyncMatchResultsJob) scheduleSync(matchID, fixtureID int64, delay time.Duration) {
+	j.timersMutex.Lock()
+	defer j.timersMutex.Unlock()
+
+	if existing, ok := j.timers[matchID]; ok {
+		existing.Stop()
+	}
+
+	j.timers[matchID] = time.AfterFunc(delay, func() {
+		j.syncMatch(context.Background(), matchID, fixtureID, syncMaxRetries)
+	})
+}
+
+// Stop cancels all pending sync timers. Called on shutdown so timers do not fire
+// during teardown; the next startup re-arms them from the scheduled matches.
+func (j *SyncMatchResultsJob) Stop() {
+	j.timersMutex.Lock()
+	defer j.timersMutex.Unlock()
+
+	for matchID, timer := range j.timers {
+		timer.Stop()
+		delete(j.timers, matchID)
+	}
 }
 
 func (j *SyncMatchResultsJob) syncMatch(ctx context.Context, matchID, fixtureID int64, retriesLeft int) {
