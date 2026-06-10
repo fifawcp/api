@@ -69,6 +69,32 @@ func (h *AwardHandler) GetUserAwards(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondWithData(w, http.StatusOK, awards)
 }
 
+// GetMemberAwards returns the award picks of a specific board member.
+//
+//	@Summary		Get a board member's award picks
+//	@Description	Returns the award picks of a specific board member. Only accessible after the tournament lockout has passed.
+//	@Tags			boards
+//	@Produce		json
+//	@Param			boardId	path		int64				true	"Board ID"
+//	@Param			userId	path		string				true	"Member user ID (UUID)"
+//	@Success		200		{object}	domain.UserAwards	"Member's award picks state"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Missing or invalid Bearer token"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Predictions are hidden until the tournament starts"
+//	@Failure		404		{object}	httpx.ErrorResponse	"Board or member not found"
+//	@Security		BearerAuth
+//	@Router			/boards/{boardId}/members/{userId}/awards [get]
+func (h *AwardHandler) GetMemberAwards(w http.ResponseWriter, r *http.Request) {
+	targetUserID := httpctx.GetUserID(r.Context())
+
+	awards, err := h.awardService.GetMemberAwards(r.Context(), targetUserID)
+	if err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	httpx.RespondWithData(w, http.StatusOK, awards)
+}
+
 // GetPopularPicks godoc
 //
 //	@Summary		Get popular award picks

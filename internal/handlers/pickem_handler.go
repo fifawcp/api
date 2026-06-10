@@ -52,6 +52,32 @@ func (h *PickemHandler) GetUserPickem(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondWithData(w, http.StatusOK, pickem)
 }
 
+// GetMemberPickem returns a board member's pickem state.
+//
+//	@Summary		Get a board member's pickem
+//	@Description	Returns the pick'em predictions of a specific board member. Only accessible after the tournament lockout has passed.
+//	@Tags			boards
+//	@Produce		json
+//	@Param			boardId	path		int64				true	"Board ID"
+//	@Param			userId	path		string				true	"Member user ID (UUID)"
+//	@Success		200		{object}	domain.UserPickem	"Member's pickem state"
+//	@Failure		401		{object}	httpx.ErrorResponse	"Missing or invalid Bearer token"
+//	@Failure		403		{object}	httpx.ErrorResponse	"Predictions are hidden until the tournament starts"
+//	@Failure		404		{object}	httpx.ErrorResponse	"Board or member not found"
+//	@Security		BearerAuth
+//	@Router			/boards/{boardId}/members/{userId}/pickem [get]
+func (h *PickemHandler) GetMemberPickem(w http.ResponseWriter, r *http.Request) {
+	targetUserID := httpctx.GetUserID(r.Context())
+
+	pickem, err := h.pickemService.GetMemberPickem(r.Context(), targetUserID)
+	if err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	httpx.RespondWithData(w, http.StatusOK, pickem)
+}
+
 // SaveGroupPicks saves (overwrites) the user's group order picks and syncs each group's
 // lock state from the per-group `locked` flag. Changing a group's order cascade-clears
 // best-thirds + bracket; toggling only a lock does not.

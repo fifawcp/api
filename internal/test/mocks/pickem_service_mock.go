@@ -8,6 +8,7 @@ import (
 
 type MockPickemService struct {
 	GetUserPickemFunc         func(ctx context.Context, userID string) (*domain.UserPickem, error)
+	GetMemberPickemFunc       func(ctx context.Context, userID string) (*domain.UserPickem, error)
 	GetChampionPickFunc       func(ctx context.Context, userID string) (*domain.Team, error)
 	GetUserPickemProgressFunc func(ctx context.Context, userID string) (*domain.PickemProgress, error)
 	SaveGroupPicksFunc        func(ctx context.Context, userID string, picks []*domain.UserGroupPick, lockedCodes []string) error
@@ -20,6 +21,13 @@ func (m *MockPickemService) GetUserPickem(ctx context.Context, userID string) (*
 		return m.GetUserPickemFunc(ctx, userID)
 	}
 	panic("GetUserPickem called unexpectedly")
+}
+
+func (m *MockPickemService) GetMemberPickem(ctx context.Context, userID string) (*domain.UserPickem, error) {
+	if m.GetMemberPickemFunc != nil {
+		return m.GetMemberPickemFunc(ctx, userID)
+	}
+	panic("GetMemberPickem called unexpectedly")
 }
 
 func (m *MockPickemService) GetChampionPick(ctx context.Context, userID string) (*domain.Team, error) {
