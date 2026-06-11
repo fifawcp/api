@@ -73,7 +73,7 @@ func TestAuthService_RequestOtp(t *testing.T) {
 		ur := &mocks.MockUserRepository{
 			GetUserByIdentifierFunc: func(ctx context.Context, id string) (*domain.User, error) {
 				assert.Equal(t, identifier, id)
-				return &domain.User{ID: gofakeit.UUID()}, nil
+				return &domain.User{ID: gofakeit.UUID(), Email: identifier}, nil
 			},
 		}
 
@@ -92,6 +92,48 @@ func TestAuthService_RequestOtp(t *testing.T) {
 
 		err := service.RequestOtp(context.Background(), &dtos.RequestOtpDto{
 			Identifier: identifier,
+			Purpose:    &loginPurpose,
+		})
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("sends OTP to the resolved account email when logging in by username", func(t *testing.T) {
+		t.Parallel()
+
+		username := gofakeit.Username()
+		accountEmail := gofakeit.Email()
+
+		os := &mocks.MockOTPStorage{
+			GetOTPFunc: func(ctx context.Context, id string, purpose domain.OTPPurpose) (*domain.OTP, error) {
+				return nil, errors.New("otp not found")
+			},
+			SetOTPFunc: func(ctx context.Context, otp *domain.OTP, ttl time.Duration) error {
+				// OTP stays keyed by the identifier the user typed, not the email.
+				assert.Equal(t, username, otp.Identifier)
+				return nil
+			},
+		}
+
+		ur := &mocks.MockUserRepository{
+			GetUserByIdentifierFunc: func(ctx context.Context, id string) (*domain.User, error) {
+				assert.Equal(t, username, id)
+				return &domain.User{ID: gofakeit.UUID(), Email: accountEmail}, nil
+			},
+		}
+
+		mailer := &mocks.MockMailer{
+			SendOTPEmailFunc: func(ctx context.Context, to, otp string, purpose domain.OTPPurpose) error {
+				// Must address the user's real email, never the raw username.
+				assert.Equal(t, accountEmail, to)
+				return nil
+			},
+		}
+
+		service := newTestAuthService(ur, nil, nil, os, &mocks.MockLogger{}, &mocks.MockAuthenticator{}, mailer)
+
+		err := service.RequestOtp(context.Background(), &dtos.RequestOtpDto{
+			Identifier: username,
 			Purpose:    &loginPurpose,
 		})
 
