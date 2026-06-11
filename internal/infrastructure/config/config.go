@@ -103,9 +103,14 @@ type MailerConfig struct {
 }
 
 type CronConfig struct {
-	CleanupSessionsSchedule  string
-	SyncMatchResultsSchedule string
-	SyncMatchResultsEnabled  bool
+	CleanupSessionsSchedule         string
+	SyncMatchResultsSchedule        string
+	SyncMatchResultsEnabled         bool
+	SyncMatchResultsFirstPollOffset time.Duration // delay from kickoff to the first poll
+	SyncMatchResultsNearEndInterval time.Duration // tight cadence near/at full time (floor of the clamp)
+	SyncMatchResultsMaxPollInterval time.Duration // sparsest cadence far from the end (ceiling of the clamp)
+	SyncMatchResultsErrorBackoff    time.Duration // reschedule delay after a fetch error / non-200
+	SyncMatchResultsMaxPollWindow   time.Duration // hard stop: give up if now > kickoff + MaxPollWindow
 }
 
 type FootballAPIConfig struct {
@@ -185,9 +190,14 @@ func NewConfig() *Config {
 			FromAddress: env.GetString("MAILER_FROM_ADDRESS", ""),
 		},
 		Cron: CronConfig{
-			CleanupSessionsSchedule:  env.GetString("CRON_CLEANUP_SESSIONS_SCHEDULE", "0 0 * * *"),   // Every day at midnight
-			SyncMatchResultsSchedule: env.GetString("CRON_SYNC_MATCH_RESULTS_SCHEDULE", "0 0 * * *"), // Every day at midnight (planning-only run)
-			SyncMatchResultsEnabled:  env.GetBool("CRON_SYNC_MATCH_RESULTS_ENABLED", true),
+			CleanupSessionsSchedule:         env.GetString("CRON_CLEANUP_SESSIONS_SCHEDULE", "0 0 * * *"),   // Every day at midnight
+			SyncMatchResultsSchedule:        env.GetString("CRON_SYNC_MATCH_RESULTS_SCHEDULE", "0 0 * * *"), // Every day at midnight (planning-only run)
+			SyncMatchResultsEnabled:         env.GetBool("CRON_SYNC_MATCH_RESULTS_ENABLED", true),
+			SyncMatchResultsFirstPollOffset: env.GetDuration("CRON_SYNC_MATCH_RESULTS_FIRST_POLL_OFFSET", 75*time.Minute),
+			SyncMatchResultsNearEndInterval: env.GetDuration("CRON_SYNC_MATCH_RESULTS_NEAR_END_INTERVAL", 60*time.Second),
+			SyncMatchResultsMaxPollInterval: env.GetDuration("CRON_SYNC_MATCH_RESULTS_MAX_POLL_INTERVAL", 15*time.Minute),
+			SyncMatchResultsErrorBackoff:    env.GetDuration("CRON_SYNC_MATCH_RESULTS_ERROR_BACKOFF", 90*time.Second),
+			SyncMatchResultsMaxPollWindow:   env.GetDuration("CRON_SYNC_MATCH_RESULTS_MAX_POLL_WINDOW", 240*time.Minute),
 		},
 		FootballAPI: FootballAPIConfig{
 			Key:     env.GetString("FOOTBALL_API_KEY", ""),
