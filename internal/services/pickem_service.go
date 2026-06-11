@@ -18,6 +18,7 @@ type PickemServiceInterface interface {
 	GetUserPickem(ctx context.Context, userID string) (*domain.UserPickem, error)
 	GetMemberPickem(ctx context.Context, userID string) (*domain.UserPickem, error)
 	GetChampionPick(ctx context.Context, userID string) (*domain.Team, error)
+	GetChampionPickCounts(ctx context.Context, limit int) ([]*domain.TitleFavorite, error)
 	GetUserPickemProgress(ctx context.Context, userID string) (*domain.PickemProgress, error)
 	SaveGroupPicks(ctx context.Context, userID string, picks []*domain.UserGroupPick, lockedCodes []string) error
 	SaveBestThirds(ctx context.Context, userID string, teamFifaCodes []string) error
@@ -113,6 +114,10 @@ func (s *PickemService) GetChampionPick(ctx context.Context, userID string) (*do
 	}
 
 	return s.teamLookup[*fifaCode], nil
+}
+
+func (s *PickemService) GetChampionPickCounts(ctx context.Context, limit int) ([]*domain.TitleFavorite, error) {
+	return s.pickemRepo.GetChampionPickCounts(ctx, limit)
 }
 
 func (s *PickemService) GetUserPickemProgress(ctx context.Context, userID string) (*domain.PickemProgress, error) {

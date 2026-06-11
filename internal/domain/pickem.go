@@ -80,6 +80,9 @@ type PickemRepository interface {
 	GetBracketPicks(ctx context.Context, userID string) ([]*UserBracketPick, error)
 	GetBracketPicksByMatch(ctx context.Context, matchID int64) ([]*UserBracketPick, error) // for scoring
 	GetChampionPick(ctx context.Context, userID string) (*string, error)
+	// GetChampionPickCounts returns the most-picked champions (final-match winner
+	// picks) across all users, with counts + percent, ordered desc, capped at limit.
+	GetChampionPickCounts(ctx context.Context, limit int) ([]*TitleFavorite, error)
 	GetUserProgressCounts(ctx context.Context, userID string) (PickemProgressCounts, error)
 	GetLockedGroupCodes(ctx context.Context, userID string) ([]string, error)
 	// SetGroupLocks replaces the user's set of locked groups with exactly lockedCodes
