@@ -57,6 +57,12 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 			GetChampionPickFunc: func(ctx context.Context, userID string) (*domain.Team, error) {
 				return argentina, nil
 			},
+			GetChampionPickCountsFunc: func(ctx context.Context, limit int) ([]*domain.TitleFavorite, error) {
+				return []*domain.TitleFavorite{
+					{Team: &domain.Team{FifaCode: "BRA"}, PickCount: 40, PickPercent: 40},
+					{Team: &domain.Team{FifaCode: "ARG"}, PickCount: 30, PickPercent: 30},
+				}, nil
+			},
 			GetUserPickemProgressFunc: func(ctx context.Context, userID string) (*domain.PickemProgress, error) {
 				return &domain.PickemProgress{
 					Groups:     domain.StepProgress{Completed: 12, Total: 12},
@@ -75,7 +81,7 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 			},
 			GetLeaderboardFunc: func(ctx context.Context, competitionID int64, page, limit int, q, sort, dir string) (*domain.CompetitionLeaderboardPage, error) {
 				assert.Equal(t, 1, page)
-				assert.Equal(t, 5, limit)
+				assert.Equal(t, 10, limit)
 				if competitionID == 11 {
 					return &domain.CompetitionLeaderboardPage{
 						Members: []*domain.CompetitionLeaderboardEntry{
@@ -107,8 +113,14 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		}
 
 		matchScorePickRepo := &mocks.MockMatchScorePickRepository{
-			CountMatchScorePicksByUserFunc: func(ctx context.Context, userID string) (int, error) {
-				return 12, nil
+			GetMatchScorePicksByUserFunc: func(ctx context.Context, userID string) ([]*domain.UserMatchScorePick, error) {
+				picks := make([]*domain.UserMatchScorePick, 0, 12)
+				// One of the picks is for the featured next match (id 1).
+				picks = append(picks, &domain.UserMatchScorePick{UserID: userID, MatchID: 1, HomeScore: 2, AwayScore: 1})
+				for i := 0; i < 11; i++ {
+					picks = append(picks, &domain.UserMatchScorePick{UserID: userID, MatchID: int64(100 + i), HomeScore: 1, AwayScore: 0})
+				}
+				return picks, nil
 			},
 		}
 
@@ -140,6 +152,12 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		assert.Equal(t, kickoffTime, dashboard.NextMatch.KickoffAt)
 		assert.Equal(t, 12, dashboard.Progress.MatchPicks.Completed)
 		assert.Equal(t, 104, dashboard.Progress.MatchPicks.Total)
+		assert.NotNil(t, dashboard.NextMatchScorePick)
+		assert.Equal(t, 2, dashboard.NextMatchScorePick.HomeScore)
+		assert.Equal(t, 1, dashboard.NextMatchScorePick.AwayScore)
+		assert.Len(t, dashboard.TitleFavorites, 2)
+		assert.Equal(t, "BRA", dashboard.TitleFavorites[0].Team.FifaCode)
+		assert.Equal(t, 40, dashboard.TitleFavorites[0].PickPercent)
 		assert.True(t, dashboard.Progress.Pickem.Groups.IsComplete())
 		assert.True(t, dashboard.Progress.Pickem.BestThirds.IsComplete())
 		assert.True(t, dashboard.Progress.Pickem.Bracket.IsComplete())
@@ -160,6 +178,9 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		pickemSvc := &mocks.MockPickemService{
 			GetChampionPickFunc: func(ctx context.Context, userID string) (*domain.Team, error) {
 				return nil, nil
+			},
+			GetChampionPickCountsFunc: func(ctx context.Context, limit int) ([]*domain.TitleFavorite, error) {
+				return []*domain.TitleFavorite{}, nil
 			},
 			GetUserPickemProgressFunc: func(ctx context.Context, userID string) (*domain.PickemProgress, error) {
 				return &domain.PickemProgress{
@@ -189,8 +210,8 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		}
 
 		matchScorePickRepo := &mocks.MockMatchScorePickRepository{
-			CountMatchScorePicksByUserFunc: func(ctx context.Context, userID string) (int, error) {
-				return 0, nil
+			GetMatchScorePicksByUserFunc: func(ctx context.Context, userID string) ([]*domain.UserMatchScorePick, error) {
+				return []*domain.UserMatchScorePick{}, nil
 			},
 		}
 
@@ -229,8 +250,13 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		t.Parallel()
 
 		// Per-user mock funcs are left unset — they panic if called, proving the
-		// service does not fan out user-specific queries for guests.
-		pickemSvc := &mocks.MockPickemService{}
+		// service does not fan out user-specific queries for guests. Champion-pick
+		// counts are public, so that one is provided.
+		pickemSvc := &mocks.MockPickemService{
+			GetChampionPickCountsFunc: func(ctx context.Context, limit int) ([]*domain.TitleFavorite, error) {
+				return []*domain.TitleFavorite{{Team: &domain.Team{FifaCode: "BRA"}, PickCount: 10, PickPercent: 100}}, nil
+			},
+		}
 		matchScorePickRepo := &mocks.MockMatchScorePickRepository{}
 		awardSvc := &mocks.MockAwardService{}
 

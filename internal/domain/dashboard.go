@@ -1,11 +1,19 @@
 package domain
 
 type Dashboard struct {
-	PickedChampion *Team                `json:"picked_champion"`
-	Stats          *DashboardStats      `json:"stats"`
-	NextMatch      *Match               `json:"next_match"`
-	Progress       *DashboardProgress   `json:"progress"`
-	Leaderboard    DashboardLeaderboard `json:"leaderboard"`
+	PickedChampion     *Team                `json:"picked_champion"`
+	Stats              *DashboardStats      `json:"stats"`
+	NextMatch          *Match               `json:"next_match"`
+	Progress           *DashboardProgress   `json:"progress"`
+	Leaderboard        DashboardLeaderboard `json:"leaderboard"`
+	TitleFavorites     []*TitleFavorite     `json:"title_favorites"`
+	NextMatchScorePick *UserMatchScorePick  `json:"-"`
+}
+
+type TitleFavorite struct {
+	Team        *Team `json:"team"`
+	PickCount   int   `json:"pick_count"`
+	PickPercent int   `json:"pick_percent"`
 }
 
 type DashboardStats struct {

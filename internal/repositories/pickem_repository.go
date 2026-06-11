@@ -343,6 +343,56 @@ func (r *PickemRepository) GetChampionPick(ctx context.Context, userID string) (
 	return &fifaCode, nil
 }
 
+func (r *PickemRepository) GetChampionPickCounts(ctx context.Context, limit int) ([]*domain.TitleFavorite, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	// Count final-match winner picks per team and express each as a share of all
+	// users who picked a final winner. Aggregate by fifa_code FIRST (a varchar —
+	// groupable), then join team_localized; grouping by the team's json
+	// name_translations directly errors ("no equality operator for type json").
+	query := `
+		WITH final_picks AS (
+			SELECT team_fifa_code
+			FROM user_bracket_picks
+			WHERE match_id = (SELECT id FROM matches WHERE stage_code = 'final')
+		),
+		total AS (SELECT COUNT(*) AS n FROM final_picks),
+		counts AS (
+			SELECT team_fifa_code, COUNT(*)::int AS pick_count
+			FROM final_picks
+			GROUP BY team_fifa_code
+		)
+		SELECT t.fifa_code, t.name_translations, t.flag_url, t.group_code,
+			c.pick_count,
+			(CASE WHEN (SELECT n FROM total) > 0
+				THEN ROUND(100.0 * c.pick_count / (SELECT n FROM total))
+				ELSE 0 END)::int AS pick_percent
+		FROM counts c
+		INNER JOIN team_localized t ON t.fifa_code = c.team_fifa_code
+		ORDER BY c.pick_count DESC, t.fifa_code
+		LIMIT $1
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, handleDBError(err, resourcePickem)
+	}
+	defer rows.Close()
+
+	favorites := []*domain.TitleFavorite{}
+	for rows.Next() {
+		var team domain.Team
+		fav := &domain.TitleFavorite{Team: &team}
+		if err := rows.Scan(&team.FifaCode, &team.Name, &team.FlagURL, &team.GroupCode, &fav.PickCount, &fav.PickPercent); err != nil {
+			return nil, handleDBError(err, resourcePickem)
+		}
+		favorites = append(favorites, fav)
+	}
+
+	return favorites, rows.Err()
+}
+
 func (r *PickemRepository) GetUserProgressCounts(ctx context.Context, userID string) (domain.PickemProgressCounts, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()

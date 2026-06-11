@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/fifawcp/api/internal/dtos"
 	"github.com/fifawcp/api/internal/httpctx"
 	"github.com/fifawcp/api/internal/httpx"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
@@ -33,8 +34,8 @@ func NewDashboardHandler(
 //	@Description	Guest callers receive `null` for `picked_champion`, `stats`, and `progress`.
 //	@Tags			dashboard
 //	@Produce		json
-//	@Success		200	{object}	httpx.Response{data=domain.Dashboard}	"Dashboard"
-//	@Failure		500	{object}	httpx.ErrorResponse						"Internal server error"
+//	@Success		200	{object}	httpx.Response{data=dtos.DashboardResponseDto}	"Dashboard"
+//	@Failure		500	{object}	httpx.ErrorResponse								"Internal server error"
 //	@Router			/dashboard [get]
 func (h *DashboardHandler) GetDashboard(w http.ResponseWriter, r *http.Request) {
 	user := httpctx.GetAuthenticatedUser(r.Context())
@@ -50,5 +51,5 @@ func (h *DashboardHandler) GetDashboard(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	httpx.RespondWithData(w, http.StatusOK, dashboard)
+	httpx.RespondWithData(w, http.StatusOK, dtos.NewDashboardResponse(dashboard))
 }

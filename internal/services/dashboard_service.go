@@ -44,15 +44,16 @@ func NewDashboardService(
 func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*domain.Dashboard, error) {
 	var (
 		// public — always fetched
-		nextMatch  *domain.Match
-		pickemPage *domain.CompetitionLeaderboardPage
-		matchPage  *domain.CompetitionLeaderboardPage
+		nextMatch      *domain.Match
+		pickemPage     *domain.CompetitionLeaderboardPage
+		matchPage      *domain.CompetitionLeaderboardPage
+		titleFavorites []*domain.TitleFavorite
 
 		// per-user — fetched only when authenticated
 		champion       *domain.Team
 		pickemStats    domain.CompetitionUserStats
 		matchStats     domain.CompetitionUserStats
-		matchPicksMade int
+		userMatchPicks []*domain.UserMatchScorePick
 		pickemProgress *domain.PickemProgress
 		userAwards     *domain.UserAwards
 	)
@@ -65,12 +66,19 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 		return
 	})
 	eg.Go(func() (err error) {
-		pickemPage, err = s.competitionScoreRepo.GetLeaderboard(egCtx, s.globalPickemCompetition.ID, 1, 5, "", "", "")
+		pickemPage, err = s.competitionScoreRepo.GetLeaderboard(egCtx, s.globalPickemCompetition.ID, 1, 10, "", "", "")
 		return
 	})
 	eg.Go(func() (err error) {
-		matchPage, err = s.competitionScoreRepo.GetLeaderboard(egCtx, s.globalMatchCompetition.ID, 1, 5, "", "", "")
+		matchPage, err = s.competitionScoreRepo.GetLeaderboard(egCtx, s.globalMatchCompetition.ID, 1, 10, "", "", "")
 		return
+	})
+	eg.Go(func() error {
+		// Decorative data — never fail the whole dashboard over it.
+		if favs, err := s.pickemService.GetChampionPickCounts(egCtx, 5); err == nil {
+			titleFavorites = favs
+		}
+		return nil
 	})
 
 	// per-user data: only fan out for authenticated callers
@@ -88,7 +96,9 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 			return
 		})
 		eg.Go(func() (err error) {
-			matchPicksMade, err = s.matchScorePickRepository.CountMatchScorePicksByUser(egCtx, userID)
+			// Fetches the user's picks once: powers both the match-picks count and
+			// the score pick attached to next_match below.
+			userMatchPicks, err = s.matchScorePickRepository.GetMatchScorePicksByUser(egCtx, userID)
 			return
 		})
 		eg.Go(func() (err error) {
@@ -106,7 +116,8 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 	}
 
 	dashboard := &domain.Dashboard{
-		NextMatch: nextMatch,
+		NextMatch:      nextMatch,
+		TitleFavorites: titleFavorites,
 		Leaderboard: domain.DashboardLeaderboard{
 			Pickem: domain.CompetitionTop{
 				CompetitionID:   s.globalPickemCompetition.ID,
@@ -130,9 +141,19 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 			Match:  matchStats,
 		}
 		dashboard.Progress = &domain.DashboardProgress{
-			MatchPicks: stepProgress(matchPicksMade, 104),
+			MatchPicks: stepProgress(len(userMatchPicks), 104),
 			Pickem:     *pickemProgress,
 			Awards:     userAwards.Progress,
+		}
+		// Attach the user's pick for the featured next match (if any) so the
+		// dashboard's "up next" card reflects it.
+		if nextMatch != nil {
+			for _, pick := range userMatchPicks {
+				if pick.MatchID == nextMatch.ID {
+					dashboard.NextMatchScorePick = pick
+					break
+				}
+			}
 		}
 	}
 

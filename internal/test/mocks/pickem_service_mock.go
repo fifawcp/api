@@ -10,6 +10,7 @@ type MockPickemService struct {
 	GetUserPickemFunc         func(ctx context.Context, userID string) (*domain.UserPickem, error)
 	GetMemberPickemFunc       func(ctx context.Context, userID string) (*domain.UserPickem, error)
 	GetChampionPickFunc       func(ctx context.Context, userID string) (*domain.Team, error)
+	GetChampionPickCountsFunc func(ctx context.Context, limit int) ([]*domain.TitleFavorite, error)
 	GetUserPickemProgressFunc func(ctx context.Context, userID string) (*domain.PickemProgress, error)
 	SaveGroupPicksFunc        func(ctx context.Context, userID string, picks []*domain.UserGroupPick, lockedCodes []string) error
 	SaveBestThirdsFunc        func(ctx context.Context, userID string, teamFifaCodes []string) error
@@ -35,6 +36,13 @@ func (m *MockPickemService) GetChampionPick(ctx context.Context, userID string) 
 		return m.GetChampionPickFunc(ctx, userID)
 	}
 	panic("GetChampionPick called unexpectedly")
+}
+
+func (m *MockPickemService) GetChampionPickCounts(ctx context.Context, limit int) ([]*domain.TitleFavorite, error) {
+	if m.GetChampionPickCountsFunc != nil {
+		return m.GetChampionPickCountsFunc(ctx, limit)
+	}
+	panic("GetChampionPickCounts called unexpectedly")
 }
 
 func (m *MockPickemService) GetUserPickemProgress(ctx context.Context, userID string) (*domain.PickemProgress, error) {
