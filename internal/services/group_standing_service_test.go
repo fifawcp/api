@@ -20,9 +20,6 @@ func newTestGroupStandingService(
 	return NewGroupStandingService(gr, mr, fp, logger)
 }
 
-// ---------------------------------------------------------------------------
-// TestGroupStandingService_GetGroupStandings
-// ---------------------------------------------------------------------------
 func TestGroupStandingService_GetGroupStandings(t *testing.T) {
 	t.Parallel()
 
@@ -67,9 +64,6 @@ func TestGroupStandingService_GetGroupStandings(t *testing.T) {
 	})
 }
 
-// ---------------------------------------------------------------------------
-// TestGroupStandingService_RecalculateStandings
-// ---------------------------------------------------------------------------
 func TestGroupStandingService_RecalculateStandings(t *testing.T) {
 	t.Parallel()
 
@@ -114,6 +108,13 @@ func TestGroupStandingService_RecalculateStandings(t *testing.T) {
 		}
 
 		gr := &mocks.MockGroupStandingRepository{
+			GetGroupStandingsFunc: func(_ context.Context, _ []string, _ *int64) ([]*domain.GroupStanding, error) {
+				roster := []*domain.GroupStanding{}
+				for _, code := range []string{"MEX", "RSA", "KOR", "CZE"} {
+					roster = append(roster, &domain.GroupStanding{Team: domain.Team{FifaCode: code, GroupCode: "A"}})
+				}
+				return roster, nil
+			},
 			UpdateGroupStandingsFunc: func(ctx context.Context, standings []*domain.GroupStanding) error {
 				return nil
 			},
@@ -159,6 +160,9 @@ func TestGroupStandingService_RecalculateStandings(t *testing.T) {
 		}
 
 		gr := &mocks.MockGroupStandingRepository{
+			GetGroupStandingsFunc: func(_ context.Context, _ []string, _ *int64) ([]*domain.GroupStanding, error) {
+				return []*domain.GroupStanding{}, nil
+			},
 			UpdateGroupStandingsFunc: func(ctx context.Context, standings []*domain.GroupStanding) error {
 				return errors.New("database error")
 			},
@@ -179,9 +183,6 @@ func TestGroupStandingService_RecalculateStandings(t *testing.T) {
 	})
 }
 
-// ---------------------------------------------------------------------------
-// TestGroupStandingService_rankGroup
-// ---------------------------------------------------------------------------
 func TestGroupStandingService_rankGroup(t *testing.T) {
 	t.Parallel()
 
@@ -205,13 +206,36 @@ func TestGroupStandingService_rankGroup(t *testing.T) {
 		return matches
 	}
 
+	buildRoster := func(codes []string) []domain.Team {
+		roster := make([]domain.Team, len(codes))
+		for i, code := range codes {
+			roster[i] = domain.Team{FifaCode: code}
+		}
+
+		return roster
+	}
+
+	groupRoster := []string{"MEX", "KOR", "CZE", "RSA"}
+
 	testCases := []struct {
 		name          string
+		roster        []string
 		scores        []matchScore
 		expectedOrder []string
 	}{
 		{
-			name: "mid-tournament: tied teams haven't played each other yet",
+			// Regression: the screenshot bug. After one match only two of the four
+			// teams have played; the other two must still be ranked (not dropped).
+			name:   "early matchday: teams with no matches are still ranked",
+			roster: groupRoster,
+			scores: []matchScore{
+				{"MEX", "RSA", 2, 0},
+			},
+			expectedOrder: []string{"MEX", "KOR", "CZE", "RSA"},
+		},
+		{
+			name:   "mid-tournament: tied teams haven't played each other yet",
+			roster: groupRoster,
 			scores: []matchScore{
 				{"MEX", "RSA", 1, 0},
 				{"KOR", "CZE", 1, 0},
@@ -219,7 +243,8 @@ func TestGroupStandingService_rankGroup(t *testing.T) {
 			expectedOrder: []string{"MEX", "KOR", "CZE", "RSA"},
 		},
 		{
-			name: "no ties",
+			name:   "no ties",
+			roster: groupRoster,
 			scores: []matchScore{
 				{"MEX", "RSA", 0, 2},
 				{"KOR", "CZE", 1, 0},
@@ -231,7 +256,8 @@ func TestGroupStandingService_rankGroup(t *testing.T) {
 			expectedOrder: []string{"RSA", "KOR", "CZE", "MEX"},
 		},
 		{
-			name: "2 teams tied on points and goal difference",
+			name:   "2 teams tied on points and goal difference",
+			roster: groupRoster,
 			scores: []matchScore{
 				{"MEX", "RSA", 0, 2},
 				{"KOR", "CZE", 0, 0},
@@ -243,7 +269,8 @@ func TestGroupStandingService_rankGroup(t *testing.T) {
 			expectedOrder: []string{"CZE", "KOR", "RSA", "MEX"},
 		},
 		{
-			name: "3 teams tied on points",
+			name:   "3 teams tied on points",
+			roster: groupRoster,
 			scores: []matchScore{
 				{"MEX", "RSA", 0, 1},
 				{"KOR", "CZE", 1, 0},
@@ -255,7 +282,8 @@ func TestGroupStandingService_rankGroup(t *testing.T) {
 			expectedOrder: []string{"CZE", "KOR", "RSA", "MEX"},
 		},
 		{
-			name: "3 teams tied on points and goal difference",
+			name:   "3 teams tied on points and goal difference",
+			roster: groupRoster,
 			scores: []matchScore{
 				{"MEX", "RSA", 0, 2},
 				{"KOR", "CZE", 0, 0},
@@ -267,7 +295,8 @@ func TestGroupStandingService_rankGroup(t *testing.T) {
 			expectedOrder: []string{"RSA", "KOR", "CZE", "MEX"},
 		},
 		{
-			name: "4 teams tied on points",
+			name:   "4 teams tied on points",
+			roster: groupRoster,
 			scores: []matchScore{
 				{"MEX", "RSA", 1, 1},
 				{"KOR", "CZE", 1, 1},
@@ -284,19 +313,12 @@ func TestGroupStandingService_rankGroup(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			standings := rankGroup(buildMatches(tc.scores))
+			standings := rankGroup(buildRoster(tc.roster), buildMatches(tc.scores))
 
 			actualOrder := make([]string, len(standings))
 			for i, s := range standings {
 				actualOrder[i] = s.Team.FifaCode
 			}
-
-			// ? Debug output
-			// for _, s := range standings {
-			// 	if tc.name == "no ties" {
-			// 		fmt.Printf("Team: %s, Points: %d, GD: %d, GF: %d, GA: %d\n", s.Team.FifaCode, s.Points, s.GoalDifference, s.GoalsFor, s.GoalsAgainst)
-			// 	}
-			// }
 
 			assert.Equal(t, tc.expectedOrder, actualOrder)
 		})

@@ -86,7 +86,7 @@ db-test-migrate-down-inner:
 
 # ==================== Database Seeding ====================
 
-SCENARIOS := pre_tournament group_stage_done r32_done r16_done qf_done sf_done final_done
+SCENARIOS := pre_tournament real_dates group_stage_done r32_done r16_done qf_done sf_done final_done
 
 .PHONY: db-seed
 db-seed:

@@ -32,13 +32,25 @@ type Scenario struct {
 
 	// AnchorMatchID's kickoff_at is shifted so it sits at AnchorOffset from
 	// "now" at seeder run time. All other matches receive the same delta to
-	// preserve relative spacing across the schedule
+	// preserve relative spacing across the schedule.
+	// Ignored when UseRealDates is set.
 	AnchorMatchID int64
 	AnchorOffset  time.Duration
+
+	// UseRealDates anchors the opener to its canonical 2026 kickoff instead of
+	// "now", restoring the real schedule so the live sync hits finished fixtures.
+	// Requires AnchorMatchID = 1.
+	UseRealDates bool
 }
+
+// canonicalOpenerKickoff is match 1's real kickoff from migration
+// 000006_seed_matches. Real-dates scenarios re-anchor the opener here, which —
+// because the shift is uniform — pins every other match back to its real date.
+var canonicalOpenerKickoff = time.Date(2026, 6, 11, 19, 0, 0, 0, time.UTC)
 
 const (
 	scenarioPreTournament  = "pre_tournament"
+	scenarioRealDates      = "real_dates"
 	scenarioGroupStageDone = "group_stage_done"
 	scenarioRoundOf32Done  = "r32_done"
 	scenarioRoundOf16Done  = "r16_done"
@@ -49,6 +61,7 @@ const (
 
 var ScenarioNames = []string{
 	scenarioPreTournament,
+	scenarioRealDates,
 	scenarioGroupStageDone,
 	scenarioRoundOf32Done,
 	scenarioRoundOf16Done,
@@ -63,6 +76,12 @@ var scenarios = map[string]Scenario{
 		StageGroups:   nil,
 		AnchorMatchID: 1,
 		AnchorOffset:  24 * time.Hour, // opener is 1 day from now
+	},
+	scenarioRealDates: {
+		Name:          scenarioRealDates,
+		StageGroups:   nil, // no results applied; matches sync in live from the football API
+		AnchorMatchID: 1,   // the opener
+		UseRealDates:  true,
 	},
 	scenarioGroupStageDone: {
 		Name:          scenarioGroupStageDone,
