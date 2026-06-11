@@ -50,6 +50,7 @@ const (
 	codeBoardIsGlobal             = "BOARD_IS_GLOBAL"
 	codeCompetitionForbidden      = "COMPETITION_FORBIDDEN"
 	codeBoardManageAdminForbidden = "BOARD_MANAGE_ADMIN_FORBIDDEN"
+	codePredictionsHidden         = "PREDICTIONS_HIDDEN"
 
 	// 400 Bad Request
 	codeInvalidWinnerTeam          = "INVALID_WINNER_TEAM"
@@ -168,6 +169,8 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.Forbidden(w, r, codeCompetitionForbidden, domain.ErrCompetitionForbidden.Error())
 	case errors.Is(err, domain.ErrBoardManageAdminForbidden):
 		httpx.Forbidden(w, r, codeBoardManageAdminForbidden, domain.ErrBoardManageAdminForbidden.Error())
+	case errors.Is(err, domain.ErrPredictionsHidden):
+		httpx.Forbidden(w, r, codePredictionsHidden, domain.ErrPredictionsHidden.Error())
 
 	// 400 Bad Request
 	case errors.Is(err, domain.ErrInvalidWinnerTeam):

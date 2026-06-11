@@ -8,6 +8,7 @@ import (
 
 type MockAwardService struct {
 	GetUserAwardsFunc   func(ctx context.Context, userID string) (*domain.UserAwards, error)
+	GetMemberAwardsFunc func(ctx context.Context, userID string) (*domain.UserAwards, error)
 	SaveAwardPicksFunc  func(ctx context.Context, userID string, picks []*domain.UserAwardPick) (*domain.UserAwards, error)
 	GetPopularPicksFunc func(ctx context.Context, limit int) (domain.PopularPicksByAward, error)
 	RecordWinnersFunc   func(ctx context.Context, winners []*domain.AwardWinner) error
@@ -18,6 +19,13 @@ func (m *MockAwardService) GetUserAwards(ctx context.Context, userID string) (*d
 		return m.GetUserAwardsFunc(ctx, userID)
 	}
 	panic("GetUserAwards called unexpectedly")
+}
+
+func (m *MockAwardService) GetMemberAwards(ctx context.Context, userID string) (*domain.UserAwards, error) {
+	if m.GetMemberAwardsFunc != nil {
+		return m.GetMemberAwardsFunc(ctx, userID)
+	}
+	panic("GetMemberAwards called unexpectedly")
 }
 
 func (m *MockAwardService) SaveAwardPicks(ctx context.Context, userID string, picks []*domain.UserAwardPick) (*domain.UserAwards, error) {

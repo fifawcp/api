@@ -112,6 +112,9 @@ var ErrCompetitionAwardsAlreadyExists = errors.New("an awards competition alread
 var ErrCompetitionNameAlreadyExists = errors.New("a competition with this name already exists on this board")
 var ErrDuplicatePickForMatch = errors.New("a pick for this match already exists on this board")
 
+// Predictions visibility (member views)
+var ErrPredictionsHidden = errors.New("member predictions are hidden until the tournament starts")
+
 // Pickem
 var ErrPickemLocked = errors.New("pickem is locked: tournament has started")
 var ErrMatchPickLocked = errors.New("match pick is locked: match has already started")

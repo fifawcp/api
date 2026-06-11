@@ -46,6 +46,7 @@ type Container struct {
 	mailer               mailer.Mailer
 	Authenticator        auth.Authenticator
 	Scheduler            scheduler.Scheduler
+	syncMatchResultsJob  *jobs.SyncMatchResultsJob
 	GoogleOauthConfig    domain.OAuth2Client
 	OIDCIdentityVerifier domain.IDTokenVerifier
 
@@ -335,8 +336,13 @@ func (c *Container) initJobs() {
 		)
 	}
 
+	if !c.Config.Cron.SyncMatchResultsEnabled {
+		c.Logger.Info("sync:match_results disabled via config")
+		return
+	}
+
 	footballClient := football.NewFootballClient(c.Config.FootballAPI)
-	syncMatchResultsJob := jobs.NewSyncMatchResultsJob(
+	c.syncMatchResultsJob = jobs.NewSyncMatchResultsJob(
 		c.matchService,
 		footballClient,
 		c.matchFairPlayRepository,
@@ -346,10 +352,10 @@ func (c *Container) initJobs() {
 
 	// Run once at startup to register timers for upcoming matches and backfill any
 	// matches whose sync window has already passed (e.g. after a server restart)
-	go syncMatchResultsJob.Run(context.Background())
+	go c.syncMatchResultsJob.Run(context.Background())
 
 	// Re-run at midnight to pick up newly-assigned knockout teams and re-register timers
-	if err := c.Scheduler.RegisterJob(c.Config.Cron.SyncMatchResultsSchedule, syncMatchResultsJob); err != nil {
+	if err := c.Scheduler.RegisterJob(c.Config.Cron.SyncMatchResultsSchedule, c.syncMatchResultsJob); err != nil {
 		c.Logger.Error(
 			"failed to register job",
 			"job", "sync:match_results",
@@ -391,7 +397,7 @@ func (c *Container) StartServer(r *chi.Mux) error {
 
 	select {
 	case err := <-serverErrors:
-		c.Scheduler.Stop()
+		c.stopJobs()
 		return fmt.Errorf("server error: %w", err)
 	case sig := <-quit:
 		c.Logger.Info("Shutting down server", "signal", sig)
@@ -399,11 +405,19 @@ func (c *Container) StartServer(r *chi.Mux) error {
 	}
 }
 
+// stopJobs halts the cron scheduler and cancels any pending match-sync timers.
+func (c *Container) stopJobs() {
+	c.Scheduler.Stop()
+	if c.syncMatchResultsJob != nil {
+		c.syncMatchResultsJob.Stop()
+	}
+}
+
 func (c *Container) ShutdownServer(server *http.Server) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.Config.Server.ShutdownTimeout)
 	defer cancel()
 
-	c.Scheduler.Stop()
+	c.stopJobs()
 
 	if err := server.Shutdown(ctx); err != nil {
 		server.Close()

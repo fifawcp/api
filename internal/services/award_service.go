@@ -15,6 +15,7 @@ const YoungPlayerMaxAge = 21
 
 type AwardServiceInterface interface {
 	GetUserAwards(ctx context.Context, userID string) (*domain.UserAwards, error)
+	GetMemberAwards(ctx context.Context, userID string) (*domain.UserAwards, error)
 	SaveAwardPicks(ctx context.Context, userID string, picks []*domain.UserAwardPick) (*domain.UserAwards, error)
 	GetPopularPicks(ctx context.Context, limit int) (domain.PopularPicksByAward, error)
 	RecordWinners(ctx context.Context, winners []*domain.AwardWinner) error
@@ -54,6 +55,14 @@ func (s *AwardService) GetUserAwards(ctx context.Context, userID string) (*domai
 	}
 
 	return s.buildUserAwards(ctx, picks)
+}
+
+func (s *AwardService) GetMemberAwards(ctx context.Context, userID string) (*domain.UserAwards, error) {
+	if !s.isLocked() {
+		return nil, domain.ErrPredictionsHidden
+	}
+
+	return s.GetUserAwards(ctx, userID)
 }
 
 func (s *AwardService) SaveAwardPicks(
