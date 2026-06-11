@@ -75,7 +75,8 @@ func (s *AuthService) RequestOtp(
 	}
 
 	// Verify user exists for the given purpose
-	if _, err := s.validateUserForPurpose(ctx, payload.Identifier, *payload.Purpose); err != nil {
+	user, err := s.validateUserForPurpose(ctx, payload.Identifier, *payload.Purpose)
+	if err != nil {
 		return err
 	}
 
@@ -85,9 +86,15 @@ func (s *AuthService) RequestOtp(
 		return err
 	}
 
+	// If identifier is an email, use it as the recipient email. Otherwise, use the user's email.
+	recipientEmail := payload.Identifier
+	if user != nil {
+		recipientEmail = user.Email
+	}
+
 	if err := s.mailer.SendOTPEmail(
 		ctx,
-		payload.Identifier,
+		recipientEmail,
 		plainOtp,
 		*payload.Purpose,
 	); err != nil {
