@@ -138,19 +138,16 @@ func (s *Seeder) seedBoards(ctx context.Context, users []*domain.User) {
 		memberCount := boardMembersMin + mathrand.Intn(boardMembersMax-boardMembersMin+1)
 		candidates := make([]*domain.User, 0, len(users)-1)
 
-		// Get all users except the owner
 		for _, user := range users {
 			if user.ID != owner.ID {
 				candidates = append(candidates, user)
 			}
 		}
 
-		// Get a random subset of candidates
 		mathrand.Shuffle(len(candidates), func(a, b int) {
 			candidates[a], candidates[b] = candidates[b], candidates[a]
 		})
 
-		// Insert the members into the board
 		for j := 0; j < memberCount && j < len(candidates); j++ {
 			if _, err := s.boardMemberRepository.CreateBoardMember(ctx, *board.JoinCode, candidates[j].ID); err != nil {
 				s.logger.Error(
@@ -251,13 +248,10 @@ func (s *Seeder) seedMatchScoresFor(ctx context.Context, users []*domain.User, m
 		 	AND m.away_team_fifa_code IS NOT NULL
 		ON CONFLICT (user_id, match_id) DO NOTHING`
 
-	// Insert the match scores for each user
 	for _, user := range users {
 		args := make([]any, 0, len(matchIDs)*4)
 
-		// Insert the match scores for each match
 		for _, matchID := range matchIDs {
-			// Generate random scores between 0 and 5
 			args = append(args, user.ID, matchID, mathrand.Intn(6), mathrand.Intn(6))
 		}
 
@@ -422,9 +416,11 @@ func (s *Seeder) resetMatchesToCanonical(ctx context.Context) error {
 	return nil
 }
 
-// shiftKickoffDates moves every match's kickoff_at by a single offset
-// computed so the scenario's anchor match sits at its configured offset
-// from "now". This preserves relative spacing across the schedule
+// shiftKickoffDates moves every match's kickoff_at by a single offset computed
+// so the scenario's anchor match sits at its target time. The shift is uniform,
+// so anchoring one match re-pins the whole schedule while preserving spacing.
+// Normal scenarios anchor to "now + AnchorOffset"; real-dates scenarios anchor
+// the opener to its canonical absolute kickoff, restoring the real 2026 schedule.
 func (s *Seeder) shiftKickoffDates(ctx context.Context, scenario Scenario) error {
 	var currentAnchorKickoff time.Time
 	row := s.db.QueryRowContext(ctx, `SELECT kickoff_at FROM matches WHERE id = $1`, scenario.AnchorMatchID)
@@ -433,6 +429,9 @@ func (s *Seeder) shiftKickoffDates(ctx context.Context, scenario Scenario) error
 	}
 
 	targetAnchorKickoff := time.Now().UTC().Add(scenario.AnchorOffset)
+	if scenario.UseRealDates {
+		targetAnchorKickoff = canonicalOpenerKickoff
+	}
 	offset := targetAnchorKickoff.Sub(currentAnchorKickoff)
 	intervalSeconds := int64(offset.Seconds())
 	if _, err := s.db.ExecContext(ctx,

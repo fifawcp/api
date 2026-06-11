@@ -14,17 +14,28 @@ import (
 	"github.com/fifawcp/api/internal/services"
 )
 
-const (
-	syncInitialBuffer = 115 * time.Minute // fires after regular time + stoppage (~90 min playing + 15 min half time + 10 min buffer)
-	syncRetryInterval = 15 * time.Minute  // covers extra time and penalty shootout window
-	syncMaxRetries    = 5                 // 5 × 15 min = 75 min extra; total coverage ≈ 190 min from kickoff
-)
+// SyncTiming controls the adaptive per-match poller.
+type SyncTiming struct {
+	FirstPollOffset time.Duration // delay from kickoff to the first poll
+	NearEndInterval time.Duration // tight cadence near/at full time (floor of the clamp)
+	MaxPollInterval time.Duration // sparsest cadence far from the end (ceiling of the clamp)
+	ErrorBackoff    time.Duration // reschedule delay after a fetch error / non-200
+	MaxPollWindow   time.Duration // hard stop: give up if now > kickoff + MaxPollWindow
+}
+
+// FixtureFetcher is the slice of the football client the job needs. Defined on
+// the consumer side so the poller can be unit-tested with a mock.
+type FixtureFetcher interface {
+	GetFixture(ctx context.Context, fixtureID int64) (*football.FixtureResponse, error)
+	GetFixturesByTeam(ctx context.Context, teamAPIID int64) ([]football.FixtureResponse, error)
+}
 
 type SyncMatchResultsJob struct {
 	matchService   services.MatchServiceInterface
-	footballClient *football.FootballClient
+	fetcher        FixtureFetcher
 	fairPlayRepo   domain.MatchFairPlayRepository
 	apiFixtureRepo domain.MatchAPIFixtureRepository
+	timing         SyncTiming
 	logger         logging.Logger
 	timersMutex    sync.Mutex
 	timers         map[int64]*time.Timer
@@ -32,16 +43,18 @@ type SyncMatchResultsJob struct {
 
 func NewSyncMatchResultsJob(
 	matchService services.MatchServiceInterface,
-	footballClient *football.FootballClient,
+	fetcher FixtureFetcher,
 	fairPlayRepo domain.MatchFairPlayRepository,
 	apiFixtureRepo domain.MatchAPIFixtureRepository,
+	timing SyncTiming,
 	logger logging.Logger,
 ) *SyncMatchResultsJob {
 	return &SyncMatchResultsJob{
 		matchService:   matchService,
-		footballClient: footballClient,
+		fetcher:        fetcher,
 		fairPlayRepo:   fairPlayRepo,
 		apiFixtureRepo: apiFixtureRepo,
+		timing:         timing,
 		logger:         logger,
 		timers:         make(map[int64]*time.Timer),
 	}
@@ -54,7 +67,6 @@ func (j *SyncMatchResultsJob) Name() string {
 func (j *SyncMatchResultsJob) Run(ctx context.Context) error {
 	j.logger.Info("sync:match_results planning run started")
 
-	// Get all scheduled matches
 	matches, err := j.matchService.GetMatches(ctx, domain.MatchFilters{
 		Status: domain.MatchStatusScheduled,
 	})
@@ -64,7 +76,6 @@ func (j *SyncMatchResultsJob) Run(ctx context.Context) error {
 
 	scheduled := 0
 
-	// For each scheduled match, resolve the api-football fixture ID and schedule a timer to sync the result
 	for _, match := range matches {
 		fixtureID, err := j.resolveFixtureID(ctx, match)
 		if err != nil {
@@ -75,20 +86,15 @@ func (j *SyncMatchResultsJob) Run(ctx context.Context) error {
 			continue
 		}
 
-		syncTime := match.KickoffAt.Add(syncInitialBuffer)
-		delay := time.Until(syncTime)
-
-		// Capture the match ID for the closure
-		matchID := match.ID
-
-		// Schedule the sync if the match is in the future
-		if delay > 0 {
-			j.scheduleSync(matchID, fixtureID, delay)
-		} else {
-			// Sync the match immediately if it's in the past
-			go j.syncMatch(ctx, matchID, fixtureID, syncMaxRetries)
+		// First poll fires at kickoff + FirstPollOffset; if that moment has
+		// already passed, poll right away (startup backfill — an already-final
+		// fixture persists on the first tick).
+		delay := time.Until(match.KickoffAt.Add(j.timing.FirstPollOffset))
+		if delay < 0 {
+			delay = 0
 		}
 
+		j.schedulePoll(match.ID, fixtureID, match.KickoffAt, delay)
 		scheduled++
 	}
 
@@ -98,9 +104,10 @@ func (j *SyncMatchResultsJob) Run(ctx context.Context) error {
 	return nil
 }
 
-// scheduleSync registers a single pending sync timer per match. A re-run stops
-// the previous timer before installing the new one so timers never accumulate.
-func (j *SyncMatchResultsJob) scheduleSync(matchID, fixtureID int64, delay time.Duration) {
+// schedulePoll registers (or replaces) the single pending poll timer for a match.
+// The self-rescheduling poll re-arms through this same slot, so there is never
+// more than one live timer per match and Stop() can cancel the whole chain.
+func (j *SyncMatchResultsJob) schedulePoll(matchID, fixtureID int64, kickoffAt time.Time, delay time.Duration) {
 	j.timersMutex.Lock()
 	defer j.timersMutex.Unlock()
 
@@ -109,8 +116,20 @@ func (j *SyncMatchResultsJob) scheduleSync(matchID, fixtureID int64, delay time.
 	}
 
 	j.timers[matchID] = time.AfterFunc(delay, func() {
-		j.syncMatch(context.Background(), matchID, fixtureID, syncMaxRetries)
+		j.poll(context.Background(), matchID, fixtureID, kickoffAt)
 	})
+}
+
+// clearTimer stops and forgets a match's timer once polling is done, so Stop()
+// has nothing stale to cancel and the map does not grow unbounded.
+func (j *SyncMatchResultsJob) clearTimer(matchID int64) {
+	j.timersMutex.Lock()
+	defer j.timersMutex.Unlock()
+
+	if timer, ok := j.timers[matchID]; ok {
+		timer.Stop()
+		delete(j.timers, matchID)
+	}
 }
 
 // Stop cancels all pending sync timers. Called on shutdown so timers do not fire
@@ -125,42 +144,64 @@ func (j *SyncMatchResultsJob) Stop() {
 	}
 }
 
-func (j *SyncMatchResultsJob) syncMatch(ctx context.Context, matchID, fixtureID int64, retriesLeft int) {
-	fixture, err := j.footballClient.GetFixture(ctx, fixtureID)
-	if err != nil {
-		j.logger.Error("sync:match_results: get fixture failed",
+// poll fetches the fixture once and either persists the final result or re-arms
+// itself at an adaptive cadence. Every non-terminal outcome — including a fetch
+// error — reschedules through schedulePoll, so a transient failure never abandons
+// the match and Stop() always has a single timer to cancel.
+func (j *SyncMatchResultsJob) poll(ctx context.Context, matchID, fixtureID int64, kickoffAt time.Time) {
+	if time.Now().After(kickoffAt.Add(j.timing.MaxPollWindow)) {
+		j.clearTimer(matchID)
+		j.logger.Warn("sync:match_results: poll window exceeded, giving up",
 			"fixture_id", fixtureID,
 			"match_id", matchID,
-			"error", err,
 		)
 		return
 	}
 
-	if !fixture.IsFinished() {
-		// If the fixture is not finished, retry after the retry interval
-		if retriesLeft > 0 {
-			j.logger.Info("sync:match_results: match still in progress, will retry",
-				"fixture_id", fixtureID,
-				"match_id", matchID,
-				"status", fixture.Fixture.Status.Short,
-				"retries_left", retriesLeft,
-			)
-
-			time.AfterFunc(syncRetryInterval, func() {
-				j.syncMatch(context.Background(), matchID, fixtureID, retriesLeft-1)
-			})
-		} else {
-			// If the fixture is not finished and we've exhausted the retries, log a warning
-			j.logger.Warn("sync:match_results: max retries exhausted, giving up",
-				"fixture_id", fixtureID,
-				"match_id", matchID,
-				"status", fixture.Fixture.Status.Short,
-			)
-		}
-
+	fixture, err := j.fetcher.GetFixture(ctx, fixtureID)
+	if err != nil {
+		// Reschedule rather than abandon: a transient error or 429 must not
+		// permanently drop the match.
+		j.logger.Warn("sync:match_results: get fixture failed, will retry",
+			"fixture_id", fixtureID,
+			"match_id", matchID,
+			"error", err,
+		)
+		j.schedulePoll(matchID, fixtureID, kickoffAt, j.timing.ErrorBackoff)
 		return
 	}
 
+	if fixture.IsFinished() {
+		j.clearTimer(matchID)
+		j.finalizeMatch(ctx, matchID, fixtureID, fixture)
+		return
+	}
+
+	decision := nextPollDelay(
+		fixture.Fixture.Status.Short, fixture.Fixture.Status.Elapsed,
+		j.timing.NearEndInterval, j.timing.MaxPollInterval,
+	)
+	if decision.stop {
+		j.clearTimer(matchID)
+		j.logger.Warn("sync:match_results: terminal non-played status, giving up",
+			"fixture_id", fixtureID,
+			"match_id", matchID,
+			"status", fixture.Fixture.Status.Short,
+		)
+		return
+	}
+
+	j.logger.Info("sync:match_results: in progress, will re-poll",
+		"fixture_id", fixtureID,
+		"match_id", matchID,
+		"status", fixture.Fixture.Status.Short,
+		"next_delay", decision.delay,
+	)
+	j.schedulePoll(matchID, fixtureID, kickoffAt, decision.delay)
+}
+
+// finalizeMatch persists a finished fixture's result and fair-play cards.
+func (j *SyncMatchResultsJob) finalizeMatch(ctx context.Context, matchID, fixtureID int64, fixture *football.FixtureResponse) {
 	if err := j.persistResult(ctx, matchID, fixture); err != nil {
 		j.logger.Error("sync:match_results: persist result failed",
 			"fixture_id", fixtureID,
@@ -229,7 +270,6 @@ func (j *SyncMatchResultsJob) persistFairPlay(ctx context.Context, matchID int64
 		})
 	}
 
-	// No update needed
 	if len(records) == 0 {
 		return nil
 	}
@@ -246,17 +286,14 @@ func (j *SyncMatchResultsJob) resolveFixtureID(ctx context.Context, match *domai
 		return 0, fmt.Errorf("lookup fixture ID for match %d: %w", match.ID, err)
 	}
 
-	// Not in DB yet — only knockout matches can be in this state (group stage IDs are pre-seeded)
-	// Discover the ID via the API and persist it for future planning runs
+	// Not in DB yet — only knockout matches reach this (group-stage IDs are pre-seeded).
 	if match.Teams.Home == nil || match.Teams.Away == nil {
 		return 0, fmt.Errorf("match %d has unassigned teams", match.ID)
 	}
 
-	// Get the API team IDs from the FIFA codes
 	homeAPITeamID := football.FifaCodeToAPITeamID[match.Teams.Home.FifaCode]
 	awayAPITeamID := football.FifaCodeToAPITeamID[match.Teams.Away.FifaCode]
 
-	// Discover the fixture ID via the API and persist it for future planning runs
 	fixtureID, err = j.discoverAndPersistKnockoutFixtureID(ctx, match.ID, homeAPITeamID, awayAPITeamID)
 	if err != nil {
 		return 0, err
@@ -266,16 +303,14 @@ func (j *SyncMatchResultsJob) resolveFixtureID(ctx context.Context, match *domai
 }
 
 func (j *SyncMatchResultsJob) discoverAndPersistKnockoutFixtureID(ctx context.Context, matchID, homeAPITeamID, awayAPITeamID int64) (int64, error) {
-	fixtures, err := j.footballClient.GetFixturesByTeam(ctx, homeAPITeamID)
+	fixtures, err := j.fetcher.GetFixturesByTeam(ctx, homeAPITeamID)
 	if err != nil {
 		return 0, fmt.Errorf("get fixtures by team %d: %w", homeAPITeamID, err)
 	}
 
 	for _, fixture := range fixtures {
-		// Check if the away team is the same as the away team in the match
 		if fixture.Teams.Away.ID == awayAPITeamID {
 			fixtureID := fixture.Fixture.ID
-			// Persist the fixture ID for future planning runs
 			if err := j.apiFixtureRepo.UpsertFixtureID(ctx, matchID, fixtureID); err != nil {
 				j.logger.Warn("sync:match_results: failed to persist knockout fixture ID",
 					"match_id", matchID,
