@@ -55,6 +55,15 @@ var ErrBoardIsGlobal = errors.New("operation not allowed on global board")
 var ErrBoardMemberNotFound = errors.New("board member not found")
 var ErrBoardMemberAlreadyInBoard = errors.New("user is already a member of this board")
 var ErrCannotTransferOwnershipToSelf = errors.New("cannot transfer ownership to yourself")
+
+type BoardMemberAlreadyInBoardError struct {
+	BoardID int64
+}
+
+func (e BoardMemberAlreadyInBoardError) Error() string {
+	return ErrBoardMemberAlreadyInBoard.Error()
+}
+
 var ErrBoardManageAdminForbidden = errors.New("only the board owner can manage admins")
 
 // Group Standings
