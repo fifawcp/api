@@ -45,6 +45,11 @@ func boardsRoutes(c *Container) chi.Router {
 
 			r.Get("/summary", c.CompetitionHandler.GetBoardSummary)
 
+			r.Route("/matches/{id}", func(r chi.Router) {
+				r.Use(middlewares.ParseMatchID)
+				r.Get("/picks", c.MatchHandler.GetBoardMatchPicks)
+			})
+
 			r.Route("/competitions", func(r chi.Router) {
 				r.Get("/", c.CompetitionHandler.GetBoardCompetitions)
 				r.Post("/", c.CompetitionHandler.CreateCompetition)
@@ -53,6 +58,12 @@ func boardsRoutes(c *Container) chi.Router {
 					r.Use(middlewares.ParseCompetitionID)
 					r.Delete("/", c.CompetitionHandler.DeleteCompetition)
 					r.Get("/leaderboard", c.CompetitionHandler.GetLeaderboard)
+
+					r.Route("/members/{userId}", func(r chi.Router) {
+						r.Use(middlewares.ParseUserID)
+						r.Use(middlewares.RequireTargetBoardMembership(c.BoardMemberService))
+						r.Get("/picks", c.MatchHandler.GetMemberCompetitionPicks)
+					})
 				})
 			})
 		})

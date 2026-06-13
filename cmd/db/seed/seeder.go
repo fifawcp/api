@@ -450,29 +450,39 @@ func (s *Seeder) shiftKickoffDates(ctx context.Context, scenario Scenario) error
 	return nil
 }
 
-// seedCompetitions creates 1-3 random competitions on every non-Global
-// seeded board, drawing from competitionTemplates
+// seedCompetitions creates 1-3 random custom (match) competitions plus 1-2
+// single-match (pick) competitions on every non-Global seeded board, drawing
+// from competitionTemplates and pickCompetitionTemplates respectively
 func (s *Seeder) seedCompetitions(ctx context.Context) error {
 	for boardID, ownerID := range s.boardOwners {
-		templateCount := 1 + mathrand.Intn(3)
-		shuffled := make([]dtos.CreateCompetitionDto, len(competitionTemplates))
-		copy(shuffled, competitionTemplates)
-		mathrand.Shuffle(len(shuffled), func(a, b int) { shuffled[a], shuffled[b] = shuffled[b], shuffled[a] })
+		matchCount := 1 + mathrand.Intn(3)
+		s.seedCompetitionsFrom(ctx, boardID, ownerID, competitionTemplates, matchCount)
 
-		for i := 0; i < templateCount && i < len(shuffled); i++ {
-			template := shuffled[i]
-
-			if _, err := s.competitionService.CreateCompetition(ctx, boardID, ownerID, domain.BoardMemberRoleOwner, template); err != nil {
-				s.logger.Error("Error seeding competition",
-					logging.Error, err.Error(),
-					"board_id", boardID,
-					"name", template.Name,
-				)
-			}
-		}
+		pickCount := 1 + mathrand.Intn(2)
+		s.seedCompetitionsFrom(ctx, boardID, ownerID, pickCompetitionTemplates, pickCount)
 	}
 
 	return nil
+}
+
+// seedCompetitionsFrom creates `count` competitions on a board, drawn at random
+// (no repeats) from the given templates.
+func (s *Seeder) seedCompetitionsFrom(ctx context.Context, boardID int64, ownerID string, templates []dtos.CreateCompetitionDto, count int) {
+	shuffled := make([]dtos.CreateCompetitionDto, len(templates))
+	copy(shuffled, templates)
+	mathrand.Shuffle(len(shuffled), func(a, b int) { shuffled[a], shuffled[b] = shuffled[b], shuffled[a] })
+
+	for i := 0; i < count && i < len(shuffled); i++ {
+		template := shuffled[i]
+
+		if _, err := s.competitionService.CreateCompetition(ctx, boardID, ownerID, domain.BoardMemberRoleOwner, template); err != nil {
+			s.logger.Error("Error seeding competition",
+				logging.Error, err.Error(),
+				"board_id", boardID,
+				"name", template.Name,
+			)
+		}
+	}
 }
 
 var knockoutStages = [][]int64{
