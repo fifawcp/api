@@ -17,6 +17,18 @@ type SaveMatchScorePickDto struct {
 	AwayScore *int `json:"away_score" validate:"required,gte=0,lte=20" example:"1"`
 }
 
+// MemberPickDto represents one board member alongside their (possibly nil) score pick.
+type MemberPickDto struct {
+	Member domain.CompetitionLeaderboardMember `json:"member"`
+	Pick   *UserScorePickDto                   `json:"pick"`
+}
+
+// MatchMemberPicksDto is the response for viewing all board members' picks for a single match.
+type MatchMemberPicksDto struct {
+	Match *domain.Match   `json:"match"`
+	Picks []MemberPickDto `json:"picks"`
+}
+
 // DashboardResponseDto mirrors domain.Dashboard but serializes next_match through
 // MatchResponseDto so it carries the authenticated user's score pick.
 type DashboardResponseDto struct {

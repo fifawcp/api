@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -105,7 +106,7 @@ func (h *BoardHandler) GetUserBoards(w http.ResponseWriter, r *http.Request) {
 //	@Failure		400			{object}	httpx.ErrorResponse	"Invalid request body or validation error"
 //	@Failure		401			{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
 //	@Failure		401			{object}	httpx.ErrorResponse	"Invalid or expired board join code"
-//	@Failure		409			{object}	httpx.ErrorResponse	"User is already a member of this board"
+//	@Failure		409			{object}	httpx.ErrorResponse	"User is already a member of this board — error.details contains board_id"
 //	@Failure		500			{object}	httpx.ErrorResponse	"Internal server error"
 //	@Security		BearerAuth
 //	@Router			/boards/join [post]
@@ -119,6 +120,14 @@ func (h *BoardHandler) JoinBoard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	boardID, err := h.boardMemberService.JoinBoard(r.Context(), body.JoinCode, user.ID)
+
+	if alreadyInBoardErr, ok := errors.AsType[domain.BoardMemberAlreadyInBoardError](err); ok {
+		httpx.RespondWithData(w, http.StatusOK, &dtos.JoinBoardResponseDto{
+			BoardID: alreadyInBoardErr.BoardID,
+		})
+		return
+	}
+
 	if err != nil {
 		handleServiceError(w, r, err, h.logger)
 		return

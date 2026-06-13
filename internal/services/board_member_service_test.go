@@ -68,6 +68,29 @@ func TestBoardMemberService_JoinBoard(t *testing.T) {
 		assert.Contains(t, err.Error(), "database error")
 		assert.Empty(t, boardID)
 	})
+
+	t.Run("propagates already-in-board typed error with board id", func(t *testing.T) {
+		t.Parallel()
+
+		joinCode := "ABCD1234"
+		userID := gofakeit.UUID()
+		expectedBoardID := gofakeit.Int64()
+
+		bmr := &mocks.MockBoardMemberRepository{
+			CreateBoardMemberFunc: func(ctx context.Context, jc string, uid string) (int64, error) {
+				return expectedBoardID, domain.BoardMemberAlreadyInBoardError{BoardID: expectedBoardID}
+			},
+		}
+
+		service := newTestBoardMemberService(nil, bmr)
+
+		boardID, err := service.JoinBoard(context.Background(), joinCode, userID)
+
+		var alreadyInBoardErr domain.BoardMemberAlreadyInBoardError
+		assert.ErrorAs(t, err, &alreadyInBoardErr)
+		assert.Equal(t, expectedBoardID, alreadyInBoardErr.BoardID)
+		assert.Equal(t, expectedBoardID, boardID)
+	})
 }
 
 // ---------------------------------------------------------------------------

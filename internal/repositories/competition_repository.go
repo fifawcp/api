@@ -226,6 +226,8 @@ func (r *CompetitionRepository) GetBoardCompetitions(
 			WHERE bc.type = 'pickem'
 		),
 		match_ranked AS (
+			-- For 'pick' competitions, members who made a prediction rank above those who
+			-- didn't within a points tie (match_id IS NOT NULL gates it to single-match picks).
 			SELECT
 				cms.competition_id,
 				cms.user_id,
@@ -236,12 +238,14 @@ func (r *CompetitionRepository) GetBoardCompetitions(
 						cms.total_points     DESC,
 						cms.exact_hits       DESC,
 						cms.correct_outcomes DESC,
+						(CASE WHEN bc.match_id IS NOT NULL AND ump.match_id IS NULL THEN 1 ELSE 0 END) ASC,
 						bm.created_at ASC,
 						cms.user_id ASC
 				) AS rank
 			FROM competition_match_scores cms
 			INNER JOIN board_members bm ON bm.board_id = $1 AND bm.user_id = cms.user_id
-			WHERE cms.competition_id IN (SELECT id FROM board_competitions)
+			INNER JOIN board_competitions bc ON bc.id = cms.competition_id
+			LEFT JOIN user_match_score_picks ump ON ump.user_id = cms.user_id AND ump.match_id = bc.match_id
 		),
 		awards_ranked AS (
 			SELECT
@@ -529,6 +533,49 @@ func (r *CompetitionRepository) GetGlobalCompetitions(
 	}
 
 	return pickemCompetition, matchCompetition, nil
+}
+
+// GetScopeMatchIDs returns the IDs of all matches in scope for a match-type competition,
+// applying the same stage + optional team filters used when seeding scores.
+func (r *CompetitionRepository) GetScopeMatchIDs(ctx context.Context, competitionID int64) ([]int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
+	defer cancel()
+
+	query := `
+		SELECT m.id
+		FROM matches m
+		INNER JOIN competition_scope_stages css
+			ON css.competition_id = $1 AND css.stage = m.stage_code
+		WHERE (
+			NOT EXISTS (SELECT 1 FROM competition_scope_teams cst WHERE cst.competition_id = $1)
+			OR EXISTS (
+				SELECT 1 FROM competition_scope_teams cst
+				WHERE cst.competition_id = $1
+				  AND cst.team_fifa_code IN (m.home_team_fifa_code, m.away_team_fifa_code)
+			)
+		)
+		ORDER BY m.kickoff_at ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, competitionID)
+	if err != nil {
+		return nil, handleDBError(err, resourceCompetition)
+	}
+	defer rows.Close()
+
+	matchIDs := []int64{}
+	for rows.Next() {
+		var matchID int64
+		if err := rows.Scan(&matchID); err != nil {
+			return nil, handleDBError(err, resourceCompetition)
+		}
+		matchIDs = append(matchIDs, matchID)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, handleDBError(err, resourceCompetition)
+	}
+
+	return matchIDs, nil
 }
 
 // FindMatchCompetitionsByMatches returns competition IDs whose scope

@@ -275,7 +275,7 @@ func (c *Container) initServices() {
 		c.pickemRepository, c.teams, c.firstKickoff, c.Config, c.Logger,
 	)
 	c.matchScorePickService = services.NewMatchScorePickService(
-		c.matchScorePickRepository, c.matchRepository,
+		c.matchScorePickRepository, c.matchRepository, c.competitionRepository,
 	)
 
 	c.competitionScoringService = services.NewCompetitionScoringService(

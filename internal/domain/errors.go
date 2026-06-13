@@ -55,6 +55,15 @@ var ErrBoardIsGlobal = errors.New("operation not allowed on global board")
 var ErrBoardMemberNotFound = errors.New("board member not found")
 var ErrBoardMemberAlreadyInBoard = errors.New("user is already a member of this board")
 var ErrCannotTransferOwnershipToSelf = errors.New("cannot transfer ownership to yourself")
+
+type BoardMemberAlreadyInBoardError struct {
+	BoardID int64
+}
+
+func (e BoardMemberAlreadyInBoardError) Error() string {
+	return ErrBoardMemberAlreadyInBoard.Error()
+}
+
 var ErrBoardManageAdminForbidden = errors.New("only the board owner can manage admins")
 
 // Group Standings
@@ -111,6 +120,7 @@ var ErrCompetitionPickemAlreadyExists = errors.New("a tournament pick'em competi
 var ErrCompetitionAwardsAlreadyExists = errors.New("an awards competition already exists on this board")
 var ErrCompetitionNameAlreadyExists = errors.New("a competition with this name already exists on this board")
 var ErrDuplicatePickForMatch = errors.New("a pick for this match already exists on this board")
+var ErrCompetitionNotMatchBased = errors.New("competition has no match score picks")
 
 // Predictions visibility (member views)
 var ErrPredictionsHidden = errors.New("member predictions are hidden until the tournament starts")
@@ -118,6 +128,7 @@ var ErrPredictionsHidden = errors.New("member predictions are hidden until the t
 // Pickem
 var ErrPickemLocked = errors.New("pickem is locked: tournament has started")
 var ErrMatchPickLocked = errors.New("match pick is locked: match has already started")
+var ErrMatchPicksHidden = errors.New("match predictions are hidden until the match starts")
 var ErrInvalidGroupPicks = errors.New("invalid group picks: each group must have exactly 4 distinct teams in positions 1-4")
 var ErrInvalidBestThirdTeam = errors.New("each best-third team must be in position 3 within submitted group picks")
 var ErrInvalidBracketPickTeam = errors.New("picked team is not a projected participant for this bracket match")

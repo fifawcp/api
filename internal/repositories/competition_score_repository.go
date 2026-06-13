@@ -556,7 +556,7 @@ func (r *CompetitionScoreRepository) GetBoardCompetitionPreviews(
 
 	query := `
 		WITH bc AS (
-			SELECT id, type FROM competitions WHERE board_id = $1
+			SELECT id, type, match_id FROM competitions WHERE board_id = $1
 		),
 		pickem AS (
 			SELECT c.id AS competition_id, bm.user_id, agg.total_points,
@@ -591,14 +591,19 @@ func (r *CompetitionScoreRepository) GetBoardCompetitionPreviews(
 			WHERE c.type = 'awards'
 		),
 		matchpick AS (
+			-- For 'pick' competitions, members who made a prediction rank above those who
+			-- didn't within a points tie (match_id IS NOT NULL gates it to single-match picks).
 			SELECT cms.competition_id, cms.user_id, cms.total_points,
 				RANK() OVER (
 					PARTITION BY cms.competition_id
-					ORDER BY cms.total_points DESC, cms.exact_hits DESC, cms.correct_outcomes DESC, bm.created_at ASC, cms.user_id ASC
+					ORDER BY cms.total_points DESC, cms.exact_hits DESC, cms.correct_outcomes DESC,
+						(CASE WHEN c.match_id IS NOT NULL AND ump.match_id IS NULL THEN 1 ELSE 0 END) ASC,
+						bm.created_at ASC, cms.user_id ASC
 				) AS rank
 			FROM competition_match_scores cms
 			JOIN bc c ON c.id = cms.competition_id
 			JOIN board_members bm ON bm.board_id = $1 AND bm.user_id = cms.user_id
+			LEFT JOIN user_match_score_picks ump ON ump.user_id = cms.user_id AND ump.match_id = c.match_id
 			WHERE c.type IN ('match', 'pick')
 		),
 		unioned AS (
@@ -932,6 +937,7 @@ func (r *CompetitionScoreRepository) getMatchLeaderboard(
 						cms.total_points     DESC,
 						cms.exact_hits       DESC,
 						cms.correct_outcomes DESC,
+						(CASE WHEN comp.match_id IS NOT NULL AND ump.match_id IS NULL THEN 1 ELSE 0 END) ASC,
 						bm.created_at ASC,
 						cms.user_id ASC
 				) AS rank
@@ -939,6 +945,7 @@ func (r *CompetitionScoreRepository) getMatchLeaderboard(
 			INNER JOIN competitions comp ON comp.id = cms.competition_id
 			INNER JOIN users u           ON u.id = cms.user_id
 			INNER JOIN board_members bm  ON bm.board_id = comp.board_id AND bm.user_id = cms.user_id
+			LEFT JOIN user_match_score_picks ump ON ump.user_id = cms.user_id AND ump.match_id = comp.match_id
 			WHERE cms.competition_id = $1
 		),
 		filtered AS (

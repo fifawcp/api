@@ -7,20 +7,20 @@ import (
 )
 
 type MockPickemRepository struct {
-	UpsertGroupPicksFunc        func(ctx context.Context, userID string, picks []*domain.UserGroupPick) error
-	GetGroupPicksFunc           func(ctx context.Context, userID string) ([]*domain.UserGroupPick, error)
-	GetGroupPicksByGroupFunc    func(ctx context.Context, groupCode string) ([]*domain.UserGroupPick, error)
-	UpsertBestThirdsFunc        func(ctx context.Context, userID string, bestThirds []*domain.UserBestThirdPick) error
-	GetBestThirdPicksFunc       func(ctx context.Context, userID string) ([]*domain.UserBestThirdPick, error)
+	UpsertGroupPicksFunc         func(ctx context.Context, userID string, picks []*domain.UserGroupPick) error
+	GetGroupPicksFunc            func(ctx context.Context, userID string) ([]*domain.UserGroupPick, error)
+	GetGroupPicksByGroupFunc     func(ctx context.Context, groupCode string) ([]*domain.UserGroupPick, error)
+	UpsertBestThirdsFunc         func(ctx context.Context, userID string, bestThirds []*domain.UserBestThirdPick) error
+	GetBestThirdPicksFunc        func(ctx context.Context, userID string) ([]*domain.UserBestThirdPick, error)
 	GetBestThirdPicksByTeamsFunc func(ctx context.Context, teamFifaCodes []string) ([]*domain.UserBestThirdPick, error)
-	UpsertBracketPicksFunc      func(ctx context.Context, userID string, picks []*domain.UserBracketPick) error
-	GetBracketPicksFunc         func(ctx context.Context, userID string) ([]*domain.UserBracketPick, error)
-	GetBracketPicksByMatchFunc  func(ctx context.Context, matchID int64) ([]*domain.UserBracketPick, error)
-	GetChampionPickFunc         func(ctx context.Context, userID string) (*string, error)
-	GetChampionPickCountsFunc   func(ctx context.Context, limit int) ([]*domain.TitleFavorite, error)
-	GetUserProgressCountsFunc   func(ctx context.Context, userID string) (domain.PickemProgressCounts, error)
-	GetLockedGroupCodesFunc     func(ctx context.Context, userID string) ([]string, error)
-	SetGroupLocksFunc           func(ctx context.Context, userID string, lockedCodes []string) error
+	UpsertBracketPicksFunc       func(ctx context.Context, userID string, picks []*domain.UserBracketPick) error
+	GetBracketPicksFunc          func(ctx context.Context, userID string) ([]*domain.UserBracketPick, error)
+	GetBracketPicksByMatchFunc   func(ctx context.Context, matchID int64) ([]*domain.UserBracketPick, error)
+	GetChampionPickFunc          func(ctx context.Context, userID string) (*string, error)
+	GetChampionPickCountsFunc    func(ctx context.Context, limit int) ([]*domain.TitleFavorite, error)
+	GetUserProgressCountsFunc    func(ctx context.Context, userID string) (domain.PickemProgressCounts, error)
+	GetLockedGroupCodesFunc      func(ctx context.Context, userID string) ([]string, error)
+	SetGroupLocksFunc            func(ctx context.Context, userID string, lockedCodes []string) error
 }
 
 func (m *MockPickemRepository) UpsertGroupPicks(ctx context.Context, userID string, picks []*domain.UserGroupPick) error {

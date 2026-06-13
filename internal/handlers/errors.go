@@ -51,6 +51,7 @@ const (
 	codeCompetitionForbidden      = "COMPETITION_FORBIDDEN"
 	codeBoardManageAdminForbidden = "BOARD_MANAGE_ADMIN_FORBIDDEN"
 	codePredictionsHidden         = "PREDICTIONS_HIDDEN"
+	codeMatchPicksHidden          = "MATCH_PICKS_HIDDEN"
 
 	// 400 Bad Request
 	codeInvalidWinnerTeam          = "INVALID_WINNER_TEAM"
@@ -84,6 +85,7 @@ const (
 	codeAwardPlayerIneligible      = "AWARD_PLAYER_INELIGIBLE"
 	codeAwardWinnersIncomplete     = "AWARD_WINNERS_INCOMPLETE"
 	codePlayerNotFound             = "PLAYER_NOT_FOUND"
+	codeCompetitionNotMatchBased   = "COMPETITION_NOT_MATCH_BASED"
 
 	// 502 Bad Gateway
 	codeMissingIDToken = "MISSING_ID_TOKEN"
@@ -171,6 +173,8 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.Forbidden(w, r, codeBoardManageAdminForbidden, domain.ErrBoardManageAdminForbidden.Error())
 	case errors.Is(err, domain.ErrPredictionsHidden):
 		httpx.Forbidden(w, r, codePredictionsHidden, domain.ErrPredictionsHidden.Error())
+	case errors.Is(err, domain.ErrMatchPicksHidden):
+		httpx.Forbidden(w, r, codeMatchPicksHidden, domain.ErrMatchPicksHidden.Error())
 
 	// 400 Bad Request
 	case errors.Is(err, domain.ErrInvalidWinnerTeam):
@@ -197,6 +201,8 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.BadRequest(w, r, codeInvalidDateRange, domain.ErrInvalidDateRange.Error())
 	case errors.Is(err, domain.ErrInvalidQueryParam):
 		httpx.BadRequest(w, r, codeInvalidQueryParam, err.Error())
+	case errors.Is(err, domain.ErrCompetitionNotMatchBased):
+		httpx.BadRequest(w, r, codeCompetitionNotMatchBased, domain.ErrCompetitionNotMatchBased.Error())
 	case errors.Is(err, domain.ErrPickemLocked):
 		httpx.BadRequest(w, r, codePickemLocked, domain.ErrPickemLocked.Error())
 	case errors.Is(err, domain.ErrMatchPickLocked):
