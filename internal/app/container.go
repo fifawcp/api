@@ -347,6 +347,13 @@ func (c *Container) initJobs() {
 		footballClient,
 		c.matchFairPlayRepository,
 		c.matchAPIFixtureRepository,
+		jobs.SyncTiming{
+			FirstPollOffset: c.Config.Cron.SyncMatchResultsFirstPollOffset,
+			NearEndInterval: c.Config.Cron.SyncMatchResultsNearEndInterval,
+			MaxPollInterval: c.Config.Cron.SyncMatchResultsMaxPollInterval,
+			ErrorBackoff:    c.Config.Cron.SyncMatchResultsErrorBackoff,
+			MaxPollWindow:   c.Config.Cron.SyncMatchResultsMaxPollWindow,
+		},
 		c.Logger,
 	)
 

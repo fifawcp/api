@@ -63,7 +63,7 @@ func (r *BoardRepository) GetUserBoards(ctx context.Context, userID string) ([]*
 	defer cancel()
 
 	query := `
-		SELECT b.id, b.name, b.privacy
+		SELECT b.id, b.name, b.privacy, bm.role
 		FROM boards b
 		INNER JOIN board_members bm ON bm.board_id = b.id
 		WHERE bm.user_id = $1
@@ -79,7 +79,7 @@ func (r *BoardRepository) GetUserBoards(ctx context.Context, userID string) ([]*
 	boards := []*domain.UserBoardListItem{}
 	for rows.Next() {
 		var board domain.UserBoardListItem
-		if err := rows.Scan(&board.ID, &board.Name, &board.Privacy); err != nil {
+		if err := rows.Scan(&board.ID, &board.Name, &board.Privacy, &board.Role); err != nil {
 			return nil, handleDBError(err, resourceBoard)
 		}
 

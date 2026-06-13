@@ -357,6 +357,37 @@ func TestBoardHandler_JoinBoard(t *testing.T) {
 		}
 	})
 
+	t.Run("returns 200 with board id when user is already a member", func(t *testing.T) {
+		t.Parallel()
+
+		body := dtos.JoinBoardDto{
+			JoinCode: "ABCD1234",
+		}
+		expectedBoardID := int64(91)
+
+		bms := &mocks.MockBoardMemberService{
+			JoinBoardFunc: func(ctx context.Context, joinCode string, userID string) (int64, error) {
+				return expectedBoardID, domain.BoardMemberAlreadyInBoardError{BoardID: expectedBoardID}
+			},
+		}
+
+		h := newTestBoardHandler(nil, bms)
+
+		req := makeJoinBoardReq(t, body)
+		w := httptest.NewRecorder()
+
+		h.JoinBoard(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp struct {
+			Data dtos.JoinBoardResponseDto `json:"data"`
+		}
+
+		testutils.ParseJSONResponse(t, w, &resp)
+		assert.Equal(t, expectedBoardID, resp.Data.BoardID)
+	})
+
 	t.Run("propagates service error", func(t *testing.T) {
 		t.Parallel()
 

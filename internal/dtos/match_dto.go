@@ -28,3 +28,37 @@ type MatchMemberPicksDto struct {
 	Match *domain.Match   `json:"match"`
 	Picks []MemberPickDto `json:"picks"`
 }
+
+// DashboardResponseDto mirrors domain.Dashboard but serializes next_match through
+// MatchResponseDto so it carries the authenticated user's score pick.
+type DashboardResponseDto struct {
+	PickedChampion *domain.Team                `json:"picked_champion"`
+	Stats          *domain.DashboardStats      `json:"stats"`
+	NextMatch      *MatchResponseDto           `json:"next_match"`
+	Progress       *domain.DashboardProgress   `json:"progress"`
+	Leaderboard    domain.DashboardLeaderboard `json:"leaderboard"`
+	TitleFavorites []*domain.TitleFavorite     `json:"title_favorites"`
+}
+
+func NewDashboardResponse(d *domain.Dashboard) *DashboardResponseDto {
+	if d == nil {
+		return nil
+	}
+
+	var nextMatch *MatchResponseDto
+	if d.NextMatch != nil {
+		nextMatch = &MatchResponseDto{Match: d.NextMatch}
+		if pick := d.NextMatchScorePick; pick != nil {
+			nextMatch.UserScorePick = &UserScorePickDto{HomeScore: pick.HomeScore, AwayScore: pick.AwayScore}
+		}
+	}
+
+	return &DashboardResponseDto{
+		PickedChampion: d.PickedChampion,
+		Stats:          d.Stats,
+		NextMatch:      nextMatch,
+		Progress:       d.Progress,
+		Leaderboard:    d.Leaderboard,
+		TitleFavorites: d.TitleFavorites,
+	}
+}

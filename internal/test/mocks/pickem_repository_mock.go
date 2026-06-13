@@ -17,6 +17,7 @@ type MockPickemRepository struct {
 	GetBracketPicksFunc          func(ctx context.Context, userID string) ([]*domain.UserBracketPick, error)
 	GetBracketPicksByMatchFunc   func(ctx context.Context, matchID int64) ([]*domain.UserBracketPick, error)
 	GetChampionPickFunc          func(ctx context.Context, userID string) (*string, error)
+	GetChampionPickCountsFunc    func(ctx context.Context, limit int) ([]*domain.TitleFavorite, error)
 	GetUserProgressCountsFunc    func(ctx context.Context, userID string) (domain.PickemProgressCounts, error)
 	GetLockedGroupCodesFunc      func(ctx context.Context, userID string) ([]string, error)
 	SetGroupLocksFunc            func(ctx context.Context, userID string, lockedCodes []string) error
@@ -90,6 +91,13 @@ func (m *MockPickemRepository) GetChampionPick(ctx context.Context, userID strin
 		return m.GetChampionPickFunc(ctx, userID)
 	}
 	panic("GetChampionPick called unexpectedly")
+}
+
+func (m *MockPickemRepository) GetChampionPickCounts(ctx context.Context, limit int) ([]*domain.TitleFavorite, error) {
+	if m.GetChampionPickCountsFunc != nil {
+		return m.GetChampionPickCountsFunc(ctx, limit)
+	}
+	panic("GetChampionPickCounts called unexpectedly")
 }
 
 func (m *MockPickemRepository) GetUserProgressCounts(ctx context.Context, userID string) (domain.PickemProgressCounts, error) {

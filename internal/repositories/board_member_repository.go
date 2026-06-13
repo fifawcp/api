@@ -39,21 +39,30 @@ func (r *BoardMemberRepository) CreateBoardMember(
 	defer tx.Rollback()
 
 	var boardID int64
+	var wasInserted bool
 	err = tx.QueryRowContext(ctx,
 		`WITH board AS (
 			SELECT id FROM boards WHERE join_code = $1
+		),
+		inserted AS (
+			INSERT INTO board_members (board_id, user_id, role)
+			SELECT id, $2, 'member' FROM board
+			ON CONFLICT (board_id, user_id) DO NOTHING
+			RETURNING board_id
 		)
-		INSERT INTO board_members (board_id, user_id, role)
-		SELECT id, $2, 'member' FROM board
-		WHERE EXISTS(SELECT 1 FROM board)
-		RETURNING board_id`,
+		SELECT board.id, EXISTS (SELECT 1 FROM inserted) AS inserted
+		FROM board`,
 		joinCode, userID,
-	).Scan(&boardID)
+	).Scan(&boardID, &wasInserted)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, domain.ErrBoardInvalidJoinCode
 		}
 		return 0, handleDBError(err, resourceBoardMember)
+	}
+
+	if !wasInserted {
+		return boardID, domain.BoardMemberAlreadyInBoardError{BoardID: boardID}
 	}
 
 	if err := r.initCompetitionScoresForMember(ctx, tx, boardID, userID); err != nil {

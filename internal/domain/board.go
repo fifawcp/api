@@ -22,9 +22,10 @@ type Board struct {
 }
 
 type UserBoardListItem struct {
-	ID      int64        `json:"id" example:"1"`
-	Name    string       `json:"name" example:"My Board"`
-	Privacy BoardPrivacy `json:"privacy" example:"private"`
+	ID      int64           `json:"id" example:"1"`
+	Name    string          `json:"name" example:"My Board"`
+	Privacy BoardPrivacy    `json:"privacy" example:"private"`
+	Role    BoardMemberRole `json:"role" example:"member"`
 }
 
 type BoardDetails struct {
