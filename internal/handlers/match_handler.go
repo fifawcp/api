@@ -137,6 +137,64 @@ func (h *MatchHandler) SaveMatchScorePick(w http.ResponseWriter, r *http.Request
 	httpx.RespondWithData(w, http.StatusNoContent, nil)
 }
 
+// GetMemberCompetitionPicks returns a board member's match score picks for a competition.
+//
+//	@Summary		Get a board member's match picks for a competition
+//	@Description	Returns the locked match score picks of a specific board member for the given competition.
+//	@Description	Only picks for matches that have already started (locked) are returned.
+//	@Tags			boards
+//	@Produce		json
+//	@Param			boardId			path		int64											true	"Board ID"
+//	@Param			competitionId	path		int64											true	"Competition ID"
+//	@Param			userId			path		string											true	"Member user ID (UUID)"
+//	@Success		200				{object}	httpx.Response{data=[]dtos.MatchResponseDto}	"Member's match picks"
+//	@Failure		400				{object}	httpx.ErrorResponse								"Competition is not match-based"
+//	@Failure		401				{object}	httpx.ErrorResponse								"Missing or invalid Bearer token"
+//	@Failure		404				{object}	httpx.ErrorResponse								"Board, competition, or member not found"
+//	@Security		BearerAuth
+//	@Router			/boards/{boardId}/competitions/{competitionId}/members/{userId}/picks [get]
+func (h *MatchHandler) GetMemberCompetitionPicks(w http.ResponseWriter, r *http.Request) {
+	boardID := httpctx.GetBoardID(r.Context())
+	competitionID := httpctx.GetCompetitionID(r.Context())
+	targetUserID := httpctx.GetUserID(r.Context())
+
+	matches, picks, err := h.matchScorePickService.GetMemberCompetitionPicks(r.Context(), boardID, competitionID, targetUserID)
+	if err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	httpx.RespondWithData(w, http.StatusOK, buildMatchResponse(matches, picks))
+}
+
+// GetBoardMatchPicks returns all board members' score picks for a specific match.
+//
+//	@Summary		Get all board members' picks for a match
+//	@Description	Returns every board member alongside their predicted score for a specific match.
+//	@Description	Only available after the match has started (is locked).
+//	@Tags			boards
+//	@Produce		json
+//	@Param			boardId	path		int64											true	"Board ID"
+//	@Param			id		path		int64											true	"Match ID"
+//	@Success		200		{object}	httpx.Response{data=dtos.MatchMemberPicksDto}	"All members' picks for the match"
+//	@Failure		401		{object}	httpx.ErrorResponse								"Missing or invalid Bearer token"
+//	@Failure		403		{object}	httpx.ErrorResponse								"Match predictions not yet revealed"
+//	@Failure		404		{object}	httpx.ErrorResponse								"Board or match not found"
+//	@Security		BearerAuth
+//	@Router			/boards/{boardId}/matches/{id}/picks [get]
+func (h *MatchHandler) GetBoardMatchPicks(w http.ResponseWriter, r *http.Request) {
+	boardID := httpctx.GetBoardID(r.Context())
+	matchID := httpctx.GetMatchID(r.Context())
+
+	match, memberPicks, err := h.matchScorePickService.GetBoardMatchPicks(r.Context(), boardID, matchID)
+	if err != nil {
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	httpx.RespondWithData(w, http.StatusOK, buildMatchMemberPicksResponse(match, memberPicks))
+}
+
 func buildMatchResponse(
 	matches []*domain.Match,
 	picks []*domain.UserMatchScorePick,
@@ -163,6 +221,25 @@ func buildMatchResponse(
 	}
 
 	return response
+}
+
+func buildMatchMemberPicksResponse(
+	match *domain.Match,
+	memberPicks []*domain.BoardMemberMatchPick,
+) dtos.MatchMemberPicksDto {
+	picks := make([]dtos.MemberPickDto, len(memberPicks))
+	for index, memberPick := range memberPicks {
+		entry := dtos.MemberPickDto{Member: memberPick.Member}
+		// HomeScore and AwayScore are always co-present (both NOT NULL in the picks table)
+		if memberPick.HomeScore != nil {
+			entry.Pick = &dtos.UserScorePickDto{
+				HomeScore: *memberPick.HomeScore,
+				AwayScore: *memberPick.AwayScore,
+			}
+		}
+		picks[index] = entry
+	}
+	return dtos.MatchMemberPicksDto{Match: match, Picks: picks}
 }
 
 func parseMatchFilters(r *http.Request) (domain.MatchFilters, error) {

@@ -67,3 +67,36 @@ var competitionTemplates = func() []dtos.CreateCompetitionDto {
 
 	return templates
 }()
+
+// pickCompetitionTemplates are single-match ("pick") competitions pointing at
+// marquee group-stage fixtures. Group-stage matches always carry their teams and
+// finish from the group_stage_done scenario onward, so their picks reveal with a
+// scored result. Each board draws a couple at random in seedCompetitions.
+var pickCompetitionTemplates = func() []dtos.CreateCompetitionDto {
+	fixtures := []struct {
+		matchID int64
+		name    string
+	}{
+		{6, "BRA vs MAR"},
+		{9, "GER vs CUW"},
+		{10, "NED vs JPN"},
+		{13, "ESP vs CPV"},
+		{14, "BEL vs EGY"},
+		{15, "KSA vs URU"},
+		{17, "ARG vs ALG"},
+		{18, "FRA vs SEN"},
+		{20, "POR vs COD"},
+		{21, "ENG vs CRO"},
+	}
+
+	templates := make([]dtos.CreateCompetitionDto, len(fixtures))
+	for i, fixture := range fixtures {
+		matchID := fixture.matchID
+		templates[i] = dtos.CreateCompetitionDto{
+			Type:    domain.CompetitionTypePick,
+			Name:    fixture.name,
+			MatchID: &matchID,
+		}
+	}
+	return templates
+}()

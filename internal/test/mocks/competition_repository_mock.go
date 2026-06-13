@@ -13,6 +13,7 @@ type MockCompetitionRepository struct {
 	DeleteCompetitionFunc              func(ctx context.Context, boardID, competitionID int64) error
 	FindMatchCompetitionsByMatchesFunc func(ctx context.Context, matchIDs []int64) ([]int64, error)
 	GetGlobalCompetitionsFunc          func(ctx context.Context) (*domain.Competition, *domain.Competition, error)
+	GetScopeMatchIDsFunc               func(ctx context.Context, competitionID int64) ([]int64, error)
 }
 
 func (m *MockCompetitionRepository) CreateCompetition(ctx context.Context, competition *domain.Competition) error {
@@ -55,4 +56,11 @@ func (m *MockCompetitionRepository) GetGlobalCompetitions(ctx context.Context) (
 		return m.GetGlobalCompetitionsFunc(ctx)
 	}
 	panic("GetGlobalCompetitions called unexpectedly")
+}
+
+func (m *MockCompetitionRepository) GetScopeMatchIDs(ctx context.Context, competitionID int64) ([]int64, error) {
+	if m.GetScopeMatchIDsFunc != nil {
+		return m.GetScopeMatchIDsFunc(ctx, competitionID)
+	}
+	panic("GetScopeMatchIDs called unexpectedly")
 }
