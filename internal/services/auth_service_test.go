@@ -26,6 +26,7 @@ func newTestAuthService(
 	logger *mocks.MockLogger,
 	authenticator *mocks.MockAuthenticator,
 	mailer *mocks.MockMailer,
+	replay ...*mocks.MockRefreshReplayStorage,
 ) AuthServiceInterface {
 	cfg := &config.Config{
 		Env: "testing",
@@ -41,7 +42,21 @@ func newTestAuthService(
 		},
 	}
 
-	return NewAuthService(ur, sr, rtr, os, logger, cfg, authenticator, mailer)
+	// Default: the caller wins the claim and proceeds to rotate. Tests exercising the
+	// dedup path pass their own replay mock.
+	rrs := &mocks.MockRefreshReplayStorage{
+		ClaimFunc: func(ctx context.Context, oldTokenHash string, tokens *domain.IssuedTokens, ttl time.Duration) (bool, *domain.IssuedTokens, error) {
+			return true, nil, nil
+		},
+		ReleaseFunc: func(ctx context.Context, oldTokenHash string) error {
+			return nil
+		},
+	}
+	if len(replay) > 0 {
+		rrs = replay[0]
+	}
+
+	return NewAuthService(ur, sr, rtr, os, rrs, logger, cfg, authenticator, mailer)
 }
 
 // ---------------------------------------------------------------------------
@@ -1183,6 +1198,150 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		assert.NotNil(t, result)
 		assert.NotEmpty(t, result.AccessToken)
 		assert.NotEmpty(t, result.RefreshToken)
+	})
+
+	t.Run("returns the already-issued successor without rotating when a concurrent refresh won the claim", func(t *testing.T) {
+		t.Parallel()
+
+		userID := gofakeit.UUID()
+		sessionID := gofakeit.UUID()
+		cached := &domain.IssuedTokens{
+			AccessToken:  "cached_access",
+			RefreshToken: "cached_refresh",
+			ExpiresAt:    time.Now().Add(time.Hour),
+		}
+
+		rotateCalled := false
+		rtr := &mocks.MockRefreshTokenRepository{
+			GetRefreshTokenByTokenHashFunc: func(ctx context.Context, hash string) (*domain.RefreshToken, error) {
+				return &domain.RefreshToken{UserID: userID, SessionID: sessionID}, nil
+			},
+			RotateRefreshTokenFunc: func(ctx context.Context, oldHash string, newToken *domain.RefreshToken) error {
+				rotateCalled = true
+				return nil
+			},
+		}
+
+		// Present so an unimplemented dedup path fails on assertions rather than nil-panicking.
+		sr := &mocks.MockSessionRepository{
+			UpdateLastUsedAtFunc: func(ctx context.Context, id string, slideTo time.Time, maxLifetime time.Duration) (time.Time, error) {
+				return slideTo, nil
+			},
+		}
+
+		authenticator := &mocks.MockAuthenticator{
+			GenerateTokenFunc: func(uid string, tokenType auth.TokenType) (*auth.TokenResult, error) {
+				return &auth.TokenResult{Token: "fresh_" + string(tokenType), ExpiresAt: time.Now().Add(time.Hour)}, nil
+			},
+		}
+
+		replay := &mocks.MockRefreshReplayStorage{
+			ClaimFunc: func(ctx context.Context, oldTokenHash string, tokens *domain.IssuedTokens, ttl time.Duration) (bool, *domain.IssuedTokens, error) {
+				return false, cached, nil
+			},
+		}
+
+		service := newTestAuthService(nil, sr, rtr, nil, &mocks.MockLogger{}, authenticator, nil, replay)
+
+		result, err := service.RefreshToken(context.Background(), "token")
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, "cached_access", result.AccessToken)
+		assert.Equal(t, "cached_refresh", result.RefreshToken)
+		assert.False(t, rotateCalled, "the caller that lost the claim must not rotate the token")
+	})
+
+	t.Run("releases the claim when rotation fails so concurrent refreshes are not stranded", func(t *testing.T) {
+		t.Parallel()
+
+		userID := gofakeit.UUID()
+		sessionID := gofakeit.UUID()
+
+		rtr := &mocks.MockRefreshTokenRepository{
+			GetRefreshTokenByTokenHashFunc: func(ctx context.Context, hash string) (*domain.RefreshToken, error) {
+				return &domain.RefreshToken{UserID: userID, SessionID: sessionID}, nil
+			},
+			RotateRefreshTokenFunc: func(ctx context.Context, oldHash string, newToken *domain.RefreshToken) error {
+				return errors.New("db down")
+			},
+		}
+
+		sr := &mocks.MockSessionRepository{
+			UpdateLastUsedAtFunc: func(ctx context.Context, id string, slideTo time.Time, maxLifetime time.Duration) (time.Time, error) {
+				return slideTo, nil
+			},
+		}
+
+		authenticator := &mocks.MockAuthenticator{
+			GenerateTokenFunc: func(uid string, tokenType auth.TokenType) (*auth.TokenResult, error) {
+				return &auth.TokenResult{Token: "fresh_" + string(tokenType), ExpiresAt: time.Now().Add(time.Hour)}, nil
+			},
+		}
+
+		releasedHash := ""
+		replay := &mocks.MockRefreshReplayStorage{
+			ClaimFunc: func(ctx context.Context, oldTokenHash string, tokens *domain.IssuedTokens, ttl time.Duration) (bool, *domain.IssuedTokens, error) {
+				return true, nil, nil
+			},
+			ReleaseFunc: func(ctx context.Context, oldTokenHash string) error {
+				releasedHash = oldTokenHash
+				return nil
+			},
+		}
+
+		service := newTestAuthService(nil, sr, rtr, nil, &mocks.MockLogger{}, authenticator, nil, replay)
+
+		result, err := service.RefreshToken(context.Background(), "token")
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Equal(t, hashToken("token"), releasedHash, "a failed rotation must release the claim")
+	})
+
+	t.Run("falls open and rotates when the replay claim errors so a Redis blip does not block refresh", func(t *testing.T) {
+		t.Parallel()
+
+		userID := gofakeit.UUID()
+		sessionID := gofakeit.UUID()
+
+		rotateCalled := false
+		rtr := &mocks.MockRefreshTokenRepository{
+			GetRefreshTokenByTokenHashFunc: func(ctx context.Context, hash string) (*domain.RefreshToken, error) {
+				return &domain.RefreshToken{UserID: userID, SessionID: sessionID}, nil
+			},
+			RotateRefreshTokenFunc: func(ctx context.Context, oldHash string, newToken *domain.RefreshToken) error {
+				rotateCalled = true
+				return nil
+			},
+		}
+
+		sr := &mocks.MockSessionRepository{
+			UpdateLastUsedAtFunc: func(ctx context.Context, id string, slideTo time.Time, maxLifetime time.Duration) (time.Time, error) {
+				return slideTo, nil
+			},
+		}
+
+		authenticator := &mocks.MockAuthenticator{
+			GenerateTokenFunc: func(uid string, tokenType auth.TokenType) (*auth.TokenResult, error) {
+				return &auth.TokenResult{Token: "new_" + string(tokenType), ExpiresAt: time.Now().Add(time.Hour)}, nil
+			},
+		}
+
+		replay := &mocks.MockRefreshReplayStorage{
+			ClaimFunc: func(ctx context.Context, oldTokenHash string, tokens *domain.IssuedTokens, ttl time.Duration) (bool, *domain.IssuedTokens, error) {
+				return false, nil, errors.New("redis down")
+			},
+		}
+
+		service := newTestAuthService(nil, sr, rtr, nil, &mocks.MockLogger{}, authenticator, nil, replay)
+
+		result, err := service.RefreshToken(context.Background(), "token")
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.NotEmpty(t, result.AccessToken)
+		assert.True(t, rotateCalled, "fail-open: a claim error must not block the rotation")
 	})
 
 	t.Run("succeeds for an already-rotated token within the grace window", func(t *testing.T) {
