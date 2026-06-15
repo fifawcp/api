@@ -7,20 +7,20 @@ import (
 )
 
 type MockPickemRepository struct {
-	UpsertGroupPicksFunc         func(ctx context.Context, userID string, picks []*domain.UserGroupPick) error
-	GetGroupPicksFunc            func(ctx context.Context, userID string) ([]*domain.UserGroupPick, error)
-	GetGroupPicksByGroupFunc     func(ctx context.Context, groupCode string) ([]*domain.UserGroupPick, error)
-	UpsertBestThirdsFunc         func(ctx context.Context, userID string, bestThirds []*domain.UserBestThirdPick) error
-	GetBestThirdPicksFunc        func(ctx context.Context, userID string) ([]*domain.UserBestThirdPick, error)
-	GetBestThirdPicksByTeamsFunc func(ctx context.Context, teamFifaCodes []string) ([]*domain.UserBestThirdPick, error)
-	UpsertBracketPicksFunc       func(ctx context.Context, userID string, picks []*domain.UserBracketPick) error
-	GetBracketPicksFunc          func(ctx context.Context, userID string) ([]*domain.UserBracketPick, error)
-	GetBracketPicksByMatchFunc   func(ctx context.Context, matchID int64) ([]*domain.UserBracketPick, error)
-	GetChampionPickFunc          func(ctx context.Context, userID string) (*string, error)
-	GetChampionPickCountsFunc    func(ctx context.Context, limit int) ([]*domain.TitleFavorite, error)
-	GetUserProgressCountsFunc    func(ctx context.Context, userID string) (domain.PickemProgressCounts, error)
-	GetLockedGroupCodesFunc      func(ctx context.Context, userID string) ([]string, error)
-	SetGroupLocksFunc            func(ctx context.Context, userID string, lockedCodes []string) error
+	UpsertGroupPicksFunc                    func(ctx context.Context, userID string, picks []*domain.UserGroupPick) error
+	GetGroupPicksFunc                       func(ctx context.Context, userID string) ([]*domain.UserGroupPick, error)
+	GetGroupPicksByGroupFunc                func(ctx context.Context, groupCode string) ([]*domain.UserGroupPick, error)
+	UpsertBestThirdsFunc                    func(ctx context.Context, userID string, bestThirds []*domain.UserBestThirdPick) error
+	GetBestThirdPicksFunc                   func(ctx context.Context, userID string) ([]*domain.UserBestThirdPick, error)
+	GetBestThirdPicksByTeamsFunc            func(ctx context.Context, teamFifaCodes []string) ([]*domain.UserBestThirdPick, error)
+	UpsertBracketPicksFunc                  func(ctx context.Context, userID string, picks []*domain.UserBracketPick) error
+	GetBracketPicksFunc                     func(ctx context.Context, userID string) ([]*domain.UserBracketPick, error)
+	GetBracketPickUserIDsByTeamAndStageFunc func(ctx context.Context, teamFifaCode string, stage domain.MatchStageCode) ([]string, error)
+	GetChampionPickFunc                     func(ctx context.Context, userID string) (*string, error)
+	GetChampionPickCountsFunc               func(ctx context.Context, limit int) ([]*domain.TitleFavorite, error)
+	GetUserProgressCountsFunc               func(ctx context.Context, userID string) (domain.PickemProgressCounts, error)
+	GetLockedGroupCodesFunc                 func(ctx context.Context, userID string) ([]string, error)
+	SetGroupLocksFunc                       func(ctx context.Context, userID string, lockedCodes []string) error
 }
 
 func (m *MockPickemRepository) UpsertGroupPicks(ctx context.Context, userID string, picks []*domain.UserGroupPick) error {
@@ -79,11 +79,11 @@ func (m *MockPickemRepository) GetBracketPicks(ctx context.Context, userID strin
 	panic("GetBracketPicks called unexpectedly")
 }
 
-func (m *MockPickemRepository) GetBracketPicksByMatch(ctx context.Context, matchID int64) ([]*domain.UserBracketPick, error) {
-	if m.GetBracketPicksByMatchFunc != nil {
-		return m.GetBracketPicksByMatchFunc(ctx, matchID)
+func (m *MockPickemRepository) GetBracketPickUserIDsByTeamAndStage(ctx context.Context, teamFifaCode string, stage domain.MatchStageCode) ([]string, error) {
+	if m.GetBracketPickUserIDsByTeamAndStageFunc != nil {
+		return m.GetBracketPickUserIDsByTeamAndStageFunc(ctx, teamFifaCode, stage)
 	}
-	panic("GetBracketPicksByMatch called unexpectedly")
+	panic("GetBracketPickUserIDsByTeamAndStage called unexpectedly")
 }
 
 func (m *MockPickemRepository) GetChampionPick(ctx context.Context, userID string) (*string, error) {
