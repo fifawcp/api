@@ -78,14 +78,10 @@ type PickemRepository interface {
 	GetBestThirdPicksByTeams(ctx context.Context, teamFifaCodes []string) ([]*UserBestThirdPick, error) // for ScoreBestThirds
 	UpsertBracketPicks(ctx context.Context, userID string, picks []*UserBracketPick) error
 	GetBracketPicks(ctx context.Context, userID string) ([]*UserBracketPick, error)
-	GetBracketPicksByMatch(ctx context.Context, matchID int64) ([]*UserBracketPick, error) // for scoring
+	GetBracketPickUserIDsByTeamAndStage(ctx context.Context, teamFifaCode string, stage MatchStageCode) ([]string, error)
 	GetChampionPick(ctx context.Context, userID string) (*string, error)
-	// GetChampionPickCounts returns the most-picked champions (final-match winner
-	// picks) across all users, with counts + percent, ordered desc, capped at limit.
 	GetChampionPickCounts(ctx context.Context, limit int) ([]*TitleFavorite, error)
 	GetUserProgressCounts(ctx context.Context, userID string) (PickemProgressCounts, error)
 	GetLockedGroupCodes(ctx context.Context, userID string) ([]string, error)
-	// SetGroupLocks replaces the user's set of locked groups with exactly lockedCodes
-	// (groups not listed are unlocked). Lock state is sent declaratively with each group save.
 	SetGroupLocks(ctx context.Context, userID string, lockedCodes []string) error
 }

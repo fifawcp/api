@@ -15,6 +15,7 @@ import (
 	"github.com/fifawcp/api/internal/infrastructure/auth"
 	"github.com/fifawcp/api/internal/infrastructure/cache"
 	"github.com/fifawcp/api/internal/infrastructure/config"
+	"github.com/fifawcp/api/internal/infrastructure/crypto"
 	"github.com/fifawcp/api/internal/infrastructure/db"
 	"github.com/fifawcp/api/internal/infrastructure/football"
 	"github.com/fifawcp/api/internal/infrastructure/logging"
@@ -49,6 +50,7 @@ type Container struct {
 	syncMatchResultsJob  *jobs.SyncMatchResultsJob
 	GoogleOauthConfig    domain.OAuth2Client
 	OIDCIdentityVerifier domain.IDTokenVerifier
+	refreshReplayCipher  *crypto.Cipher
 
 	// repositories
 	userRepository             domain.UserRepository
@@ -78,9 +80,10 @@ type Container struct {
 	globalMatchCompetition  *domain.Competition
 
 	// storages
-	otpStorage        *storage.OTPStorage
-	userStorage       *storage.UserStorage
-	oauthStateStorage *storage.OAuthStorage
+	otpStorage           *storage.OTPStorage
+	userStorage          *storage.UserStorage
+	oauthStateStorage    *storage.OAuthStorage
+	refreshReplayStorage *storage.RefreshReplayStorage
 
 	// services
 	authService               services.AuthServiceInterface
@@ -185,6 +188,12 @@ func (c *Container) initCoreDeps(cfg *config.Config) error {
 	c.mailer = mailer.NewResendMailer(cfg)
 	c.Scheduler = scheduler.NewCronScheduler(c.Logger)
 
+	refreshReplayCipher, err := crypto.NewCipher(crypto.DeriveKey(cfg.JWT.Secret, "refresh-replay"))
+	if err != nil {
+		return fmt.Errorf("creating refresh replay cipher: %w", err)
+	}
+	c.refreshReplayCipher = refreshReplayCipher
+
 	googleOIDCProvider, err := oauth.NewOIDCProvider(cfg.Auth.GoogleOAuth.Issuer)
 	if err != nil {
 		c.Logger.Error(
@@ -250,12 +259,13 @@ func (c *Container) initStorages() {
 	c.otpStorage = storage.NewOTPStorage(c.redis, c.Config)
 	c.userStorage = storage.NewUserStorage(c.redis, c.Config)
 	c.oauthStateStorage = storage.NewOAuthStorage(c.redis, c.Config)
+	c.refreshReplayStorage = storage.NewRefreshReplayStorage(c.redis, c.Config, c.refreshReplayCipher)
 }
 
 func (c *Container) initServices() {
 	c.authService = services.NewAuthService(
 		c.userRepository, c.sessionRepository, c.refreshTokenRepository,
-		c.otpStorage, c.Logger, c.Config, c.Authenticator, c.mailer,
+		c.otpStorage, c.refreshReplayStorage, c.Logger, c.Config, c.Authenticator, c.mailer,
 	)
 	c.UserService = services.NewUserService(c.userRepository, c.userStorage, c.Logger)
 	c.boardService = services.NewBoardService(c.boardRepository, c.competitionRepository)

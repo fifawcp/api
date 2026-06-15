@@ -395,32 +395,38 @@ func (s *ScoringService) scoreGroupStandingPicks(ctx context.Context, groupCode 
 	return groupEvents, affectedUserIDs, nil
 }
 
+// scoreBracketPicks awards points set-based: every user who picked the match's
+// winner to advance at this stage scores, regardless of which slot they placed it
+// in. The team's actual match determines the points, so source_ref stays the match
+// ID — a unique, idempotent key (each match has exactly one winner per user).
 func (s *ScoringService) scoreBracketPicks(ctx context.Context, match *domain.Match) ([]*domain.ScoreEvent, map[string]struct{}, error) {
-	bracketPicks, err := s.pickemRepository.GetBracketPicksByMatch(ctx, match.ID)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	points := bracketPointsForStage(match.StageCode, &s.cfg.Scoring)
 	if points <= 0 {
 		return nil, nil, nil
 	}
 
-	bracketEvents := make([]*domain.ScoreEvent, 0, len(bracketPicks))
-	affectedUserIDs := make(map[string]struct{}, len(bracketPicks))
+	if match.Result == nil || match.Result.WinnerTeamFifaCode == nil {
+		return nil, nil, nil
+	}
+	winner := *match.Result.WinnerTeamFifaCode
 
-	for _, pick := range bracketPicks {
-		// If the picked team is the winner, points awarded
-		if pick.TeamFifaCode == *match.Result.WinnerTeamFifaCode {
-			bracketEvents = append(bracketEvents, &domain.ScoreEvent{
-				UserID:     pick.UserID,
-				SourceType: domain.ScoreSourceBracketPick,
-				SourceRef:  strconv.FormatInt(match.ID, 10),
-				Points:     points,
-			})
+	userIDs, err := s.pickemRepository.GetBracketPickUserIDsByTeamAndStage(ctx, winner, match.StageCode)
+	if err != nil {
+		return nil, nil, err
+	}
 
-			affectedUserIDs[pick.UserID] = struct{}{}
-		}
+	bracketEvents := make([]*domain.ScoreEvent, 0, len(userIDs))
+	affectedUserIDs := make(map[string]struct{}, len(userIDs))
+
+	for _, userID := range userIDs {
+		bracketEvents = append(bracketEvents, &domain.ScoreEvent{
+			UserID:     userID,
+			SourceType: domain.ScoreSourceBracketPick,
+			SourceRef:  strconv.FormatInt(match.ID, 10),
+			Points:     points,
+		})
+
+		affectedUserIDs[userID] = struct{}{}
 	}
 
 	return bracketEvents, affectedUserIDs, nil

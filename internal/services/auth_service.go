@@ -34,6 +34,7 @@ type AuthService struct {
 	sessionRepository      domain.SessionRepository
 	refreshTokenRepository domain.RefreshTokenRepository
 	otpStorage             domain.OTPStorage
+	refreshReplayStorage   domain.RefreshReplayStorage
 	cfg                    *config.Config
 	logger                 logging.Logger
 	authenticator          auth.Authenticator
@@ -45,6 +46,7 @@ func NewAuthService(
 	sessionRepository domain.SessionRepository,
 	refreshTokenRepository domain.RefreshTokenRepository,
 	otpStorage domain.OTPStorage,
+	refreshReplayStorage domain.RefreshReplayStorage,
 	logger logging.Logger,
 	cfg *config.Config,
 	authenticator auth.Authenticator,
@@ -55,6 +57,7 @@ func NewAuthService(
 		sessionRepository:      sessionRepository,
 		refreshTokenRepository: refreshTokenRepository,
 		otpStorage:             otpStorage,
+		refreshReplayStorage:   refreshReplayStorage,
 		cfg:                    cfg,
 		logger:                 logger,
 		authenticator:          authenticator,
@@ -215,16 +218,38 @@ func (s *AuthService) RefreshToken(
 		return nil, domain.ErrRefreshTokenInvalidOrExpired
 	}
 
-	// Generate access token
 	accessTokenResult, err := s.authenticator.GenerateToken(refreshToken.UserID, auth.AccessTokenType)
 	if err != nil {
 		return nil, err
 	}
 
-	// Generate refresh token
 	refreshTokenResult, err := s.authenticator.GenerateToken(refreshToken.UserID, auth.RefreshTokenType)
 	if err != nil {
 		return nil, err
+	}
+
+	candidate := &domain.IssuedTokens{
+		AccessToken:  accessTokenResult.Token,
+		RefreshToken: refreshTokenResult.Token,
+		ExpiresAt:    refreshTokenResult.ExpiresAt,
+	}
+
+	// Collapse concurrent refreshes of one token onto a single successor: the winner rotates,
+	// losers return the token it issued. Otherwise each mints its own and the orphans log the user out.
+	won, existing, err := s.refreshReplayStorage.Claim(ctx, tokenHash, candidate, s.cfg.JWT.RefreshGraceWindow)
+	if err != nil {
+		// Fail open: a Redis blip must not block refresh (that would log everyone out). We
+		// rotate without dedup for this request only.
+		s.logger.Warn("refresh replay claim failed; rotating without dedup", logging.Error, err.Error())
+		won = true
+	}
+	if !won {
+		s.logRefreshOutcome(ctx, "deduped", tokenHash, refreshToken)
+		return &dtos.AuthData{
+			AccessToken:  existing.AccessToken,
+			RefreshToken: existing.RefreshToken,
+			ExpiresAt:    existing.ExpiresAt,
+		}, nil
 	}
 
 	// Slide the session expiry forward (bounded by SessionMaxLifetime) before rotating,
@@ -237,6 +262,7 @@ func (s *AuthService) RefreshToken(
 		s.cfg.Auth.SessionMaxLifetime,
 	)
 	if err != nil {
+		s.refreshReplayStorage.Release(ctx, tokenHash)
 		return nil, err
 	}
 
@@ -245,22 +271,22 @@ func (s *AuthService) RefreshToken(
 		refreshTokenExpiresAt = sessionExpiresAt
 	}
 
-	// Rotate refresh token
 	if err := s.refreshTokenRepository.RotateRefreshToken(ctx, refreshToken.TokenHash, &domain.RefreshToken{
 		UserID:    refreshToken.UserID,
 		SessionID: refreshToken.SessionID,
 		TokenHash: hashToken(refreshTokenResult.Token),
 		ExpiresAt: refreshTokenExpiresAt,
 	}); err != nil {
+		s.refreshReplayStorage.Release(ctx, tokenHash)
 		return nil, err
 	}
 
 	s.logRefreshOutcome(ctx, "success", tokenHash, refreshToken)
 
 	return &dtos.AuthData{
-		AccessToken:  accessTokenResult.Token,
-		RefreshToken: refreshTokenResult.Token,
-		ExpiresAt:    refreshTokenResult.ExpiresAt,
+		AccessToken:  candidate.AccessToken,
+		RefreshToken: candidate.RefreshToken,
+		ExpiresAt:    candidate.ExpiresAt,
 	}, nil
 }
 
@@ -292,8 +318,8 @@ func (s *AuthService) logRefreshOutcome(ctx context.Context, outcome, tokenHash 
 		}
 	}
 
-	// rotated_past_grace is the real anomaly (race lost past the window / reuse);
-	// success and the benign not_found_or_expired stay at info to avoid warn noise.
+	// rotated_past_grace is the real anomaly (race lost past the window / reuse); every
+	// other outcome (success, deduped, not_found_or_expired) is benign and stays at info.
 	if outcome == "rotated_past_grace" {
 		s.logger.Warn("refresh outcome", fields...)
 	} else {

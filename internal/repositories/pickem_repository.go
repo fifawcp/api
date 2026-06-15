@@ -476,31 +476,30 @@ func (r *PickemRepository) SetGroupLocks(ctx context.Context, userID string, loc
 	return tx.Commit()
 }
 
-func (r *PickemRepository) GetBracketPicksByMatch(ctx context.Context, matchID int64) ([]*domain.UserBracketPick, error) {
+func (r *PickemRepository) GetBracketPickUserIDsByTeamAndStage(ctx context.Context, teamFifaCode string, stage domain.MatchStageCode) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
 
-	query := `SELECT
-		user_id,
-		match_id,
-		team_fifa_code
-	FROM user_bracket_picks WHERE match_id = $1`
+	query := `SELECT DISTINCT bp.user_id
+		FROM user_bracket_picks bp
+		INNER JOIN matches m ON m.id = bp.match_id
+		WHERE bp.team_fifa_code = $1 AND m.stage_code = $2`
 
-	rows, err := r.db.QueryContext(ctx, query, matchID)
+	rows, err := r.db.QueryContext(ctx, query, teamFifaCode, string(stage))
 	if err != nil {
 		return nil, handleDBError(err, resourcePickem)
 	}
 	defer rows.Close()
 
-	picks := []*domain.UserBracketPick{}
+	userIDs := []string{}
 	for rows.Next() {
-		var p domain.UserBracketPick
-		if err := rows.Scan(&p.UserID, &p.MatchID, &p.TeamFifaCode); err != nil {
+		var userID string
+		if err := rows.Scan(&userID); err != nil {
 			return nil, handleDBError(err, resourcePickem)
 		}
 
-		picks = append(picks, &p)
+		userIDs = append(userIDs, userID)
 	}
 
-	return picks, rows.Err()
+	return userIDs, rows.Err()
 }
