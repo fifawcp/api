@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -133,6 +134,85 @@ func TestGroupStandingService_RecalculateStandings(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("applies fair play to break ties left level by head-to-head", func(t *testing.T) {
+		t.Parallel()
+
+		// Group G mirror: IRN drew NZL 2-2 and BEL drew EGY 1-1, so all four teams
+		// sit on 1 point with 0 goal difference. IRN and NZL stay level through
+		// head-to-head, so fair play decides — IRN took a yellow (-1), NZL none, so
+		// NZL must rank above IRN even though IRN is higher in the FIFA world ranking.
+		mr := &mocks.MockMatchRepository{
+			GetMatchesFunc: func(_ context.Context, _ domain.MatchFilters) ([]*domain.Match, error) {
+				rows := []struct {
+					id                                 int64
+					homeTeamFifaCode, awayTeamFifaCode string
+					homeScore, awayScore               int
+				}{
+					{16, "IRN", "NZL", 2, 2},
+					{14, "BEL", "EGY", 1, 1},
+				}
+
+				groupCode := "G"
+				matches := make([]*domain.Match, len(rows))
+				for i, r := range rows {
+					matches[i] = &domain.Match{
+						ID:        r.id,
+						GroupCode: &groupCode,
+						Status:    domain.MatchStatusFinished,
+						StageCode: domain.MatchStageCodeGroupStage,
+						Teams: domain.MatchTeams{
+							Home: &domain.Team{FifaCode: r.homeTeamFifaCode},
+							Away: &domain.Team{FifaCode: r.awayTeamFifaCode},
+						},
+						Result: &domain.MatchResult{HomeScore: r.homeScore, AwayScore: r.awayScore},
+					}
+				}
+
+				return matches, nil
+			},
+		}
+
+		var mu sync.Mutex
+		var groupGOrder []string
+		gr := &mocks.MockGroupStandingRepository{
+			GetGroupStandingsFunc: func(_ context.Context, _ []string, _ *int64) ([]*domain.GroupStanding, error) {
+				roster := []*domain.GroupStanding{}
+				for _, code := range []string{"IRN", "NZL", "BEL", "EGY"} {
+					roster = append(roster, &domain.GroupStanding{Team: domain.Team{FifaCode: code, GroupCode: "G"}})
+				}
+				return roster, nil
+			},
+			UpdateGroupStandingsFunc: func(_ context.Context, standings []*domain.GroupStanding) error {
+				if len(standings) == 0 {
+					return nil
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				groupGOrder = make([]string, len(standings))
+				for i, s := range standings {
+					groupGOrder[i] = s.Team.FifaCode
+				}
+				return nil
+			},
+		}
+
+		fp := &mocks.MockMatchFairPlayRepository{
+			GetFairPlayTotalsByGroupFunc: func(_ context.Context, groupCode string) (map[string]int, error) {
+				if groupCode == "G" {
+					return map[string]int{"IRN": -1}, nil
+				}
+				return map[string]int{}, nil
+			},
+		}
+
+		service := newTestGroupStandingService(gr, mr, fp, nil)
+
+		err := service.RecalculateStandings(context.Background())
+
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"NZL", "IRN", "BEL", "EGY"}, groupGOrder)
+	})
+
 	t.Run("propagates match repository error", func(t *testing.T) {
 		t.Parallel()
 
@@ -221,6 +301,7 @@ func TestGroupStandingService_rankGroup(t *testing.T) {
 		name          string
 		roster        []string
 		scores        []matchScore
+		fairPlay      map[string]int
 		expectedOrder []string
 	}{
 		{
@@ -307,13 +388,25 @@ func TestGroupStandingService_rankGroup(t *testing.T) {
 			},
 			expectedOrder: []string{"CZE", "KOR", "RSA", "MEX"},
 		},
+		{
+			// Level on points, goal difference, goals for and head-to-head, so fair
+			// play (FIFA rule f) decides: MEX took a card, so RSA ranks above it even
+			// though MEX is higher in the FIFA world ranking.
+			name:   "fair play breaks a head-to-head tie",
+			roster: []string{"MEX", "RSA"},
+			scores: []matchScore{
+				{"MEX", "RSA", 1, 1},
+			},
+			fairPlay:      map[string]int{"MEX": -1},
+			expectedOrder: []string{"RSA", "MEX"},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			standings := rankGroup(buildRoster(tc.roster), buildMatches(tc.scores))
+			standings := rankGroup(buildRoster(tc.roster), buildMatches(tc.scores), tc.fairPlay)
 
 			actualOrder := make([]string, len(standings))
 			for i, s := range standings {
