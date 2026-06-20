@@ -92,16 +92,12 @@ func (s *GroupStandingService) RecalculateStandings(ctx context.Context) error {
 }
 
 func (s *GroupStandingService) recalculateStandingsByGroup(ctx context.Context, groupCode string, roster []domain.Team, groupMatches []*domain.Match) error {
-	standings := rankGroup(roster, groupMatches)
-
 	fairPlayTotals, err := s.fairPlayRepository.GetFairPlayTotalsByGroup(ctx, groupCode)
 	if err != nil {
 		return err
 	}
 
-	for _, standing := range standings {
-		standing.FairPlayScore = fairPlayTotals[standing.Team.FifaCode]
-	}
+	standings := rankGroup(roster, groupMatches, fairPlayTotals)
 
 	return s.groupStandingRepository.UpdateGroupStandings(ctx, standings)
 }
@@ -109,8 +105,11 @@ func (s *GroupStandingService) recalculateStandingsByGroup(ctx context.Context, 
 // rankGroup is the full FIFA Article 13 ranking pipeline. roster is every team
 // in the group, so teams without a finished match yet are still ranked rather
 // than dropped from the table.
-func rankGroup(roster []domain.Team, matches []*domain.Match) []*domain.GroupStanding {
+func rankGroup(roster []domain.Team, matches []*domain.Match, fairPlayTotals map[string]int) []*domain.GroupStanding {
 	standings := computeStandings(roster, matches)
+	for _, standing := range standings {
+		standing.FairPlayScore = fairPlayTotals[standing.Team.FifaCode]
+	}
 	sortBy(standings, overallSortChain)
 	breakPointsTies(standings, matches)
 	assignPositions(standings)
