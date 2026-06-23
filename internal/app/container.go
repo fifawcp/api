@@ -47,6 +47,7 @@ type Container struct {
 	mailer               mailer.Mailer
 	Authenticator        auth.Authenticator
 	Scheduler            scheduler.Scheduler
+	footballClient       football.FixtureFetcher
 	syncMatchResultsJob  *jobs.SyncMatchResultsJob
 	GoogleOauthConfig    domain.OAuth2Client
 	OIDCIdentityVerifier domain.IDTokenVerifier
@@ -90,6 +91,7 @@ type Container struct {
 	boardService              services.BoardServiceInterface
 	groupStandingService      services.GroupStandingServiceInterface
 	matchService              services.MatchServiceInterface
+	matchResultSyncService    services.MatchResultSyncServiceInterface
 	matchScorePickService     services.MatchScorePickServiceInterface
 	oauthService              services.OAuthServiceInterface
 	UserService               services.UserServiceInterface
@@ -299,6 +301,19 @@ func (c *Container) initServices() {
 		c.matchRepository, c.groupStandingRepository,
 		c.groupStandingService, c.pickemScoringService, c.competitionScoringService, c.Logger,
 	)
+
+	// Built unconditionally (independent of the sync cron toggle) so the manual
+	// admin sync endpoint works even when the poller is disabled. The cron job
+	// reuses this same service and football client when enabled.
+	c.footballClient = football.NewFootballClient(c.Config.FootballAPI)
+	c.matchResultSyncService = services.NewMatchResultSyncService(
+		c.matchService,
+		c.footballClient,
+		c.matchAPIFixtureRepository,
+		c.matchFairPlayRepository,
+		c.Logger,
+	)
+
 	c.oauthService = services.NewOAuthService(
 		c.oauthStateStorage, c.GoogleOauthConfig, c.OIDCIdentityVerifier,
 		c.oauthAccountRepository, c.userRepository, c.authService,
@@ -328,7 +343,7 @@ func (c *Container) initHandlers() {
 	c.BoardHandler = handlers.NewBoardHandler(c.boardService, c.BoardMemberService, c.Config, c.validator, c.Logger)
 	c.GroupHandler = handlers.NewGroupStandingHandler(c.groupStandingService, c.Logger)
 	c.MatchHandler = handlers.NewMatchHandler(c.matchService, c.matchScorePickService, c.Logger, c.validator)
-	c.AdminHandler = handlers.NewAdminHandler(c.matchService, c.groupStandingService, c.pickemScoringService, c.awardService, c.Logger, c.AuditLogger, c.validator)
+	c.AdminHandler = handlers.NewAdminHandler(c.matchService, c.matchResultSyncService, c.groupStandingService, c.pickemScoringService, c.awardService, c.Logger, c.AuditLogger, c.validator)
 	c.OAuthHandler = handlers.NewOAuthHandler(c.oauthService, c.Logger, c.Config)
 	c.PickemHandler = handlers.NewPickemHandler(c.pickemService, c.Logger, c.validator)
 	c.CompetitionHandler = handlers.NewCompetitionHandler(c.competitionService, c.Config, c.validator, c.Logger)
@@ -351,12 +366,10 @@ func (c *Container) initJobs() {
 		return
 	}
 
-	footballClient := football.NewFootballClient(c.Config.FootballAPI)
 	c.syncMatchResultsJob = jobs.NewSyncMatchResultsJob(
 		c.matchService,
-		footballClient,
-		c.matchFairPlayRepository,
-		c.matchAPIFixtureRepository,
+		c.footballClient,
+		c.matchResultSyncService,
 		jobs.SyncTiming{
 			FirstPollOffset: c.Config.Cron.SyncMatchResultsFirstPollOffset,
 			NearEndInterval: c.Config.Cron.SyncMatchResultsNearEndInterval,

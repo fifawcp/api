@@ -18,6 +18,7 @@ type AuditAction string
 
 const (
 	ActionUpdateMatchResult    AuditAction = "match.update_result"
+	ActionSyncMatchResult      AuditAction = "match.sync_result"
 	ActionResetMatchResult     AuditAction = "match.reset_result"
 	ActionBulkUpdateMatches    AuditAction = "match.bulk_update_results"
 	ActionRecalculateStandings AuditAction = "standing.recalculate"

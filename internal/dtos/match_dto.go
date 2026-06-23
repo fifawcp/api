@@ -29,12 +29,15 @@ type MatchMemberPicksDto struct {
 	Picks []MemberPickDto `json:"picks"`
 }
 
-// DashboardResponseDto mirrors domain.Dashboard but serializes next_match through
-// MatchResponseDto so it carries the authenticated user's score pick.
+// DashboardResponseDto mirrors domain.Dashboard but serializes the next matches
+// through MatchResponseDto so each carries the authenticated user's score pick.
 type DashboardResponseDto struct {
-	PickedChampion *domain.Team                `json:"picked_champion"`
-	Stats          *domain.DashboardStats      `json:"stats"`
+	PickedChampion *domain.Team           `json:"picked_champion"`
+	Stats          *domain.DashboardStats `json:"stats"`
+	// NextMatch is deprecated: use NextMatches. Kept (= NextMatches[0]) for
+	// backward compatibility while clients migrate.
 	NextMatch      *MatchResponseDto           `json:"next_match"`
+	NextMatches    []*MatchResponseDto         `json:"next_matches"`
 	Progress       *domain.DashboardProgress   `json:"progress"`
 	Leaderboard    domain.DashboardLeaderboard `json:"leaderboard"`
 	TitleFavorites []*domain.TitleFavorite     `json:"title_favorites"`
@@ -45,18 +48,25 @@ func NewDashboardResponse(d *domain.Dashboard) *DashboardResponseDto {
 		return nil
 	}
 
-	var nextMatch *MatchResponseDto
-	if d.NextMatch != nil {
-		nextMatch = &MatchResponseDto{Match: d.NextMatch}
-		if pick := d.NextMatchScorePick; pick != nil {
-			nextMatch.UserScorePick = &UserScorePickDto{HomeScore: pick.HomeScore, AwayScore: pick.AwayScore}
+	nextMatches := make([]*MatchResponseDto, 0, len(d.NextMatches))
+	for _, match := range d.NextMatches {
+		dto := &MatchResponseDto{Match: match}
+		if pick := d.NextMatchScorePicks[match.ID]; pick != nil {
+			dto.UserScorePick = &UserScorePickDto{HomeScore: pick.HomeScore, AwayScore: pick.AwayScore}
 		}
+		nextMatches = append(nextMatches, dto)
+	}
+
+	var nextMatch *MatchResponseDto
+	if len(nextMatches) > 0 {
+		nextMatch = nextMatches[0]
 	}
 
 	return &DashboardResponseDto{
 		PickedChampion: d.PickedChampion,
 		Stats:          d.Stats,
 		NextMatch:      nextMatch,
+		NextMatches:    nextMatches,
 		Progress:       d.Progress,
 		Leaderboard:    d.Leaderboard,
 		TitleFavorites: d.TitleFavorites,
