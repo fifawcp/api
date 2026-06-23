@@ -44,7 +44,7 @@ func NewDashboardService(
 func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*domain.Dashboard, error) {
 	var (
 		// public — always fetched
-		nextMatch      *domain.Match
+		nextMatches    []*domain.Match
 		pickemPage     *domain.CompetitionLeaderboardPage
 		matchPage      *domain.CompetitionLeaderboardPage
 		titleFavorites []*domain.TitleFavorite
@@ -62,7 +62,7 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 
 	// public data: always fan out
 	eg.Go(func() (err error) {
-		nextMatch, err = s.matchRepository.GetNextScheduledMatch(egCtx)
+		nextMatches, err = s.matchRepository.GetNextScheduledMatches(egCtx)
 		return
 	})
 	eg.Go(func() (err error) {
@@ -116,7 +116,7 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 	}
 
 	dashboard := &domain.Dashboard{
-		NextMatch:      nextMatch,
+		NextMatches:    nextMatches,
 		TitleFavorites: titleFavorites,
 		Leaderboard: domain.DashboardLeaderboard{
 			Pickem: domain.CompetitionTop{
@@ -134,6 +134,11 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 		},
 	}
 
+	// Deprecated single-match field: the earliest of the simultaneous set.
+	if len(nextMatches) > 0 {
+		dashboard.NextMatch = nextMatches[0]
+	}
+
 	if userID != "" {
 		dashboard.PickedChampion = champion
 		dashboard.Stats = &domain.DashboardStats{
@@ -145,19 +150,30 @@ func (s *DashboardService) GetDashboard(ctx context.Context, userID string) (*do
 			Pickem:     *pickemProgress,
 			Awards:     userAwards.Progress,
 		}
-		// Attach the user's pick for the featured next match (if any) so the
-		// dashboard's "up next" card reflects it.
-		if nextMatch != nil {
-			for _, pick := range userMatchPicks {
-				if pick.MatchID == nextMatch.ID {
-					dashboard.NextMatchScorePick = pick
-					break
-				}
-			}
-		}
+		// Attach the user's pick to each next match (if any) so the dashboard's
+		// "up next" cards reflect them.
+		dashboard.NextMatchScorePicks = nextMatchScorePicks(nextMatches, userMatchPicks)
 	}
 
 	return dashboard, nil
+}
+
+// nextMatchScorePicks indexes the user's picks by match ID and returns the
+// subset that belongs to the upcoming matches.
+func nextMatchScorePicks(nextMatches []*domain.Match, userMatchPicks []*domain.UserMatchScorePick) map[int64]*domain.UserMatchScorePick {
+	picksByMatch := make(map[int64]*domain.UserMatchScorePick, len(userMatchPicks))
+	for _, pick := range userMatchPicks {
+		picksByMatch[pick.MatchID] = pick
+	}
+
+	picks := make(map[int64]*domain.UserMatchScorePick)
+	for _, match := range nextMatches {
+		if pick, ok := picksByMatch[match.ID]; ok {
+			picks[match.ID] = pick
+		}
+	}
+
+	return picks
 }
 
 func buildLeaderEntries(page *domain.CompetitionLeaderboardPage) []domain.DashboardLeaderEntry {

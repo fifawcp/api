@@ -14,17 +14,19 @@ import (
 )
 
 type AdminHandler struct {
-	matchService         services.MatchServiceInterface
-	groupStandingService services.GroupStandingServiceInterface
-	scoringService       services.ScoringServiceInterface
-	awardService         services.AwardServiceInterface
-	logger               logging.Logger
-	auditLogger          logging.AuditLogger
-	validator            *validator.Validator
+	matchService           services.MatchServiceInterface
+	matchResultSyncService services.MatchResultSyncServiceInterface
+	groupStandingService   services.GroupStandingServiceInterface
+	scoringService         services.ScoringServiceInterface
+	awardService           services.AwardServiceInterface
+	logger                 logging.Logger
+	auditLogger            logging.AuditLogger
+	validator              *validator.Validator
 }
 
 func NewAdminHandler(
 	matchService services.MatchServiceInterface,
+	matchResultSyncService services.MatchResultSyncServiceInterface,
 	groupStandingService services.GroupStandingServiceInterface,
 	scoringService services.ScoringServiceInterface,
 	awardService services.AwardServiceInterface,
@@ -33,13 +35,14 @@ func NewAdminHandler(
 	validator *validator.Validator,
 ) *AdminHandler {
 	return &AdminHandler{
-		matchService:         matchService,
-		groupStandingService: groupStandingService,
-		scoringService:       scoringService,
-		awardService:         awardService,
-		logger:               logger,
-		auditLogger:          auditLogger,
-		validator:            validator,
+		matchService:           matchService,
+		matchResultSyncService: matchResultSyncService,
+		groupStandingService:   groupStandingService,
+		scoringService:         scoringService,
+		awardService:           awardService,
+		logger:                 logger,
+		auditLogger:            auditLogger,
+		validator:              validator,
 	}
 }
 
@@ -94,6 +97,51 @@ func (h *AdminHandler) UpdateMatchResult(w http.ResponseWriter, r *http.Request)
 	})
 
 	httpx.RespondWithData(w, http.StatusOK, outcome)
+}
+
+// SyncMatchResult godoc
+//
+//	@Summary		Manually sync a match result from the football provider
+//	@Description	Re-fetches a single match's result from the football API by its fixture ID and persists it when the fixture is final (triggering standings + scoring). Use this when the automatic poller's window was missed — e.g. a suspended match that resumed hours after kickoff. A non-final fixture returns 200 with finalized=false and the live status, making no changes. Requires authentication and admin role.
+//	@Tags			admin
+//	@Produce		json
+//	@Param			id	path		string										true	"Match ID"
+//	@Success		200	{object}	httpx.Response{data=domain.MatchSyncResult}	"Sync attempted; finalized indicates whether the result was persisted"
+//	@Failure		400	{object}	httpx.ErrorResponse							"Invalid match ID, or knockout match teams not yet assigned"
+//	@Failure		401	{object}	httpx.ErrorResponse							"Unauthorized - missing or invalid authentication"
+//	@Failure		403	{object}	httpx.ErrorResponse							"Forbidden - admin role required"
+//	@Failure		404	{object}	httpx.ErrorResponse							"Match not found, or no matching provider fixture could be resolved"
+//	@Failure		500	{object}	httpx.ErrorResponse							"Internal server error"
+//	@Security		BearerAuth
+//	@Router			/admin/matches/{id}/sync-result [post]
+func (h *AdminHandler) SyncMatchResult(w http.ResponseWriter, r *http.Request) {
+	matchID := httpctx.GetMatchID(r.Context())
+
+	result, err := h.matchResultSyncService.SyncMatch(r.Context(), matchID)
+	if err != nil {
+		h.auditLogger.LogEvent(r.Context(), logging.Event{
+			Action:     logging.ActionSyncMatchResult,
+			Resource:   logging.ResourceMatch,
+			ResourceID: fmt.Sprintf("%d", matchID),
+			Outcome:    logging.OutcomeFailure,
+			Metadata:   map[string]any{logging.Error: err.Error()},
+		})
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	h.auditLogger.LogEvent(r.Context(), logging.Event{
+		Action:     logging.ActionSyncMatchResult,
+		Resource:   logging.ResourceMatch,
+		ResourceID: fmt.Sprintf("%d", matchID),
+		Outcome:    logging.OutcomeSuccess,
+		Metadata: map[string]any{
+			"finalized": result.Finalized,
+			"status":    result.Status,
+		},
+	})
+
+	httpx.RespondWithData(w, http.StatusOK, result)
 }
 
 // ResetMatchResult godoc

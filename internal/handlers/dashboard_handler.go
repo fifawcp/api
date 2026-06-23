@@ -28,7 +28,8 @@ func NewDashboardHandler(
 // GetDashboard godoc
 //
 //	@Summary		Dashboard for authenticated or guest callers
-//	@Description	Returns the next scheduled match and the top 5 of each global competition for everyone.
+//	@Description	Returns the next scheduled matches (all that kick off at the same earliest time, e.g. simultaneous group finales) and the top 5 of each global competition for everyone.
+//	@Description	`next_match` is the earliest of those and is deprecated in favour of `next_matches`.
 //	@Description	When the caller is authenticated, also includes their picked champion (when bracket is complete),
 //	@Description	per-competition rank and points, and pick progress (match picks + pickem groups/best-thirds/bracket).
 //	@Description	Guest callers receive `null` for `picked_champion`, `stats`, and `progress`.

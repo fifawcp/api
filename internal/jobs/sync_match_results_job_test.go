@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/fifawcp/api/internal/domain"
-	"github.com/fifawcp/api/internal/dtos"
 	"github.com/fifawcp/api/internal/infrastructure/football"
 	"github.com/fifawcp/api/internal/test/mocks"
 )
@@ -72,46 +71,43 @@ func TestStop_CancelsAllPendingTimers(t *testing.T) {
 }
 
 // TestPoll_PersistsAndClearsTimer_WhenFinal verifies the happy path: a finished
-// fixture is persisted via UpdateMatchResult and its timer is cleared.
+// fixture is finalized via the sync service and its timer is cleared.
 func TestPoll_PersistsAndClearsTimer_WhenFinal(t *testing.T) {
-	home, away := 2, 0
 	fetcher := &mocks.MockFixtureFetcher{
 		GetFixtureFunc: func(_ context.Context, fixtureID int64) (*football.FixtureResponse, error) {
 			return &football.FixtureResponse{
 				Fixture: football.FixtureInfo{ID: fixtureID, Status: football.FixtureStatus{Short: "FT"}},
-				Goals:   football.FixtureGoals{Home: &home, Away: &away},
 			}, nil
 		},
 	}
 
-	var persistedMatchID int64
-	var persisted dtos.UpdateMatchResultDto
+	var finalizedMatchID, finalizedFixtureID int64
 	called := false
-	matchService := &mocks.MockMatchService{
-		UpdateMatchResultFunc: func(_ context.Context, matchID int64, payload dtos.UpdateMatchResultDto) (*domain.SyncGroupStageOutcomes, error) {
+	syncService := &mocks.MockMatchResultSyncService{
+		FinalizeFunc: func(_ context.Context, matchID, fixtureID int64, _ *football.FixtureResponse) (*domain.SyncGroupStageOutcomes, error) {
 			called = true
-			persistedMatchID = matchID
-			persisted = payload
+			finalizedMatchID = matchID
+			finalizedFixtureID = fixtureID
 			return &domain.SyncGroupStageOutcomes{}, nil
 		},
 	}
 
 	job := &SyncMatchResultsJob{
-		matchService: matchService,
-		fetcher:      fetcher,
-		logger:       &mocks.MockLogger{},
-		timing:       neverEndingTiming(),
-		timers:       make(map[int64]*time.Timer),
+		fetcher:     fetcher,
+		syncService: syncService,
+		logger:      &mocks.MockLogger{},
+		timing:      neverEndingTiming(),
+		timers:      make(map[int64]*time.Timer),
 	}
 	job.schedulePoll(1, 10, time.Now(), time.Hour) // pre-arm so we can prove it gets cleared
 
 	job.poll(context.Background(), 1, 10, time.Now())
 
 	if !called {
-		t.Fatal("expected UpdateMatchResult to be called for a finished fixture")
+		t.Fatal("expected Finalize to be called for a finished fixture")
 	}
-	if persistedMatchID != 1 || persisted.HomeScore == nil || *persisted.HomeScore != 2 || persisted.AwayScore == nil || *persisted.AwayScore != 0 {
-		t.Fatalf("unexpected persisted result: match=%d payload=%+v", persistedMatchID, persisted)
+	if finalizedMatchID != 1 || finalizedFixtureID != 10 {
+		t.Fatalf("unexpected finalize args: match=%d fixture=%d", finalizedMatchID, finalizedFixtureID)
 	}
 	if _, ok := job.timers[1]; ok {
 		t.Fatal("expected timer to be cleared after the match went final")
@@ -154,11 +150,11 @@ func TestPoll_ReschedulesWhileInProgress(t *testing.T) {
 	}
 
 	job := &SyncMatchResultsJob{
-		matchService: &mocks.MockMatchService{}, // must NOT be called (would panic)
-		fetcher:      fetcher,
-		logger:       &mocks.MockLogger{},
-		timing:       neverEndingTiming(),
-		timers:       make(map[int64]*time.Timer),
+		fetcher:     fetcher,
+		syncService: &mocks.MockMatchResultSyncService{}, // Finalize must NOT be called (would panic)
+		logger:      &mocks.MockLogger{},
+		timing:      neverEndingTiming(),
+		timers:      make(map[int64]*time.Timer),
 	}
 
 	job.poll(context.Background(), 1, 10, time.Now())

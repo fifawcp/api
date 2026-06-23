@@ -16,6 +16,7 @@ func adminRoutes(c *Container) chi.Router {
 		r.Route("/{id}", func(r chi.Router) {
 			r.Use(middlewares.ParseMatchID)
 			r.Post("/result", c.AdminHandler.UpdateMatchResult)
+			r.Post("/sync-result", c.AdminHandler.SyncMatchResult)
 			r.Delete("/result", c.AdminHandler.ResetMatchResult)
 		})
 	})

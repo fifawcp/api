@@ -12,14 +12,15 @@ import (
 
 const (
 	// 404 Not Found
-	codeUserNotFound         = "USER_NOT_FOUND"
-	codeSessionNotFound      = "SESSION_NOT_FOUND"
-	codeBoardNotFound        = "BOARD_NOT_FOUND"
-	codeBoardMemberNotFound  = "BOARD_MEMBER_NOT_FOUND"
-	codeMatchNotFound        = "MATCH_NOT_FOUND"
-	codeOAuthAccountNotFound = "OAUTH_ACCOUNT_NOT_FOUND"
-	codeMatchesNotFound      = "MATCHES_NOT_FOUND"
-	codeCompetitionNotFound  = "COMPETITION_NOT_FOUND"
+	codeUserNotFound           = "USER_NOT_FOUND"
+	codeSessionNotFound        = "SESSION_NOT_FOUND"
+	codeBoardNotFound          = "BOARD_NOT_FOUND"
+	codeBoardMemberNotFound    = "BOARD_MEMBER_NOT_FOUND"
+	codeMatchNotFound          = "MATCH_NOT_FOUND"
+	codeMatchFixtureUnresolved = "MATCH_FIXTURE_UNRESOLVED"
+	codeOAuthAccountNotFound   = "OAUTH_ACCOUNT_NOT_FOUND"
+	codeMatchesNotFound        = "MATCHES_NOT_FOUND"
+	codeCompetitionNotFound    = "COMPETITION_NOT_FOUND"
 
 	// 409 Conflict
 	codeUserAlreadyExists              = "USER_ALREADY_EXISTS"
@@ -115,6 +116,8 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error, logge
 		httpx.NotFound(w, r, codeBoardMemberNotFound, domain.ErrBoardMemberNotFound.Error())
 	case errors.Is(err, domain.ErrMatchNotFound):
 		httpx.NotFound(w, r, codeMatchNotFound, domain.ErrMatchNotFound.Error())
+	case errors.Is(err, domain.ErrMatchFixtureUnresolved):
+		httpx.NotFound(w, r, codeMatchFixtureUnresolved, domain.ErrMatchFixtureUnresolved.Error())
 	case errors.Is(err, domain.ErrOAuthAccountNotFound):
 		httpx.NotFound(w, r, codeOAuthAccountNotFound, domain.ErrOAuthAccountNotFound.Error())
 	case errors.As(err, &matchesNotFoundErr):
