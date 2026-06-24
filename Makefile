@@ -96,6 +96,30 @@ db-seed:
 db-seed-inner:
 	@go run ./cmd/db/seed $(if $(SCENARIO),-scenario=$(SCENARIO))
 
+.PHONY: db-export-snapshot
+db-export-snapshot:
+	@docker compose exec server make db-export-snapshot-inner FILE=$(FILE)
+
+.PHONY: db-export-snapshot-inner
+db-export-snapshot-inner:
+	@go run ./cmd/db/export $(if $(FILE),-out=$(FILE))
+
+.PHONY: db-seed-snapshot
+db-seed-snapshot:
+	@docker compose exec server make db-seed-snapshot-inner FILE=$(FILE)
+
+.PHONY: db-seed-snapshot-inner
+db-seed-snapshot-inner:
+	@go run ./cmd/db/seed -snapshot=$(FILE)
+
+.PHONY: db-seed-from-prod
+db-seed-from-prod:
+	@docker compose exec server make db-seed-from-prod-inner
+
+.PHONY: db-seed-from-prod-inner
+db-seed-from-prod-inner:
+	@go run ./cmd/db/seed -from-prod
+
 .PHONY: db-flush
 db-flush:
 	@docker compose exec server make db-flush-inner
@@ -152,6 +176,9 @@ help:
 	@echo "  make db-seed <scenario>     - Seed a tournament snapshot (e.g. qf_done)"
 	@echo "                                  Scenarios: pre_tournament, group_stage_done,"
 	@echo "                                  r32_done, r16_done, qf_done, sf_done, final_done"
+	@echo "  make db-export-snapshot FILE= - Export real prod data → JSON (needs PROD_DB_ADDRESS)"
+	@echo "  make db-seed-snapshot FILE= - Replay a real prod snapshot into dev"
+	@echo "  make db-seed-from-prod      - Reseed dev live from prod (read-only SELECT; needs PROD_DB_ADDRESS)"
 	@echo "  make db-flush               - Reset DB to post-migration baseline"
 	@echo ""
 	@echo "🔄 Database Migrations:"

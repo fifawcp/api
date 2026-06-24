@@ -26,6 +26,7 @@ type Seeder struct {
 	pickemRepository      domain.PickemRepository
 	matchRepository       domain.MatchRepository
 	awardPickRepository   domain.AwardPickRepository
+	fairPlayRepository    domain.MatchFairPlayRepository
 	matchService          services.MatchServiceInterface
 	pickemService         services.PickemServiceInterface
 	boardService          services.BoardServiceInterface
@@ -42,6 +43,7 @@ func NewSeeder(
 	pickemRepository domain.PickemRepository,
 	matchRepository domain.MatchRepository,
 	awardPickRepository domain.AwardPickRepository,
+	fairPlayRepository domain.MatchFairPlayRepository,
 	matchService services.MatchServiceInterface,
 	pickemService services.PickemServiceInterface,
 	boardService services.BoardServiceInterface,
@@ -56,6 +58,7 @@ func NewSeeder(
 		pickemRepository:      pickemRepository,
 		matchRepository:       matchRepository,
 		awardPickRepository:   awardPickRepository,
+		fairPlayRepository:    fairPlayRepository,
 		matchService:          matchService,
 		pickemService:         pickemService,
 		boardService:          boardService,
@@ -276,6 +279,27 @@ func (s *Seeder) RunScenario(ctx context.Context, scenarioName string) error {
 		return fmt.Errorf("shift kickoff dates: %w", err)
 	}
 
+	matchUsers, err := s.seedParticipants(ctx)
+	if err != nil {
+		return err
+	}
+
+	scriptedResultsByMatchID, err := buildScriptedResults(ctx, s.db)
+	if err != nil {
+		return fmt.Errorf("build scripted results: %w", err)
+	}
+
+	if err := s.replayResults(ctx, scenario.StageGroups, scriptedResultsByMatchID, matchUsers); err != nil {
+		return err
+	}
+
+	s.logger.Info("Scenario seeded successfully", "scenario", scenario.Name)
+	return nil
+}
+
+// seedParticipants creates the synthetic users/boards/competitions and their picks,
+// returning the match-score pickers so callers re-seed knockout picks per stage.
+func (s *Seeder) seedParticipants(ctx context.Context) ([]*domain.User, error) {
 	users := s.generateUsers(usersAmount)
 	createdUsers := make([]*domain.User, 0, len(users))
 	for _, user := range users {
@@ -289,43 +313,42 @@ func (s *Seeder) RunScenario(ctx context.Context, scenarioName string) error {
 
 	s.seedBoards(ctx, createdUsers)
 	if err := s.seedCompetitions(ctx); err != nil {
-		return fmt.Errorf("seed competitions: %w", err)
+		return nil, fmt.Errorf("seed competitions: %w", err)
 	}
 
 	pickemUsers, matchUsers, err := partitionUsersByEngagement(createdUsers)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	s.seedPickemData(ctx, pickemUsers)
 	if err := s.seedBracketPicks(ctx, pickemUsers); err != nil {
-		return fmt.Errorf("seed bracket picks: %w", err)
+		return nil, fmt.Errorf("seed bracket picks: %w", err)
 	}
 	if err := s.seedAwardPicks(ctx, pickemUsers); err != nil {
-		return fmt.Errorf("seed award picks: %w", err)
+		return nil, fmt.Errorf("seed award picks: %w", err)
 	}
 
-	// Group-stage teams are always assigned post-migration, so these picks always land
-	// Knockout picks are seeded per-stage below, once their matchups become known via advanceBracket
+	// Group-stage teams are assigned post-migration so these picks always land;
+	// knockout picks are re-seeded per-stage by replayResults as matchups reveal.
 	s.seedMatchScoresFor(ctx, matchUsers, allMatchIDs())
 
-	scriptedResultsByMatchID, err := buildScriptedResults(ctx, s.db)
-	if err != nil {
-		return fmt.Errorf("build scripted results: %w", err)
-	}
+	return matchUsers, nil
+}
 
-	for stageIndex, stageMatchIDs := range scenario.StageGroups {
-		if err := s.applyScenarioResults(ctx, stageMatchIDs, scriptedResultsByMatchID); err != nil {
+// replayResults applies results one stage at a time (in stageGroups order), re-seeding
+// match-score picks after each stage so newly revealed knockout matchups get scored.
+func (s *Seeder) replayResults(ctx context.Context, stageGroups [][]int64, results map[int64]ScriptedResult, matchUsers []*domain.User) error {
+	for stageIndex, stageMatchIDs := range stageGroups {
+		if err := s.applyScenarioResults(ctx, stageMatchIDs, results); err != nil {
 			return fmt.Errorf("apply stage %d results: %w", stageIndex, err)
 		}
 
-		// After this stage's apply, advanceBracket has filled in the NEXT
-		// stage's home/away teams. Re-seed picks so that next stage's
-		// scoring (in the following iteration) sees them
+		// advanceBracket has now filled the next stage's teams; re-seed so its
+		// scoring sees them on the following iteration.
 		s.seedMatchScoresFor(ctx, matchUsers, allMatchIDs())
 	}
 
-	s.logger.Info("Scenario seeded successfully", "scenario", scenario.Name)
 	return nil
 }
 
@@ -370,6 +393,7 @@ func allMatchIDs() []int64 {
 func (s *Seeder) resetTournamentState(ctx context.Context) error {
 	queries := []string{
 		`DELETE FROM score_events`,
+		`DELETE FROM match_fair_play`,
 		`DELETE FROM competition_match_scores`,
 		`DELETE FROM user_bracket_picks`,
 		`DELETE FROM user_match_score_picks`,
