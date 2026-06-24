@@ -7,6 +7,8 @@ coverage.out
 coverage.html
 coverage-integration.out
 
+snapshot.json
+
 bin/
 *.exe
 *.dll

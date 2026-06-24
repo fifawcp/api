@@ -26,6 +26,68 @@ func NewMatchRepository(db *sql.DB, cfg *config.Config, teams *domain.TeamLookup
 	}
 }
 
+// matchSelectColumns is the shared column projection for every match query, so a
+// new column is wired into the scan in exactly one place (scanMatch).
+const matchSelectColumns = `
+	m.id,
+	m.stage_code,
+	m.group_code,
+	m.venue_name,
+	m.venue_city,
+	m.home_team_fifa_code,
+	m.away_team_fifa_code,
+	m.kickoff_at,
+	m.status,
+	m.home_score,
+	m.away_score,
+	m.home_penalty_score,
+	m.away_penalty_score,
+	m.winner_team_fifa_code,
+	m.updated_at`
+
+// rowScanner is satisfied by both *sql.Row and *sql.Rows, so scanMatch backs
+// single-row and multi-row queries alike.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+// scanMatch reads one matchSelectColumns row into a domain.Match. The raw scan
+// error is returned unwrapped so callers can detect sql.ErrNoRows.
+func (r *MatchRepository) scanMatch(row rowScanner) (*domain.Match, error) {
+	var match domain.Match
+	var homeFifa, awayFifa sql.NullString
+	var homeScore, awayScore, homePenaltyScore, awayPenaltyScore sql.NullInt64
+	var winnerFifaCode sql.NullString
+
+	if err := row.Scan(
+		&match.ID,
+		&match.StageCode,
+		&match.GroupCode,
+		&match.Venue.Name,
+		&match.Venue.City,
+		&homeFifa,
+		&awayFifa,
+		&match.KickoffAt,
+		&match.Status,
+		&homeScore,
+		&awayScore,
+		&homePenaltyScore,
+		&awayPenaltyScore,
+		&winnerFifaCode,
+		&match.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+
+	match.Teams = domain.MatchTeams{
+		Home: r.teams.Get(homeFifa.String),
+		Away: r.teams.Get(awayFifa.String),
+	}
+	match.Result = buildMatchResult(homeScore, awayScore, homePenaltyScore, awayPenaltyScore, winnerFifaCode)
+
+	return &match, nil
+}
+
 func (r *MatchRepository) GetMatches(ctx context.Context, filters domain.MatchFilters) ([]*domain.Match, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
@@ -33,22 +95,7 @@ func (r *MatchRepository) GetMatches(ctx context.Context, filters domain.MatchFi
 	var args []any
 	var conditions []string
 
-	baseQuery := `SELECT
-    m.id,
-    m.stage_code,
-    m.group_code,
-    m.venue_name,
-    m.venue_city,
-    m.home_team_fifa_code,
-    m.away_team_fifa_code,
-    m.kickoff_at,
-    m.status,
-    m.home_score,
-    m.away_score,
-    m.home_penalty_score,
-    m.away_penalty_score,
-    m.winner_team_fifa_code,
-    m.updated_at
+	baseQuery := `SELECT ` + matchSelectColumns + `
   FROM matches m`
 
 	if len(filters.MatchIDs) > 0 {
@@ -118,103 +165,47 @@ func (r *MatchRepository) GetMatches(ctx context.Context, filters domain.MatchFi
 	matches := []*domain.Match{}
 
 	for rows.Next() {
-		var match domain.Match
-		var homeFifa, awayFifa sql.NullString
-		var homeScore, awayScore, homePenaltyScore, awayPenaltyScore sql.NullInt64
-		var winnerFifaCode sql.NullString
-		err := rows.Scan(
-			&match.ID,
-			&match.StageCode,
-			&match.GroupCode,
-			&match.Venue.Name,
-			&match.Venue.City,
-			&homeFifa,
-			&awayFifa,
-			&match.KickoffAt,
-			&match.Status,
-			&homeScore,
-			&awayScore,
-			&homePenaltyScore,
-			&awayPenaltyScore,
-			&winnerFifaCode,
-			&match.UpdatedAt,
-		)
+		match, err := r.scanMatch(rows)
 		if err != nil {
 			return nil, handleDBError(err, resourceMatch)
 		}
-
-		match.Teams = domain.MatchTeams{
-			Home: r.teams.Get(homeFifa.String),
-			Away: r.teams.Get(awayFifa.String),
-		}
-		match.Result = buildMatchResult(homeScore, awayScore, homePenaltyScore, awayPenaltyScore, winnerFifaCode)
-		matches = append(matches, &match)
+		matches = append(matches, match)
 	}
 
 	return matches, nil
 }
 
-func (r *MatchRepository) GetNextScheduledMatch(ctx context.Context) (*domain.Match, error) {
+// GetNextScheduledMatches returns every scheduled match sharing the single
+// earliest upcoming kickoff. kickoff_at is TIMESTAMP(0) (second precision), so
+// the equality is exact: this yields the simultaneous set (e.g. group-stage
+// final matchdays kicking off together), not a time range. An empty slice means
+// nothing is scheduled.
+func (r *MatchRepository) GetNextScheduledMatches(ctx context.Context) ([]*domain.Match, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.DB.QueryTimeout)
 	defer cancel()
 
-	query := `SELECT
-		m.id,
-		m.stage_code,
-		m.group_code,
-		m.venue_name,
-		m.venue_city,
-		m.home_team_fifa_code,
-		m.away_team_fifa_code,
-		m.kickoff_at,
-		m.status,
-		m.home_score,
-		m.away_score,
-		m.home_penalty_score,
-		m.away_penalty_score,
-		m.winner_team_fifa_code,
-		m.updated_at
+	query := `SELECT ` + matchSelectColumns + `
 	FROM matches m
 	WHERE m.status = 'scheduled'
-	ORDER BY m.kickoff_at ASC
-	LIMIT 1`
+	  AND m.kickoff_at = (SELECT MIN(kickoff_at) FROM matches WHERE status = 'scheduled')
+	ORDER BY m.id ASC`
 
-	var match domain.Match
-	var homeFifa, awayFifa sql.NullString
-	var homeScore, awayScore, homePenaltyScore, awayPenaltyScore sql.NullInt64
-	var winnerFifaCode sql.NullString
-
-	err := r.db.QueryRowContext(ctx, query).Scan(
-		&match.ID,
-		&match.StageCode,
-		&match.GroupCode,
-		&match.Venue.Name,
-		&match.Venue.City,
-		&homeFifa,
-		&awayFifa,
-		&match.KickoffAt,
-		&match.Status,
-		&homeScore,
-		&awayScore,
-		&homePenaltyScore,
-		&awayPenaltyScore,
-		&winnerFifaCode,
-		&match.UpdatedAt,
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, handleDBError(err, resourceMatch)
 	}
+	defer rows.Close()
 
-	match.Teams = domain.MatchTeams{
-		Home: r.teams.Get(homeFifa.String),
-		Away: r.teams.Get(awayFifa.String),
+	matches := []*domain.Match{}
+	for rows.Next() {
+		match, err := r.scanMatch(rows)
+		if err != nil {
+			return nil, handleDBError(err, resourceMatch)
+		}
+		matches = append(matches, match)
 	}
-	match.Result = buildMatchResult(homeScore, awayScore, homePenaltyScore, awayPenaltyScore, winnerFifaCode)
 
-	return &match, nil
+	return matches, nil
 }
 
 func (r *MatchRepository) GetFirstGroupStageMatchKickoff(ctx context.Context) (time.Time, error) {

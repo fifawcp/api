@@ -99,8 +99,8 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 
 		kickoffTime := time.Date(2026, 6, 11, 18, 0, 0, 0, time.UTC)
 		matchRepo := &mocks.MockMatchRepository{
-			GetNextScheduledMatchFunc: func(ctx context.Context) (*domain.Match, error) {
-				return &domain.Match{
+			GetNextScheduledMatchesFunc: func(ctx context.Context) ([]*domain.Match, error) {
+				return []*domain.Match{{
 					ID:        1,
 					StageCode: domain.MatchStageCodeGroupStage,
 					KickoffAt: kickoffTime,
@@ -108,7 +108,7 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 						Home: &domain.Team{FifaCode: "MEX"},
 						Away: &domain.Team{FifaCode: "RSA"},
 					},
-				}, nil
+				}}, nil
 			},
 		}
 
@@ -145,16 +145,19 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		assert.Equal(t, 150, dashboard.Stats.Pickem.Points)
 		assert.Equal(t, 5, dashboard.Stats.Match.Rank)
 		assert.Equal(t, 90, dashboard.Stats.Match.Points)
+		assert.Len(t, dashboard.NextMatches, 1)
+		assert.Equal(t, int64(1), dashboard.NextMatches[0].ID)
+		assert.Equal(t, "MEX", dashboard.NextMatches[0].Teams.Home.FifaCode)
+		assert.Equal(t, "RSA", dashboard.NextMatches[0].Teams.Away.FifaCode)
+		assert.Equal(t, kickoffTime, dashboard.NextMatches[0].KickoffAt)
+		// Deprecated single-match field mirrors the earliest of NextMatches.
 		assert.NotNil(t, dashboard.NextMatch)
 		assert.Equal(t, int64(1), dashboard.NextMatch.ID)
-		assert.Equal(t, "MEX", dashboard.NextMatch.Teams.Home.FifaCode)
-		assert.Equal(t, "RSA", dashboard.NextMatch.Teams.Away.FifaCode)
-		assert.Equal(t, kickoffTime, dashboard.NextMatch.KickoffAt)
 		assert.Equal(t, 12, dashboard.Progress.MatchPicks.Completed)
 		assert.Equal(t, 104, dashboard.Progress.MatchPicks.Total)
-		assert.NotNil(t, dashboard.NextMatchScorePick)
-		assert.Equal(t, 2, dashboard.NextMatchScorePick.HomeScore)
-		assert.Equal(t, 1, dashboard.NextMatchScorePick.AwayScore)
+		assert.NotNil(t, dashboard.NextMatchScorePicks[1])
+		assert.Equal(t, 2, dashboard.NextMatchScorePicks[1].HomeScore)
+		assert.Equal(t, 1, dashboard.NextMatchScorePicks[1].AwayScore)
 		assert.Len(t, dashboard.TitleFavorites, 2)
 		assert.Equal(t, "BRA", dashboard.TitleFavorites[0].Team.FifaCode)
 		assert.Equal(t, 40, dashboard.TitleFavorites[0].PickPercent)
@@ -204,8 +207,8 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		}
 
 		matchRepo := &mocks.MockMatchRepository{
-			GetNextScheduledMatchFunc: func(ctx context.Context) (*domain.Match, error) {
-				return nil, nil
+			GetNextScheduledMatchesFunc: func(ctx context.Context) ([]*domain.Match, error) {
+				return []*domain.Match{}, nil
 			},
 		}
 
@@ -234,6 +237,7 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		assert.Equal(t, 0, dashboard.Stats.Pickem.Rank)
 		assert.Equal(t, 0, dashboard.Stats.Match.Rank)
 		assert.Nil(t, dashboard.NextMatch)
+		assert.Empty(t, dashboard.NextMatches)
 		assert.NotNil(t, dashboard.Progress)
 		assert.Equal(t, 0, dashboard.Progress.MatchPicks.Completed)
 		assert.Equal(t, 104, dashboard.Progress.MatchPicks.Total)
@@ -262,8 +266,8 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 
 		kickoffTime := time.Date(2026, 6, 11, 18, 0, 0, 0, time.UTC)
 		matchRepo := &mocks.MockMatchRepository{
-			GetNextScheduledMatchFunc: func(ctx context.Context) (*domain.Match, error) {
-				return &domain.Match{ID: 1, KickoffAt: kickoffTime}, nil
+			GetNextScheduledMatchesFunc: func(ctx context.Context) ([]*domain.Match, error) {
+				return []*domain.Match{{ID: 1, KickoffAt: kickoffTime}}, nil
 			},
 		}
 
@@ -286,11 +290,80 @@ func TestDashboardService_GetDashboard(t *testing.T) {
 		assert.Nil(t, dashboard.PickedChampion)
 		assert.Nil(t, dashboard.Stats)
 		assert.Nil(t, dashboard.Progress)
-		assert.NotNil(t, dashboard.NextMatch)
+		assert.Len(t, dashboard.NextMatches, 1)
+		assert.Equal(t, int64(1), dashboard.NextMatches[0].ID)
 		assert.Equal(t, int64(1), dashboard.NextMatch.ID)
 		assert.Len(t, dashboard.Leaderboard.Pickem.Entries, 1)
 		assert.Equal(t, "Pick'em", dashboard.Leaderboard.Pickem.CompetitionName)
 		assert.Len(t, dashboard.Leaderboard.Match.Entries, 1)
 		assert.Equal(t, "All Matches", dashboard.Leaderboard.Match.CompetitionName)
+	})
+
+	t.Run("returns all simultaneous next matches each with the user's pick", func(t *testing.T) {
+		t.Parallel()
+
+		pickemSvc := &mocks.MockPickemService{
+			GetChampionPickFunc: func(ctx context.Context, userID string) (*domain.Team, error) { return nil, nil },
+			GetChampionPickCountsFunc: func(ctx context.Context, limit int) ([]*domain.TitleFavorite, error) {
+				return []*domain.TitleFavorite{}, nil
+			},
+			GetUserPickemProgressFunc: func(ctx context.Context, userID string) (*domain.PickemProgress, error) {
+				return &domain.PickemProgress{}, nil
+			},
+		}
+		competitionScoreRepo := &mocks.MockCompetitionScoreRepository{
+			GetUserPickemStatsFunc: func(ctx context.Context, competitionID int64, userID string) (domain.CompetitionUserStats, error) {
+				return domain.CompetitionUserStats{}, nil
+			},
+			GetUserMatchStatsFunc: func(ctx context.Context, competitionID int64, userID string) (domain.CompetitionUserStats, error) {
+				return domain.CompetitionUserStats{}, nil
+			},
+			GetLeaderboardFunc: func(ctx context.Context, competitionID int64, page, limit int, q, sort, dir string) (*domain.CompetitionLeaderboardPage, error) {
+				return &domain.CompetitionLeaderboardPage{Members: []*domain.CompetitionLeaderboardEntry{}}, nil
+			},
+		}
+
+		// Two group-stage matches kicking off at the same instant (final matchday).
+		kickoffTime := time.Date(2026, 6, 26, 18, 0, 0, 0, time.UTC)
+		matchRepo := &mocks.MockMatchRepository{
+			GetNextScheduledMatchesFunc: func(ctx context.Context) ([]*domain.Match, error) {
+				return []*domain.Match{
+					{ID: 1, KickoffAt: kickoffTime, Teams: domain.MatchTeams{Home: &domain.Team{FifaCode: "MEX"}, Away: &domain.Team{FifaCode: "RSA"}}},
+					{ID: 2, KickoffAt: kickoffTime, Teams: domain.MatchTeams{Home: &domain.Team{FifaCode: "BRA"}, Away: &domain.Team{FifaCode: "MAR"}}},
+				}, nil
+			},
+		}
+
+		matchScorePickRepo := &mocks.MockMatchScorePickRepository{
+			GetMatchScorePicksByUserFunc: func(ctx context.Context, userID string) ([]*domain.UserMatchScorePick, error) {
+				return []*domain.UserMatchScorePick{
+					{UserID: userID, MatchID: 1, HomeScore: 2, AwayScore: 1},
+					{UserID: userID, MatchID: 2, HomeScore: 0, AwayScore: 0},
+				}, nil
+			},
+		}
+
+		awardSvc := &mocks.MockAwardService{
+			GetUserAwardsFunc: func(ctx context.Context, userID string) (*domain.UserAwards, error) {
+				return &domain.UserAwards{Progress: domain.StepProgress{Completed: 0, Total: 4}}, nil
+			},
+		}
+
+		pickemComp, matchComp := makeGlobalCompetitions()
+		service := newTestDashboardService(pickemSvc, awardSvc, matchScorePickRepo, matchRepo, competitionScoreRepo, pickemComp, matchComp)
+
+		dashboard, err := service.GetDashboard(context.Background(), "user-1")
+
+		assert.NoError(t, err)
+		assert.Len(t, dashboard.NextMatches, 2)
+		assert.Equal(t, int64(1), dashboard.NextMatches[0].ID)
+		assert.Equal(t, int64(2), dashboard.NextMatches[1].ID)
+		// Deprecated field points at the earliest match.
+		assert.Equal(t, int64(1), dashboard.NextMatch.ID)
+		// Each simultaneous match carries its own pick.
+		assert.Equal(t, 2, dashboard.NextMatchScorePicks[1].HomeScore)
+		assert.Equal(t, 1, dashboard.NextMatchScorePicks[1].AwayScore)
+		assert.Equal(t, 0, dashboard.NextMatchScorePicks[2].HomeScore)
+		assert.Equal(t, 0, dashboard.NextMatchScorePicks[2].AwayScore)
 	})
 }

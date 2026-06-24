@@ -1,13 +1,19 @@
 package domain
 
 type Dashboard struct {
-	PickedChampion     *Team                `json:"picked_champion"`
-	Stats              *DashboardStats      `json:"stats"`
-	NextMatch          *Match               `json:"next_match"`
-	Progress           *DashboardProgress   `json:"progress"`
-	Leaderboard        DashboardLeaderboard `json:"leaderboard"`
-	TitleFavorites     []*TitleFavorite     `json:"title_favorites"`
-	NextMatchScorePick *UserMatchScorePick  `json:"-"`
+	PickedChampion *Team           `json:"picked_champion"`
+	Stats          *DashboardStats `json:"stats"`
+	// NextMatch is the earliest upcoming match. Deprecated: use NextMatches, which
+	// also carries any other matches kicking off at the same time. Kept populated
+	// (= NextMatches[0]) for backward compatibility.
+	NextMatch      *Match               `json:"next_match"`
+	NextMatches    []*Match             `json:"next_matches"`
+	Progress       *DashboardProgress   `json:"progress"`
+	Leaderboard    DashboardLeaderboard `json:"leaderboard"`
+	TitleFavorites []*TitleFavorite     `json:"title_favorites"`
+	// NextMatchScorePicks maps each next match's ID to the authenticated user's
+	// score pick for it, when one exists.
+	NextMatchScorePicks map[int64]*UserMatchScorePick `json:"-"`
 }
 
 type TitleFavorite struct {

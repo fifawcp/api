@@ -62,6 +62,15 @@ type Match struct {
 	UpdatedAt time.Time      `json:"-"`
 }
 
+// MatchSyncResult reports the outcome of fetching a single match's result from
+// the football provider on demand (the manual admin sync). A non-final fixture
+// leaves Finalized false with no DB change so the caller can surface the live status.
+type MatchSyncResult struct {
+	Finalized bool                    `json:"finalized"`          // true when the fixture was final and persisted
+	Status    string                  `json:"status"`             // provider status short code (e.g. "FT","1H","SUSP")
+	Outcomes  *SyncGroupStageOutcomes `json:"outcomes,omitempty"` // standings/promotion changes; set only when Finalized
+}
+
 type MatchFilters struct {
 	MatchIDs      []int64          `json:"match_ids"`
 	GroupCodes    []string         `json:"group_codes"`
@@ -253,7 +262,7 @@ var MatchSlotRules = map[int64]MatchSlotRule{
 type MatchRepository interface {
 	GetMatches(ctx context.Context, filters MatchFilters) ([]*Match, error)
 	GetFirstGroupStageMatchKickoff(ctx context.Context) (time.Time, error)
-	GetNextScheduledMatch(ctx context.Context) (*Match, error)
+	GetNextScheduledMatches(ctx context.Context) ([]*Match, error)
 	UpdateMatchesResult(ctx context.Context, updates []MatchResultUpdate) error
 	UpdateMatchTeams(ctx context.Context, updates []MatchTeamUpdate) error
 	ResetMatchResult(ctx context.Context, matchID int64) error
