@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	mathrand "math/rand"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -600,85 +599,9 @@ func (s *Seeder) applyScenarioResults(ctx context.Context, matchIDs []int64, res
 		return fmt.Errorf("update match results: %w", err)
 	}
 
-	if err := s.advanceBracket(ctx, matchIDs); err != nil {
+	if err := s.matchService.AdvanceBracket(ctx, matchIDs); err != nil {
 		return fmt.Errorf("advance bracket: %w", err)
 	}
 
 	return nil
-}
-
-// advanceBracket fills downstream knockout slots based on the winners/losers
-// of just-finished matches. MatchService.SyncGroupStageOutcomes already
-// handles group → R32 promotion; this covers R32 → R16, R16 → QF, QF → SF,
-// and SF → 3rd-place/Final, which aren't wired in the production service
-func (s *Seeder) advanceBracket(ctx context.Context, completedMatchIDs []int64) error {
-	if len(completedMatchIDs) == 0 {
-		return nil
-	}
-
-	finishedMatches, err := s.matchRepository.GetMatches(ctx, domain.MatchFilters{MatchIDs: completedMatchIDs})
-	if err != nil {
-		return err
-	}
-
-	completed := map[int64]*domain.Match{}
-	for _, match := range finishedMatches {
-		completed[match.ID] = match
-	}
-
-	var updates []domain.MatchTeamUpdate
-	for downstreamID, rule := range domain.MatchSlotRules {
-		var update domain.MatchTeamUpdate
-		update.MatchID = downstreamID
-		anySet := false
-
-		if homeCode := resolveBracketSource(rule.Home, completed); homeCode != "" {
-			homeCodeCopy := homeCode
-			update.HomeTeamFifaCode = &homeCodeCopy
-			anySet = true
-		}
-
-		if awayCode := resolveBracketSource(rule.Away, completed); awayCode != "" {
-			awayCodeCopy := awayCode
-			update.AwayTeamFifaCode = &awayCodeCopy
-			anySet = true
-		}
-
-		if anySet {
-			updates = append(updates, update)
-		}
-	}
-
-	if len(updates) == 0 {
-		return nil
-	}
-
-	sort.Slice(updates, func(a, b int) bool { return updates[a].MatchID < updates[b].MatchID })
-	return s.matchRepository.UpdateMatchTeams(ctx, updates)
-}
-
-func resolveBracketSource(src domain.Source, completed map[int64]*domain.Match) string {
-	if src.Kind != domain.SourceWinner && src.Kind != domain.SourceLoser {
-		return ""
-	}
-
-	match, ok := completed[src.MatchID]
-	if !ok || match.Result == nil || match.Result.WinnerTeamFifaCode == nil {
-		return ""
-	}
-
-	winner := *match.Result.WinnerTeamFifaCode
-	if src.Kind == domain.SourceWinner {
-		return winner
-	}
-
-	if match.Teams.Home != nil && match.Teams.Home.FifaCode == winner && match.Teams.Away != nil {
-		return match.Teams.Away.FifaCode
-	}
-
-	if match.Teams.Home != nil {
-		return match.Teams.Home.FifaCode
-	}
-
-	return ""
 }

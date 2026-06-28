@@ -268,6 +268,52 @@ func (h *AdminHandler) RecalculateStandings(w http.ResponseWriter, r *http.Reque
 	httpx.RespondWithData(w, http.StatusOK, outcome)
 }
 
+// AdvanceBracket godoc
+//
+//	@Summary		Advance knockout bracket
+//	@Description	Re-propagates the winners/losers of all finished knockout matches into their downstream Round-of-16+ slots.
+//	@Description	Idempotent — safe to call repeatedly. Use to backfill bracket slots for matches finished before winner-advancement existed.
+//	@Description	Requires authentication and admin role.
+//	@Tags			admin
+//	@Produce		json
+//	@Success		200	{object}	httpx.Response		"Bracket advanced successfully"
+//	@Failure		401	{object}	httpx.ErrorResponse	"Unauthorized - missing or invalid authentication"
+//	@Failure		403	{object}	httpx.ErrorResponse	"Forbidden - admin role required"
+//	@Failure		500	{object}	httpx.ErrorResponse	"Internal server error"
+//	@Security		BearerAuth
+//	@Router			/admin/bracket/advance [post]
+func (h *AdminHandler) AdvanceBracket(w http.ResponseWriter, r *http.Request) {
+	if err := h.matchService.AdvanceBracket(r.Context(), allKnockoutMatchIDs()); err != nil {
+		h.auditLogger.LogEvent(r.Context(), logging.Event{
+			Action:   logging.ActionAdvanceBracket,
+			Resource: logging.ResourceMatch,
+			Outcome:  logging.OutcomeFailure,
+			Metadata: map[string]any{logging.Error: err.Error()},
+		})
+		handleServiceError(w, r, err, h.logger)
+		return
+	}
+
+	h.auditLogger.LogEvent(r.Context(), logging.Event{
+		Action:   logging.ActionAdvanceBracket,
+		Resource: logging.ResourceMatch,
+		Outcome:  logging.OutcomeSuccess,
+	})
+
+	httpx.RespondWithData(w, http.StatusOK, nil)
+}
+
+// allKnockoutMatchIDs returns every knockout match ID (the MatchSlotRules keys,
+// matches 73-104). AdvanceBracket only reads the finished ones, so passing the
+// whole set and letting it filter keeps the repair idempotent.
+func allKnockoutMatchIDs() []int64 {
+	ids := make([]int64, 0, len(domain.MatchSlotRules))
+	for id := range domain.MatchSlotRules {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // ResolveThirdPlaceConflict godoc
 //
 //	@Summary		Resolve third-place conflict
