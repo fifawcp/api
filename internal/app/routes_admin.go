@@ -29,6 +29,10 @@ func adminRoutes(c *Container) chi.Router {
 		})
 	})
 
+	r.Route("/bracket", func(r chi.Router) {
+		r.Post("/advance", c.AdminHandler.AdvanceBracket)
+	})
+
 	r.Route("/pickems", func(r chi.Router) {
 		r.Post("/rescore/best-thirds", c.AdminHandler.RescoreBestThirds)
 

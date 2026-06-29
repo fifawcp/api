@@ -23,6 +23,7 @@ const (
 	ActionBulkUpdateMatches    AuditAction = "match.bulk_update_results"
 	ActionRecalculateStandings AuditAction = "standing.recalculate"
 	ActionResolveThirdPlace    AuditAction = "match.resolve_third_place"
+	ActionAdvanceBracket       AuditAction = "match.advance_bracket"
 	ActionRecordAwardWinners   AuditAction = "award.record_winners"
 )
 

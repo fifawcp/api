@@ -78,6 +78,22 @@ func groupStageMatch() *domain.Match {
 	}
 }
 
+// knockoutMatch73CanBeatRsa is the finished Round-of-32 match 73 (RSA 0 - CAN 1).
+// Its winner (CAN) feeds the home slot of Round-of-16 match 90 via MatchSlotRules.
+func knockoutMatch73CanBeatRsa() *domain.Match {
+	winner := "CAN"
+	return &domain.Match{
+		ID:        73,
+		StageCode: domain.MatchStageCodeRoundOf32,
+		Status:    domain.MatchStatusFinished,
+		Teams: domain.MatchTeams{
+			Home: &domain.Team{FifaCode: "RSA"},
+			Away: &domain.Team{FifaCode: "CAN"},
+		},
+		Result: &domain.MatchResult{HomeScore: 0, AwayScore: 1, WinnerTeamFifaCode: &winner},
+	}
+}
+
 // ---------------------------------------------------------------------------
 // TestMatchService_GetMatches
 // ---------------------------------------------------------------------------
@@ -424,6 +440,49 @@ func TestMatchService_UpdateMatchResult(t *testing.T) {
 		assert.Contains(t, err.Error(), "db write error")
 		assert.Nil(t, outcomes)
 	})
+
+	t.Run("advances bracket and skips group sync for a knockout match", func(t *testing.T) {
+		t.Parallel()
+
+		var capturedTeams []domain.MatchTeamUpdate
+		mr := &mocks.MockMatchRepository{
+			GetMatchesFunc: func(ctx context.Context, filters domain.MatchFilters) ([]*domain.Match, error) {
+				return []*domain.Match{knockoutMatch73CanBeatRsa()}, nil
+			},
+			UpdateMatchesResultFunc: func(ctx context.Context, updates []domain.MatchResultUpdate) error {
+				return nil
+			},
+			UpdateMatchTeamsFunc: func(ctx context.Context, updates []domain.MatchTeamUpdate) error {
+				capturedTeams = updates
+				return nil
+			},
+			// IsGroupStageFinishedFunc / IsGroupFinishedFunc / RecalculateStandingsFunc are
+			// intentionally unset: reaching SyncGroupStageOutcomes would panic and fail this test.
+		}
+
+		ss := &mocks.MockScoringService{
+			ScoreMatchesFunc: func(ctx context.Context, matchIDs []int64) (*domain.ScoreMatchesResult, error) {
+				return &domain.ScoreMatchesResult{}, nil
+			},
+		}
+
+		service := newTestMatchService(mr, nil, nil, ss, &mocks.MockCompetitionScoringService{
+			RecomputeForMatchesFunc: func(ctx context.Context, result *domain.ScoreMatchesResult) error { return nil },
+		}, nil)
+
+		home, away := 0, 1
+		outcomes, err := service.UpdateMatchResult(context.Background(), 73, dtos.UpdateMatchResultDto{
+			HomeScore: &home,
+			AwayScore: &away,
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, &domain.SyncGroupStageOutcomes{IsGroupStageFinished: true}, outcomes)
+		assert.Len(t, capturedTeams, 1)
+		assert.Equal(t, int64(90), capturedTeams[0].MatchID)
+		assert.Equal(t, "CAN", *capturedTeams[0].HomeTeamFifaCode)
+		assert.Nil(t, capturedTeams[0].AwayTeamFifaCode) // match 75 not finished yet
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -527,6 +586,48 @@ func TestMatchService_UpdateMatchResultsBulk(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, outcomes.IsGroupStageFinished)
 		assert.Equal(t, outcomes.PromotionOutcome.Status, domain.PromotionStatusCompleted)
+	})
+
+	t.Run("advances bracket and skips group sync for a knockout-only payload", func(t *testing.T) {
+		t.Parallel()
+
+		var capturedTeams []domain.MatchTeamUpdate
+		mr := &mocks.MockMatchRepository{
+			GetMatchesFunc: func(ctx context.Context, filters domain.MatchFilters) ([]*domain.Match, error) {
+				return []*domain.Match{knockoutMatch73CanBeatRsa()}, nil
+			},
+			UpdateMatchesResultFunc: func(ctx context.Context, updates []domain.MatchResultUpdate) error {
+				return nil
+			},
+			UpdateMatchTeamsFunc: func(ctx context.Context, updates []domain.MatchTeamUpdate) error {
+				capturedTeams = updates
+				return nil
+			},
+			// Group-sync mocks intentionally unset; SyncGroupStageOutcomes must not run.
+		}
+
+		ss := &mocks.MockScoringService{
+			ScoreMatchesFunc: func(ctx context.Context, matchIDs []int64) (*domain.ScoreMatchesResult, error) {
+				return &domain.ScoreMatchesResult{}, nil
+			},
+		}
+
+		service := newTestMatchService(mr, nil, nil, ss, &mocks.MockCompetitionScoringService{
+			RecomputeForMatchesFunc: func(ctx context.Context, result *domain.ScoreMatchesResult) error { return nil },
+		}, nil)
+
+		home, away := 0, 1
+		outcomes, err := service.UpdateMatchResultsBulk(context.Background(), dtos.BulkUpdateMatchesResultDto{
+			Matches: []dtos.BulkUpdateMatchResultDto{
+				{ID: 73, UpdateMatchResultDto: dtos.UpdateMatchResultDto{HomeScore: &home, AwayScore: &away}},
+			},
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, &domain.SyncGroupStageOutcomes{IsGroupStageFinished: true}, outcomes)
+		assert.Len(t, capturedTeams, 1)
+		assert.Equal(t, int64(90), capturedTeams[0].MatchID)
+		assert.Equal(t, "CAN", *capturedTeams[0].HomeTeamFifaCode)
 	})
 
 	t.Run("returns ErrMatchesNotFound when a match ID is not in the database", func(t *testing.T) {
@@ -806,5 +907,106 @@ func TestMatchService_ResolveThirdPlaceConflict(t *testing.T) {
 
 		assert.ErrorIs(t, err, domain.ErrThirdPlaceInvalidSelection)
 		assert.Nil(t, outcomes)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestMatchService_AdvanceBracket
+// ---------------------------------------------------------------------------
+func TestMatchService_AdvanceBracket(t *testing.T) {
+	t.Parallel()
+
+	t.Run("advances a knockout winner into the downstream slot, leaving the undecided side untouched", func(t *testing.T) {
+		t.Parallel()
+
+		var captured []domain.MatchTeamUpdate
+		mr := &mocks.MockMatchRepository{
+			GetMatchesFunc: func(ctx context.Context, filters domain.MatchFilters) ([]*domain.Match, error) {
+				return []*domain.Match{knockoutMatch73CanBeatRsa()}, nil
+			},
+			UpdateMatchTeamsFunc: func(ctx context.Context, updates []domain.MatchTeamUpdate) error {
+				captured = updates
+				return nil
+			},
+		}
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
+
+		err := service.AdvanceBracket(context.Background(), []int64{73})
+
+		assert.NoError(t, err)
+		assert.Len(t, captured, 1)
+		assert.Equal(t, int64(90), captured[0].MatchID)
+		assert.Equal(t, "CAN", *captured[0].HomeTeamFifaCode)
+		assert.Nil(t, captured[0].AwayTeamFifaCode) // winner of match 75 not known yet
+	})
+
+	t.Run("resolves losers into the third-place match and winners into the final", func(t *testing.T) {
+		t.Parallel()
+
+		winner101, winner102 := "FRA", "ARG"
+		semiFinal101 := &domain.Match{
+			ID: 101, StageCode: domain.MatchStageCodeSemiFinals, Status: domain.MatchStatusFinished,
+			Teams:  domain.MatchTeams{Home: &domain.Team{FifaCode: "FRA"}, Away: &domain.Team{FifaCode: "BRA"}},
+			Result: &domain.MatchResult{HomeScore: 2, AwayScore: 1, WinnerTeamFifaCode: &winner101},
+		}
+		semiFinal102 := &domain.Match{
+			ID: 102, StageCode: domain.MatchStageCodeSemiFinals, Status: domain.MatchStatusFinished,
+			Teams:  domain.MatchTeams{Home: &domain.Team{FifaCode: "ARG"}, Away: &domain.Team{FifaCode: "GER"}},
+			Result: &domain.MatchResult{HomeScore: 3, AwayScore: 0, WinnerTeamFifaCode: &winner102},
+		}
+
+		var captured []domain.MatchTeamUpdate
+		mr := &mocks.MockMatchRepository{
+			GetMatchesFunc: func(ctx context.Context, filters domain.MatchFilters) ([]*domain.Match, error) {
+				return []*domain.Match{semiFinal101, semiFinal102}, nil
+			},
+			UpdateMatchTeamsFunc: func(ctx context.Context, updates []domain.MatchTeamUpdate) error {
+				captured = updates
+				return nil
+			},
+		}
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
+
+		err := service.AdvanceBracket(context.Background(), []int64{101, 102})
+
+		assert.NoError(t, err)
+		byID := make(map[int64]domain.MatchTeamUpdate, len(captured))
+		for _, update := range captured {
+			byID[update.MatchID] = update
+		}
+		assert.Equal(t, "BRA", *byID[103].HomeTeamFifaCode) // loser of semifinal 101
+		assert.Equal(t, "GER", *byID[103].AwayTeamFifaCode) // loser of semifinal 102
+		assert.Equal(t, "FRA", *byID[104].HomeTeamFifaCode) // winner of semifinal 101
+		assert.Equal(t, "ARG", *byID[104].AwayTeamFifaCode) // winner of semifinal 102
+	})
+
+	t.Run("is idempotent across repeated runs", func(t *testing.T) {
+		t.Parallel()
+
+		var runs [][]domain.MatchTeamUpdate
+		mr := &mocks.MockMatchRepository{
+			GetMatchesFunc: func(ctx context.Context, filters domain.MatchFilters) ([]*domain.Match, error) {
+				return []*domain.Match{knockoutMatch73CanBeatRsa()}, nil
+			},
+			UpdateMatchTeamsFunc: func(ctx context.Context, updates []domain.MatchTeamUpdate) error {
+				runs = append(runs, updates)
+				return nil
+			},
+		}
+		service := newTestMatchService(mr, nil, nil, nil, nil, nil)
+
+		assert.NoError(t, service.AdvanceBracket(context.Background(), []int64{73}))
+		assert.NoError(t, service.AdvanceBracket(context.Background(), []int64{73}))
+		assert.Len(t, runs, 2)
+		assert.Equal(t, runs[0], runs[1])
+	})
+
+	t.Run("is a no-op for empty input and never touches the repository", func(t *testing.T) {
+		t.Parallel()
+
+		// All repository funcs are nil, so any repository call would panic.
+		service := newTestMatchService(&mocks.MockMatchRepository{}, nil, nil, nil, nil, nil)
+
+		assert.NoError(t, service.AdvanceBracket(context.Background(), nil))
 	})
 }

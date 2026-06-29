@@ -26,6 +26,7 @@ type MatchServiceInterface interface {
 	ResetMatchResult(ctx context.Context, matchID int64) (*domain.SyncGroupStageOutcomes, error)
 	SyncGroupStageOutcomes(ctx context.Context) (*domain.SyncGroupStageOutcomes, error)
 	ResolveThirdPlaceConflict(ctx context.Context, payload dtos.ResolveThirdPlaceConflictDto) (*domain.SyncGroupStageOutcomes, error)
+	AdvanceBracket(ctx context.Context, completedMatchIDs []int64) error
 }
 
 type MatchService struct {
@@ -88,6 +89,17 @@ func (s *MatchService) UpdateMatchResult(ctx context.Context, matchID int64, pay
 	}
 	if err := s.matchRepository.UpdateMatchesResult(ctx, []domain.MatchResultUpdate{updatedMatch}); err != nil {
 		return nil, err
+	}
+
+	// Knockout matches don't touch group standings; they advance the winner/loser
+	// into the next bracket slot. The group stage is over by the time these finalize.
+	if matches[0].StageCode.IsKnockout() {
+		if err := s.AdvanceBracket(ctx, []int64{matchID}); err != nil {
+			return nil, err
+		}
+
+		s.asyncScoreMatches(nil, []int64{matchID})
+		return &domain.SyncGroupStageOutcomes{IsGroupStageFinished: true}, nil
 	}
 
 	outcomes, err := s.SyncGroupStageOutcomes(ctx)
@@ -168,9 +180,29 @@ func (s *MatchService) prepareBulkUpdate(ctx context.Context, payload dtos.BulkU
 		return nil, nil, err
 	}
 
-	outcomes, err := s.SyncGroupStageOutcomes(ctx)
-	if err != nil {
-		return nil, nil, err
+	var groupIDs, knockoutIDs []int64
+	for _, match := range existingMatches {
+		if match.StageCode.IsKnockout() {
+			knockoutIDs = append(knockoutIDs, match.ID)
+		} else {
+			groupIDs = append(groupIDs, match.ID)
+		}
+	}
+
+	if len(knockoutIDs) > 0 {
+		if err := s.AdvanceBracket(ctx, knockoutIDs); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// Only group-stage finalizes affect standings/promotion; skip the recompute
+	// for knockout-only payloads now that the group stage is done.
+	outcomes := &domain.SyncGroupStageOutcomes{IsGroupStageFinished: true}
+	if len(groupIDs) > 0 {
+		outcomes, err = s.SyncGroupStageOutcomes(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	return matchIDs, outcomes, nil
@@ -257,6 +289,89 @@ func (s *MatchService) SyncGroupStageOutcomes(ctx context.Context) (*domain.Sync
 		IsGroupStageFinished: true,
 		PromotionOutcome:     promotionOutcome,
 	}, nil
+}
+
+// AdvanceBracket fills downstream knockout slots from the winners/losers of the
+// just-finished matches. SyncGroupStageOutcomes already handles group → R32;
+// this covers R32 → R16, R16 → QF, QF → SF, and SF → 3rd-place/Final. It is
+// idempotent: re-running re-writes the same teams, and UpdateMatchTeams uses
+// COALESCE so a partial (home-only or away-only) fill never nulls the other side.
+func (s *MatchService) AdvanceBracket(ctx context.Context, completedMatchIDs []int64) error {
+	if len(completedMatchIDs) == 0 {
+		return nil
+	}
+
+	finishedMatches, err := s.matchRepository.GetMatches(ctx, domain.MatchFilters{MatchIDs: completedMatchIDs})
+	if err != nil {
+		return err
+	}
+
+	completed := make(map[int64]*domain.Match, len(finishedMatches))
+	for _, match := range finishedMatches {
+		completed[match.ID] = match
+	}
+
+	var updates []domain.MatchTeamUpdate
+	for downstreamID, rule := range domain.MatchSlotRules {
+		update := domain.MatchTeamUpdate{MatchID: downstreamID}
+		anySet := false
+
+		if homeCode := resolveBracketSource(rule.Home, completed); homeCode != "" {
+			homeCodeCopy := homeCode
+			update.HomeTeamFifaCode = &homeCodeCopy
+			anySet = true
+		}
+
+		if awayCode := resolveBracketSource(rule.Away, completed); awayCode != "" {
+			awayCodeCopy := awayCode
+			update.AwayTeamFifaCode = &awayCodeCopy
+			anySet = true
+		}
+
+		if anySet {
+			updates = append(updates, update)
+		}
+	}
+
+	if len(updates) == 0 {
+		return nil
+	}
+
+	// Sort by matchID to prevent deadlocks when updating matches
+	sort.Slice(updates, func(i, j int) bool {
+		return updates[i].MatchID < updates[j].MatchID
+	})
+
+	return s.matchRepository.UpdateMatchTeams(ctx, updates)
+}
+
+// resolveBracketSource returns the FIFA code feeding a SourceWinner/SourceLoser
+// slot, or "" when the source match isn't among the finished set yet.
+func resolveBracketSource(src domain.Source, completed map[int64]*domain.Match) string {
+	if src.Kind != domain.SourceWinner && src.Kind != domain.SourceLoser {
+		return ""
+	}
+
+	match, ok := completed[src.MatchID]
+	if !ok || match.Result == nil || match.Result.WinnerTeamFifaCode == nil {
+		return ""
+	}
+
+	winner := *match.Result.WinnerTeamFifaCode
+	if src.Kind == domain.SourceWinner {
+		return winner
+	}
+
+	// SourceLoser: the team that isn't the winner.
+	if match.Teams.Home != nil && match.Teams.Home.FifaCode == winner && match.Teams.Away != nil {
+		return match.Teams.Away.FifaCode
+	}
+
+	if match.Teams.Home != nil {
+		return match.Teams.Home.FifaCode
+	}
+
+	return ""
 }
 
 func (s *MatchService) ResolveThirdPlaceConflict(ctx context.Context, payload dtos.ResolveThirdPlaceConflictDto) (*domain.SyncGroupStageOutcomes, error) {
