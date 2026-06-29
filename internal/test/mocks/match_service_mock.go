@@ -15,6 +15,7 @@ type MockMatchService struct {
 	ResetMatchResultFunc           func(ctx context.Context, matchID int64) (*domain.SyncGroupStageOutcomes, error)
 	SyncGroupStageOutcomesFunc     func(ctx context.Context) (*domain.SyncGroupStageOutcomes, error)
 	ResolveThirdPlaceConflictFunc  func(ctx context.Context, payload dtos.ResolveThirdPlaceConflictDto) (*domain.SyncGroupStageOutcomes, error)
+	AdvanceBracketFunc             func(ctx context.Context, completedMatchIDs []int64) error
 }
 
 func (m *MockMatchService) GetMatches(ctx context.Context, filters domain.MatchFilters) ([]*domain.Match, error) {
@@ -64,4 +65,11 @@ func (m *MockMatchService) ResolveThirdPlaceConflict(ctx context.Context, payloa
 		return m.ResolveThirdPlaceConflictFunc(ctx, payload)
 	}
 	panic("ResolveThirdPlaceConflict called unexpectedly")
+}
+
+func (m *MockMatchService) AdvanceBracket(ctx context.Context, completedMatchIDs []int64) error {
+	if m.AdvanceBracketFunc != nil {
+		return m.AdvanceBracketFunc(ctx, completedMatchIDs)
+	}
+	panic("AdvanceBracket called unexpectedly")
 }
